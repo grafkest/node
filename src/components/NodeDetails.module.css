@@ -45,6 +45,24 @@
   text-decoration: underline;
 }
 
+.ioList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ioItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+}
+
 .code {
   padding: 8px;
   border-radius: 6px;

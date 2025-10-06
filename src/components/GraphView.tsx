@@ -36,7 +36,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const { theme } = useTheme();
   const themeClassName = theme?.className ?? 'default';
 
-  const palette = useMemo(() => resolvePalette(), [themeClassName]);
+  const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
 
   const graphData = useMemo(() => {
     const flatDomains = flattenDomains(domains);
@@ -82,11 +82,14 @@ const GraphView: React.FC<GraphViewProps> = ({
               ? palette.linkDependency
               : link.type === 'produces'
                 ? palette.linkProduces
-                : palette.linkRelates
+                : link.type === 'consumes'
+                  ? palette.linkConsumes
+                  : palette.linkRelates
           }
           nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
             drawNode(node, ctx, globalScale, highlightedNode, palette);
           }}
+          nodeCanvasObjectMode={() => 'replace'}
           onNodeClick={(node) => {
             onSelect(node as ForceNode);
           }}
@@ -108,6 +111,7 @@ type GraphPalette = {
   linkDependency: string;
   linkProduces: string;
   linkRelates: string;
+  linkConsumes: string;
 };
 
 function drawNode(
@@ -120,6 +124,7 @@ function drawNode(
   const label = node.name ?? node.id;
   const fontSize = 12 / Math.sqrt(globalScale);
   const radius = node.type === 'module' ? 10 : node.type === 'domain' ? 8 : 6;
+  ctx.save();
   ctx.beginPath();
   ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
   ctx.fillStyle =
@@ -135,15 +140,17 @@ function drawNode(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillStyle = palette.text;
-  ctx.fillText(label, (node.x ?? 0), (node.y ?? 0) + radius + 4);
+  ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + radius + 4);
+  ctx.restore();
 }
 
-function resolvePalette(): GraphPalette {
+function resolvePalette(themeClassName?: string): GraphPalette {
   if (typeof window === 'undefined') {
     return DEFAULT_PALETTE;
   }
 
-  const styles = getComputedStyle(document.body);
+  const themeElement = themeClassName ? document.querySelector(`.${themeClassName}`) : null;
+  const styles = getComputedStyle((themeElement as HTMLElement) ?? document.body);
   const getVar = (token: string, fallback: string) => styles.getPropertyValue(token).trim() || fallback;
 
   return {
@@ -153,7 +160,8 @@ function resolvePalette(): GraphPalette {
     text: getVar('--color-typo-primary', DEFAULT_PALETTE.text),
     linkDependency: getVar('--color-bg-border', DEFAULT_PALETTE.linkDependency),
     linkProduces: getVar('--color-bg-success', DEFAULT_PALETTE.linkProduces),
-    linkRelates: getVar('--color-bg-info', DEFAULT_PALETTE.linkRelates)
+    linkRelates: getVar('--color-bg-info', DEFAULT_PALETTE.linkRelates),
+    linkConsumes: getVar('--color-bg-normal', DEFAULT_PALETTE.linkConsumes)
   };
 }
 
@@ -164,7 +172,8 @@ const DEFAULT_PALETTE: GraphPalette = {
   text: '#1F1F1F',
   linkDependency: '#B8B8B8',
   linkProduces: '#45C7B0',
-  linkRelates: '#5B8FF9'
+  linkRelates: '#5B8FF9',
+  linkConsumes: '#8E8E93'
 };
 
 export type { GraphNode };

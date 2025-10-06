@@ -6,13 +6,23 @@ import DomainTree from './components/DomainTree';
 import FiltersPanel from './components/FiltersPanel';
 import GraphView, { type GraphNode } from './components/GraphView';
 import NodeDetails from './components/NodeDetails';
-import { artifacts, domainTree, moduleLinks, modules, type DomainNode, type ModuleStatus } from './data';
+import {
+  artifacts,
+  domainTree,
+  moduleById,
+  moduleLinks,
+  modules,
+  type DomainNode,
+  type ModuleStatus
+} from './data';
 import styles from './App.module.css';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 
 function App() {
-  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set(['economics', 'well']));
+  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
+    new Set(['production-monitoring', 'production-planning'])
+  );
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
@@ -48,6 +58,27 @@ function App() {
   }, [filteredModules, showDependencies]);
 
   const filteredDomains = useMemo(() => filterDomains(domainTree, selectedDomains), [selectedDomains]);
+
+  const artifactMap = useMemo(() => new Map(artifacts.map((artifact) => [artifact.id, artifact])), []);
+  const domainMap = useMemo(() => new Map(flattenDomainTree(domainTree).map((domain) => [domain.id, domain])), []);
+
+  const handleNavigate = (nodeId: string) => {
+    if (moduleById[nodeId]) {
+      setSelectedNode({ ...moduleById[nodeId], type: 'module' });
+      return;
+    }
+
+    const artifact = artifactMap.get(nodeId);
+    if (artifact) {
+      setSelectedNode({ ...artifact, type: 'artifact', reuseScore: 0 });
+      return;
+    }
+
+    const domain = domainMap.get(nodeId);
+    if (domain) {
+      setSelectedNode({ ...domain, type: 'domain' });
+    }
+  };
 
   return (
     <Layout className={styles.app} direction="column">
@@ -129,7 +160,7 @@ function App() {
           </div>
         </section>
         <aside className={styles.details}>
-          <NodeDetails node={selectedNode} onClose={() => setSelectedNode(null)} />
+          <NodeDetails node={selectedNode} onClose={() => setSelectedNode(null)} onNavigate={handleNavigate} />
         </aside>
       </main>
     </Layout>
@@ -149,6 +180,10 @@ function filterDomains(domains: DomainNode[], selected: Set<string>): DomainNode
       return null;
     })
     .filter(Boolean) as DomainNode[];
+}
+
+function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
+  return domains.flatMap((domain) => [domain, ...(domain.children ? flattenDomainTree(domain.children) : [])]);
 }
 
 export default App;

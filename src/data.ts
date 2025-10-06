@@ -7,6 +7,18 @@ export type DomainNode = {
 
 export type ModuleStatus = 'in-dev' | 'production' | 'deprecated';
 
+export type ModuleInput = {
+  id: string;
+  label: string;
+  sourceId?: string;
+};
+
+export type ModuleOutput = {
+  id: string;
+  label: string;
+  consumerIds?: string[];
+};
+
 export type ModuleNode = {
   id: string;
   name: string;
@@ -25,96 +37,180 @@ export type ModuleNode = {
     coverage?: number;
     latencyMs?: number;
   };
+  dataIn: ModuleInput[];
+  dataOut: ModuleOutput[];
+  formula: string;
 };
 
 export const domainTree: DomainNode[] = [
   {
-    id: 'upstream',
-    name: 'Добыча нефти и газа',
-    description: 'Технологии добычи, бурение, мониторинг скважин',
+    id: 'solutions',
+    name: 'Решения',
+    description: 'Компетенции цифрового портфеля компании',
     children: [
       {
-        id: 'well',
-        name: 'Скважины',
-        description: 'Карточки скважин, расчёт дебита, мониторинг состояний',
+        id: 'business-management',
+        name: 'Управление бизнесом',
+        description: 'Стратегия, инвестиции и эффективность активов',
         children: [
           {
-            id: 'well-monitoring',
-            name: 'Мониторинг',
-            description: 'Сбор телеметрии и построение витрин состояния'
+            id: 'strategy-asset',
+            name: 'Стратегическое управление активами',
+            description: 'Долгосрочные цели развития активов и капитальные вложения'
           },
           {
-            id: 'well-production',
-            name: 'Прогноз добычи',
-            description: 'Прогнозирование добычи и расчёт показателей эффективности'
+            id: 'performance-management',
+            name: 'Управление эффективностью',
+            description: 'Контроль KPI добычи, потерь и производительности'
           },
           {
-            id: 'well-optimization',
-            name: 'Оптимизация работы',
-            description: 'Оптимизация режимов работы скважин, подбор мероприятий'
+            id: 'investment-portfolio',
+            name: 'Инвестиционный портфель',
+            description: 'Сценарное планирование и приоритизация проектов'
+          },
+          {
+            id: 'contract-management',
+            name: 'Управление договорами',
+            description: 'Жизненный цикл договоров и обязательств'
           }
         ]
       },
       {
-        id: 'drilling',
-        name: 'Бурение',
-        description: 'Планирование и контроль буровых работ'
+        id: 'production-management',
+        name: 'Управление добычей',
+        description: 'Оперативное планирование и контроль добычи',
+        children: [
+          {
+            id: 'production-monitoring',
+            name: 'Мониторинг добычи',
+            description: 'Диспетчеризация фонда скважин и телеметрия'
+          },
+          {
+            id: 'production-planning',
+            name: 'Планирование добычи',
+            description: 'Формирование оперативных и среднесрочных планов'
+          },
+          {
+            id: 'production-optimization',
+            name: 'Оптимизация добычи',
+            description: 'Повышение дебита и снижение потерь'
+          },
+          {
+            id: 'production-accounting',
+            name: 'Производственный учёт',
+            description: 'Бухгалтерия добытых объёмов и потерь'
+          }
+        ]
       },
       {
-        id: 'production-operations',
-        name: 'Операции добычи',
-        description: 'Оперативное управление добычей и поддерживающими сервисами'
-      }
-    ]
-  },
-  {
-    id: 'economics',
-    name: 'Экономика',
-    description: 'Финансовые расчёты, бюджетирование и аналитика',
-    children: [
-      {
-        id: 'economics-well',
-        name: 'Экономика скважин',
-        description: 'NPV, OPEX, CAPEX и окупаемость проектов'
+        id: 'engineering-support',
+        name: 'Инженерная поддержка',
+        description: 'Диагностика и расчёты технологического оборудования',
+        children: [
+          {
+            id: 'lift-diagnostics',
+            name: 'Диагностика лифтового оборудования',
+            description: 'Состояние насосов, штуцеров и систем ППД'
+          },
+          {
+            id: 'equipment-analytics',
+            name: 'Аналитика оборудования',
+            description: 'Прогноз отказов и контроль режимов работы'
+          },
+          {
+            id: 'energy-efficiency',
+            name: 'Энергоэффективность',
+            description: 'Оптимизация энергопотребления установок'
+          }
+        ]
       },
       {
-        id: 'economics-portfolio',
-        name: 'Портфель проектов',
-        description: 'Приоритизация, сценарное моделирование'
+        id: 'drilling-workover',
+        name: 'Бурение и КРС',
+        description: 'Планирование бурения и капитальных ремонтов',
+        children: [
+          {
+            id: 'drilling-planning',
+            name: 'Планирование бурения',
+            description: 'Графики бурения и управление подрядчиками'
+          },
+          {
+            id: 'drilling-execution',
+            name: 'Оперативное сопровождение бурения',
+            description: 'Контроль хода буровых работ'
+          },
+          {
+            id: 'workover-management',
+            name: 'Капитальный ремонт скважин',
+            description: 'Подбор и приоритизация мероприятий КРС'
+          }
+        ]
       },
       {
-        id: 'economics-reporting',
-        name: 'Финансовая отчётность',
-        description: 'Регламентированная отчётность и раскрытие данных'
-      }
-    ]
-  },
-  {
-    id: 'logistics',
-    name: 'Логистика и транспорт',
-    description: 'Перемещение нефти и ресурсов',
-    children: [
-      {
-        id: 'pipeline',
-        name: 'Трубопроводы',
-        description: 'Диспетчеризация, планирование прокачки'
+        id: 'geology',
+        name: 'Геология',
+        description: 'Моделирование месторождений и анализ геоданных',
+        children: [
+          {
+            id: 'reservoir-model',
+            name: 'Геолого-техническая модель',
+            description: 'Построение цифровых моделей пластов'
+          },
+          {
+            id: 'seismic-interpretation',
+            name: 'Сейсморазведка и интерпретация',
+            description: 'Обработка сейсмических кубов и разрезов'
+          },
+          {
+            id: 'resource-estimation',
+            name: 'Подсчёт запасов',
+            description: 'Оценка остаточных запасов и сценариев разработки'
+          }
+        ]
       },
       {
-        id: 'supply-chain',
-        name: 'Снабжение',
-        description: 'Планирование снабжения и управление складами'
-      }
-    ]
-  },
-  {
-    id: 'hse',
-    name: 'Промышленная безопасность',
-    description: 'Охрана труда, экологический контроль и управление инцидентами',
-    children: [
+        id: 'transport',
+        name: 'Транспорт нефти и газа',
+        description: 'Диспетчеризация потоков и управление инфраструктурой',
+        children: [
+          {
+            id: 'pipeline-dispatch',
+            name: 'Диспетчеризация трубопроводов',
+            description: 'Управление пропускной способностью и авариями'
+          },
+          {
+            id: 'storage-management',
+            name: 'Управление складами',
+            description: 'Оптимизация резервуарного парка'
+          },
+          {
+            id: 'shipping-planning',
+            name: 'Планирование отгрузок',
+            description: 'Графики отгрузок и логистика'
+          }
+        ]
+      },
       {
-        id: 'hse-monitoring',
-        name: 'Мониторинг HSE',
-        description: 'Мониторинг показателей безопасности и охраны окружающей среды'
+        id: 'energy',
+        name: 'Энергия',
+        description: 'Контроль энергоресурсов и энергоэффективность',
+        children: [
+          {
+            id: 'power-balance',
+            name: 'Энергетический баланс',
+            description: 'Балансировка потребления и генерации энергии'
+          },
+          {
+            id: 'energy-monitoring',
+            name: 'Мониторинг энергопотребления',
+            description: 'Анализ и контроль энергоиспользования'
+          },
+          {
+            id: 'energy-optimization',
+            name: 'Оптимизация энергозатрат',
+            description: 'Снижение удельных затрат на энергию'
+          }
+        ]
       }
     ]
   }
@@ -138,321 +234,458 @@ export const domainNameById: Record<string, string> = (() => {
 
 export const modules: ModuleNode[] = [
   {
-    id: 'module-npv',
-    name: 'Расчёт NPV скважины',
-    description:
-      'Рассчитывает чистую приведённую стоимость по фактическим и прогнозным данным добычи.',
-    domains: ['economics', 'economics-well', 'well-production'],
-    team: 'Economic Insights',
-    owner: 'Мария Лебедева',
-    status: 'production',
-    repository: 'https://git.example.com/economics/npv',
-    api: 'REST /api/v1/well/npv',
-    dependencies: ['module-production-forecast', 'module-cost-service'],
-    produces: ['economics-report'],
-    reuseScore: 0.8,
-    metrics: {
-      tests: 180,
-      coverage: 92,
-      latencyMs: 550
-    }
-  },
-  {
-    id: 'module-production-forecast',
-    name: 'Прогноз добычи',
-    description:
-      'Модуль машинного обучения для прогнозирования дебита скважин по телеметрии.',
-    domains: ['upstream', 'well', 'well-production'],
-    team: 'Field Analytics',
-    owner: 'Иван Терехов',
-    status: 'production',
-    repository: 'https://git.example.com/upstream/production-forecast',
-    api: 'gRPC forecast.ForecastService',
-    dependencies: ['module-well-telemetry'],
-    produces: ['production-profiles'],
-    reuseScore: 0.9,
-    metrics: {
-      tests: 240,
-      coverage: 88,
-      latencyMs: 780
-    }
-  },
-  {
-    id: 'module-well-telemetry',
-    name: 'Телеметрия скважин',
-    description: 'Потоковая обработка телеметрии и агрегация витрин.',
-    domains: ['upstream', 'well', 'well-monitoring'],
-    team: 'IoT Platform',
-    owner: 'Виктория Осипова',
-    status: 'production',
-    repository: 'https://git.example.com/platform/well-telemetry',
-    api: 'Kafka topics telemetry.*',
-    dependencies: [],
-    produces: ['telemetry-aggregates'],
-    reuseScore: 0.7,
-    metrics: {
-      tests: 120,
-      coverage: 76,
-      latencyMs: 310
-    }
-  },
-  {
-    id: 'module-cost-service',
-    name: 'Расчёт стоимости скважины',
-    description: 'Подсчёт операционных и капитальных затрат с учётом сценариев.',
-    domains: ['economics', 'economics-well'],
-    team: 'Economic Insights',
-    owner: 'Мария Лебедева',
-    status: 'in-dev',
-    repository: 'https://git.example.com/economics/cost-service',
-    api: 'REST /api/v1/well/costs',
-    dependencies: ['module-normative-directory'],
-    produces: ['cost-breakdown'],
-    reuseScore: 0.6,
-    metrics: {
-      tests: 90,
-      coverage: 71,
-      latencyMs: 890
-    }
-  },
-  {
-    id: 'module-normative-directory',
-    name: 'Нормативный справочник',
-    description: 'Хранит нормативы и тарифы, используется несколькими командами.',
-    domains: ['economics', 'economics-portfolio'],
-    team: 'Reference Data',
-    owner: 'Алексей Махов',
-    status: 'production',
-    repository: 'https://git.example.com/common/normative',
-    api: 'REST /api/v1/normative',
-    dependencies: [],
-    produces: ['normative-datasets'],
-    reuseScore: 0.95,
-    metrics: {
-      tests: 200,
-      coverage: 97,
-      latencyMs: 420
-    }
-  },
-  {
-    id: 'module-legacy-cost',
-    name: 'Старый расчёт себестоимости',
-    description: 'Устаревший расчёт себестоимости без актуальных нормативов.',
-    domains: ['economics', 'economics-well'],
-    team: 'Legacy Ops',
-    owner: 'Сергей Петров',
-    status: 'deprecated',
-    repository: 'https://git.example.com/legacy/cost',
-    api: 'REST /api/v1/legacy/costs',
-    dependencies: [],
-    produces: ['legacy-costs'],
-    reuseScore: 0.2,
-    metrics: {
-      tests: 45,
-      coverage: 38,
-      latencyMs: 1600
-    }
-  },
-  {
-    id: 'module-pipeline-monitoring',
-    name: 'Мониторинг трубопроводов',
-    description: 'Визуализация состояния трубопроводов и аварийных сигналов.',
-    domains: ['logistics', 'pipeline'],
-    team: 'Logistics Hub',
-    owner: 'Андрей Романов',
-    status: 'production',
-    repository: 'https://git.example.com/logistics/pipeline-monitoring',
-    api: 'REST /api/v1/pipeline/status',
-    dependencies: ['module-asset-registry'],
-    produces: ['pipeline-alerts'],
-    reuseScore: 0.5,
-    metrics: {
-      tests: 150,
-      coverage: 83,
-      latencyMs: 460
-    }
-  },
-  {
-    id: 'module-asset-registry',
-    name: 'Реестр активов',
-    description: 'Справочник объектов инфраструктуры и оборудование.',
-    domains: ['upstream', 'logistics'],
-    team: 'Reference Data',
-    owner: 'Алексей Махов',
-    status: 'production',
-    repository: 'https://git.example.com/common/assets',
-    api: 'REST /api/v1/assets',
-    dependencies: [],
-    produces: ['asset-catalog'],
-    reuseScore: 0.85,
-    metrics: {
-      tests: 160,
-      coverage: 89,
-      latencyMs: 390
-    }
-  },
-  {
-    id: 'module-well-optimizer',
-    name: 'Оптимизация режимов скважины',
-    description:
-      'Определяет оптимальные настройки работы скважины на основе прогноза добычи и экономических метрик.',
-    domains: ['upstream', 'well', 'well-optimization', 'economics-well'],
-    team: 'Field Analytics',
-    owner: 'Иван Терехов',
-    status: 'in-dev',
-    repository: 'https://git.example.com/upstream/well-optimizer',
-    api: 'REST /api/v1/well/optimization',
-    dependencies: ['module-production-forecast', 'module-cost-service'],
-    produces: ['optimization-recommendations'],
-    reuseScore: 0.75,
-    metrics: {
-      tests: 130,
-      coverage: 81,
-      latencyMs: 640
-    }
-  },
-  {
-    id: 'module-digital-twin',
-    name: 'Цифровой двойник промысла',
-    description:
-      'Интегрированная модель промысла, объединяющая телеметрию, прогнозы и логистику для ситуационного анализа.',
-    domains: ['upstream', 'production-operations', 'well-monitoring', 'pipeline'],
-    team: 'Operations Intelligence',
+    id: 'module-telemetry-ingest',
+    name: 'Поток телеметрии скважин',
+    description: 'Собирает и нормализует телеметрию фонда скважин и насосного оборудования в реальном времени.',
+    domains: ['production-monitoring', 'lift-diagnostics', 'energy-monitoring'],
+    team: 'Field Data Platform',
     owner: 'Наталья Коваль',
-    status: 'in-dev',
-    repository: 'https://git.example.com/operations/digital-twin',
-    api: 'GraphQL /graphql',
-    dependencies: ['module-well-telemetry', 'module-production-forecast', 'module-pipeline-monitoring'],
-    produces: ['operations-dashboard'],
-    reuseScore: 0.65,
-    metrics: {
-      tests: 110,
-      coverage: 74,
-      latencyMs: 950
-    }
-  },
-  {
-    id: 'module-portfolio-optimizer',
-    name: 'Оптимизация портфеля проектов',
-    description: 'Строит сценарии инвестиций, рассчитывает NPV и IRR по портфелю проектов.',
-    domains: ['economics', 'economics-portfolio', 'economics-reporting'],
-    team: 'Economic Insights',
-    owner: 'Мария Лебедева',
     status: 'production',
-    repository: 'https://git.example.com/economics/portfolio-optimizer',
-    api: 'REST /api/v1/portfolio/optimize',
-    dependencies: ['module-normative-directory'],
-    produces: ['portfolio-scenarios'],
-    reuseScore: 0.82,
+    repository: 'https://git.example.com/upstream/telemetry-ingest',
+    api: 'Kafka telemetry.normalized',
+    dependencies: [],
+    produces: ['artifact-clean-telemetry'],
+    reuseScore: 0.86,
     metrics: {
       tests: 210,
-      coverage: 90,
-      latencyMs: 870
-    }
+      coverage: 93,
+      latencyMs: 280
+    },
+    dataIn: [
+      {
+        id: 'raw-stream',
+        label: 'Сырые сообщения датчиков'
+      },
+      {
+        id: 'asset-passports',
+        label: 'Паспорта оборудования',
+        sourceId: 'artifact-asset-passports'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'clean-telemetry',
+        label: 'Очищенная телеметрия',
+        consumerIds: ['module-production-analytics', 'module-pipeline-optimizer', 'module-energy-monitor']
+      }
+    ],
+    formula: 'normalized = (rawValue - sensor.bias) * sensor.calibrationFactor'
   },
   {
-    id: 'module-supply-planner',
-    name: 'Планировщик снабжения',
-    description: 'Оптимизация графиков поставок и складских запасов для буровых площадок.',
-    domains: ['logistics', 'supply-chain', 'drilling'],
-    team: 'Logistics Hub',
-    owner: 'Андрей Романов',
+    id: 'module-reservoir-modeler',
+    name: 'Моделирование пласта',
+    description: 'Строит геолого-технические модели и прогноз добычи по сценариям закачки и режимам работы.',
+    domains: ['reservoir-model', 'seismic-interpretation', 'resource-estimation'],
+    team: 'Geology Models',
+    owner: 'Александр Жуков',
     status: 'production',
-    repository: 'https://git.example.com/logistics/supply-planner',
-    api: 'REST /api/v1/supply/plan',
-    dependencies: ['module-asset-registry'],
-    produces: ['supply-orders'],
-    reuseScore: 0.68,
+    repository: 'https://git.example.com/geology/reservoir-modeler',
+    api: 'REST /api/v1/reservoir/model',
+    dependencies: [],
+    produces: ['artifact-reservoir-forecast'],
+    reuseScore: 0.8,
+    metrics: {
+      tests: 160,
+      coverage: 88,
+      latencyMs: 720
+    },
+    dataIn: [
+      {
+        id: 'seismic-cubes',
+        label: 'Сейсмические кубы и интерпретации',
+        sourceId: 'artifact-seismic-cubes'
+      },
+      {
+        id: 'historical-production',
+        label: 'История добычи по скважинам',
+        sourceId: 'artifact-clean-telemetry'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'reservoir-forecast',
+        label: 'Прогнозные профили добычи',
+        consumerIds: ['module-production-analytics', 'module-workover-planner', 'module-investment-portfolio']
+      }
+    ],
+    formula: 'forecast = reservoirSimulator(model, injectionScenario, historicalProduction)'
+  },
+  {
+    id: 'module-production-analytics',
+    name: 'Аналитика добычи',
+    description: 'Расчитывает показатели добычи, потери и эффективность фонда скважин для оперативного управления.',
+    domains: ['production-monitoring', 'production-optimization', 'production-accounting'],
+    team: 'Operations Intelligence',
+    owner: 'Иван Терехов',
+    status: 'production',
+    repository: 'https://git.example.com/operations/production-analytics',
+    api: 'REST /api/v1/production/metrics',
+    dependencies: ['module-telemetry-ingest', 'module-reservoir-modeler'],
+    produces: ['artifact-production-metrics', 'artifact-losses-report'],
+    reuseScore: 0.83,
+    metrics: {
+      tests: 240,
+      coverage: 91,
+      latencyMs: 540
+    },
+    dataIn: [
+      {
+        id: 'clean-telemetry',
+        label: 'Очищенная телеметрия',
+        sourceId: 'artifact-clean-telemetry'
+      },
+      {
+        id: 'reservoir-forecast',
+        label: 'Прогнозные профили добычи',
+        sourceId: 'artifact-reservoir-forecast'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'production-metrics',
+        label: 'Показатели добычи',
+        consumerIds: ['module-production-control-room', 'module-workover-planner']
+      },
+      {
+        id: 'losses-report',
+        label: 'Отчёт по потерям',
+        consumerIds: ['module-production-control-room']
+      }
+    ],
+    formula: 'q_eff = sum(actualRate) / sum(planRate)'
+  },
+  {
+    id: 'module-workover-planner',
+    name: 'Планировщик КРС',
+    description: 'Формирует программу капитальных ремонтов скважин на основе потерь дебита и технических ограничений.',
+    domains: ['drilling-planning', 'workover-management', 'production-planning'],
+    team: 'Well Operations',
+    owner: 'Ольга Фомина',
+    status: 'in-dev',
+    repository: 'https://git.example.com/wells/workover-planner',
+    api: 'REST /api/v1/workover/plan',
+    dependencies: ['module-production-analytics', 'module-reservoir-modeler'],
+    produces: ['artifact-workover-plan', 'artifact-workover-passports'],
+    reuseScore: 0.64,
+    metrics: {
+      tests: 130,
+      coverage: 82,
+      latencyMs: 810
+    },
+    dataIn: [
+      {
+        id: 'production-metrics',
+        label: 'Показатели добычи',
+        sourceId: 'artifact-production-metrics'
+      },
+      {
+        id: 'reservoir-forecast',
+        label: 'Прогнозные профили добычи',
+        sourceId: 'artifact-reservoir-forecast'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'workover-plan',
+        label: 'План КРС',
+        consumerIds: ['module-production-control-room']
+      },
+      {
+        id: 'workover-passport',
+        label: 'Паспорта ремонтов'
+      }
+    ],
+    formula: 'priority = Δдебит * весРентабельности / длительностьРабот'
+  },
+  {
+    id: 'module-production-control-room',
+    name: 'Ситуационный центр добычи',
+    description: 'Консолидирует ключевые показатели и формирует сменные планы добычи с управлением отклонениями.',
+    domains: ['production-planning', 'production-monitoring', 'performance-management'],
+    team: 'Operations Center',
+    owner: 'Мария Лебедева',
+    status: 'production',
+    repository: 'https://git.example.com/operations/control-room',
+    api: 'GraphQL /graphql',
+    dependencies: ['module-production-analytics', 'module-workover-planner'],
+    produces: ['artifact-production-plan', 'artifact-deviation-dashboard'],
+    reuseScore: 0.78,
+    metrics: {
+      tests: 200,
+      coverage: 89,
+      latencyMs: 620
+    },
+    dataIn: [
+      {
+        id: 'production-metrics',
+        label: 'Показатели добычи',
+        sourceId: 'artifact-production-metrics'
+      },
+      {
+        id: 'workover-plan',
+        label: 'План КРС',
+        sourceId: 'artifact-workover-plan'
+      },
+      {
+        id: 'losses-report',
+        label: 'Отчёт по потерям',
+        sourceId: 'artifact-losses-report'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'shift-plan',
+        label: 'Оперативный план добычи',
+        consumerIds: ['module-pipeline-optimizer', 'module-investment-portfolio']
+      },
+      {
+        id: 'deviation-dashboard',
+        label: 'Дашборд отклонений',
+        consumerIds: ['module-energy-monitor']
+      }
+    ],
+    formula: 'shiftPlan = optimize(planInputs, equipmentConstraints, workoverSchedule)'
+  },
+  {
+    id: 'module-pipeline-optimizer',
+    name: 'Оптимизатор прокачки',
+    description: 'Оптимизирует график прокачки и загрузку инфраструктуры транспортировки нефти.',
+    domains: ['pipeline-dispatch', 'storage-management', 'production-planning'],
+    team: 'Midstream Logistics',
+    owner: 'Андрей Романов',
+    status: 'in-dev',
+    repository: 'https://git.example.com/logistics/pipeline-optimizer',
+    api: 'REST /api/v1/pipeline/schedule',
+    dependencies: ['module-production-control-room'],
+    produces: ['artifact-pipeline-schedule'],
+    reuseScore: 0.7,
+    metrics: {
+      tests: 150,
+      coverage: 84,
+      latencyMs: 680
+    },
+    dataIn: [
+      {
+        id: 'shift-plan',
+        label: 'Оперативный план добычи',
+        sourceId: 'artifact-production-plan'
+      },
+      {
+        id: 'clean-telemetry',
+        label: 'Очищенная телеметрия',
+        sourceId: 'artifact-clean-telemetry'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'flow-schedule',
+        label: 'График прокачки',
+        consumerIds: ['module-energy-monitor']
+      },
+      {
+        id: 'storage-utilization',
+        label: 'Загрузка резервуаров'
+      }
+    ],
+    formula: 'schedule = linearOptimize(flowConstraints, demand, energyCosts)'
+  },
+  {
+    id: 'module-energy-monitor',
+    name: 'Мониторинг энергопотребления',
+    description: 'Сводит энергобаланс промысла, выявляет аномалии и рассылает уведомления по эффективности.',
+    domains: ['energy-monitoring', 'energy-optimization', 'equipment-analytics'],
+    team: 'Energy Lab',
+    owner: 'Сергей Петров',
+    status: 'production',
+    repository: 'https://git.example.com/energy/monitor',
+    api: 'REST /api/v1/energy/balance',
+    dependencies: ['module-telemetry-ingest', 'module-pipeline-optimizer'],
+    produces: ['artifact-energy-balance', 'artifact-energy-alerts'],
+    reuseScore: 0.75,
     metrics: {
       tests: 175,
       coverage: 86,
-      latencyMs: 520
-    }
+      latencyMs: 560
+    },
+    dataIn: [
+      {
+        id: 'clean-telemetry',
+        label: 'Очищенная телеметрия',
+        sourceId: 'artifact-clean-telemetry'
+      },
+      {
+        id: 'flow-schedule',
+        label: 'График прокачки',
+        sourceId: 'artifact-pipeline-schedule'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'energy-balance',
+        label: 'Баланс энергопотребления',
+        consumerIds: ['module-investment-portfolio']
+      },
+      {
+        id: 'efficiency-alerts',
+        label: 'Алерты по энергоэффективности',
+        consumerIds: ['module-production-control-room']
+      }
+    ],
+    formula: 'balance = Σ(потребление) - Σ(генерация)' 
   },
   {
-    id: 'module-hse-monitoring',
-    name: 'HSE мониторинг',
-    description: 'Сбор и анализ показателей безопасности, управление инцидентами.',
-    domains: ['hse', 'hse-monitoring', 'upstream'],
-    team: 'Sustainability Office',
-    owner: 'Ольга Фомина',
-    status: 'production',
-    repository: 'https://git.example.com/hse/monitoring',
-    api: 'REST /api/v1/hse/incidents',
-    dependencies: ['module-well-telemetry', 'module-pipeline-monitoring'],
-    produces: ['hse-alerts'],
-    reuseScore: 0.72,
-    metrics: {
-      tests: 190,
-      coverage: 87,
-      latencyMs: 610
-    }
-  },
-  {
-    id: 'module-reporting-hub',
-    name: 'Хаб финансовой отчётности',
-    description:
-      'Консолидирует финансовые показатели и формирует регламентированную отчётность для акционеров.',
-    domains: ['economics', 'economics-reporting'],
-    team: 'Finance Core',
+    id: 'module-investment-portfolio',
+    name: 'Инвестиционный аналитик',
+    description: 'Формирует инвестиционные паспорта и сценарии развития на основе производственных и энергобалансовых данных.',
+    domains: ['investment-portfolio', 'strategy-asset', 'performance-management'],
+    team: 'Corporate Planning',
     owner: 'Дмитрий Орлов',
     status: 'production',
-    repository: 'https://git.example.com/finance/reporting-hub',
-    api: 'REST /api/v1/reporting',
-    dependencies: ['module-normative-directory', 'module-portfolio-optimizer'],
-    produces: ['financial-reports'],
-    reuseScore: 0.77,
+    repository: 'https://git.example.com/finance/investment-portfolio',
+    api: 'REST /api/v1/investment/cases',
+    dependencies: ['module-production-control-room', 'module-reservoir-modeler', 'module-energy-monitor'],
+    produces: ['artifact-investment-passport', 'artifact-portfolio-report'],
+    reuseScore: 0.82,
     metrics: {
       tests: 220,
-      coverage: 93,
-      latencyMs: 680
-    }
-  },
-  {
-    id: 'module-maintenance-planner',
-    name: 'Планировщик ремонтов',
-    description: 'Формирует расписание ППР на основе телеметрии и отчётов HSE.',
-    domains: ['upstream', 'production-operations', 'hse-monitoring'],
-    team: 'Operations Intelligence',
-    owner: 'Наталья Коваль',
-    status: 'in-dev',
-    repository: 'https://git.example.com/operations/maintenance-planner',
-    api: 'REST /api/v1/maintenance/plan',
-    dependencies: ['module-hse-monitoring', 'module-well-telemetry'],
-    produces: ['maintenance-plans'],
-    reuseScore: 0.61,
-    metrics: {
-      tests: 115,
-      coverage: 78,
-      latencyMs: 720
-    }
-  },
-  {
-    id: 'module-legacy-forecast',
-    name: 'Старый прогноз добычи',
-    description: 'Историческая система прогнозирования без поддержки современных моделей.',
-    domains: ['upstream', 'well-production'],
-    team: 'Legacy Ops',
-    owner: 'Сергей Петров',
-    status: 'deprecated',
-    repository: 'https://git.example.com/legacy/forecast',
-    api: 'REST /api/v1/legacy/forecast',
-    dependencies: [],
-    produces: ['legacy-production-profiles'],
-    reuseScore: 0.15,
-    metrics: {
-      tests: 60,
-      coverage: 42,
-      latencyMs: 1400
-    }
+      coverage: 90,
+      latencyMs: 840
+    },
+    dataIn: [
+      {
+        id: 'shift-plan',
+        label: 'Оперативный план добычи',
+        sourceId: 'artifact-production-plan'
+      },
+      {
+        id: 'reservoir-forecast',
+        label: 'Прогнозные профили добычи',
+        sourceId: 'artifact-reservoir-forecast'
+      },
+      {
+        id: 'energy-balance',
+        label: 'Баланс энергопотребления',
+        sourceId: 'artifact-energy-balance'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'investment-case',
+        label: 'Инвестиционный паспорт проекта'
+      },
+      {
+        id: 'portfolio-report',
+        label: 'Отчёт по портфелю'
+      }
+    ],
+    formula: 'NPV = Σ((cashIn - cashOut) / (1 + WACC)^t)'
   }
 ];
+
+export const moduleNameById: Record<string, string> = modules.reduce((acc, module) => {
+  acc[module.id] = module.name;
+  return acc;
+}, {} as Record<string, string>);
+
+export type ArtifactNode = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export const artifacts: ArtifactNode[] = [
+  {
+    id: 'artifact-clean-telemetry',
+    name: 'Очищенная телеметрия',
+    description: 'Нормализованные показания датчиков скважин.'
+  },
+  {
+    id: 'artifact-asset-passports',
+    name: 'Паспорта оборудования',
+    description: 'Справочник характеристик оборудования и насосов.'
+  },
+  {
+    id: 'artifact-seismic-cubes',
+    name: 'Сейсмические кубы',
+    description: 'Интерпретированные сейсмические данные по месторождению.'
+  },
+  {
+    id: 'artifact-reservoir-forecast',
+    name: 'Прогнозные профили добычи',
+    description: 'Сценарии дебита и накопленной добычи по скважинам.'
+  },
+  {
+    id: 'artifact-production-metrics',
+    name: 'Показатели добычи',
+    description: 'Консолидированные KPI добычи и потерь.'
+  },
+  {
+    id: 'artifact-losses-report',
+    name: 'Отчёт по потерям',
+    description: 'Детализация потерь добычи по причинам.'
+  },
+  {
+    id: 'artifact-workover-plan',
+    name: 'План КРС',
+    description: 'Приоритизированный перечень работ по капитальному ремонту.'
+  },
+  {
+    id: 'artifact-workover-passports',
+    name: 'Паспорта ремонтов',
+    description: 'Комплекты документации по выполненным ремонтам.'
+  },
+  {
+    id: 'artifact-production-plan',
+    name: 'Оперативный план добычи',
+    description: 'Сменные и недельные планы добычи.'
+  },
+  {
+    id: 'artifact-deviation-dashboard',
+    name: 'Дашборд отклонений',
+    description: 'Витрина отклонений факта от плана по ключевым метрикам.'
+  },
+  {
+    id: 'artifact-pipeline-schedule',
+    name: 'График прокачки',
+    description: 'Оптимизированные расписания прокачки и загрузки резервуаров.'
+  },
+  {
+    id: 'artifact-energy-balance',
+    name: 'Баланс энергопотребления',
+    description: 'Свод по потреблению и генерации энергии.'
+  },
+  {
+    id: 'artifact-energy-alerts',
+    name: 'Алерты по энергоэффективности',
+    description: 'Уведомления о превышении целевых энергопоказателей.'
+  },
+  {
+    id: 'artifact-investment-passport',
+    name: 'Инвестиционный паспорт',
+    description: 'Презентация инвестиционного проекта и финансовые метрики.'
+  },
+  {
+    id: 'artifact-portfolio-report',
+    name: 'Отчёт по портфелю',
+    description: 'Агрегированные показатели по инвестиционному портфелю.'
+  }
+];
+
+export const artifactNameById: Record<string, string> = artifacts.reduce((acc, artifact) => {
+  acc[artifact.id] = artifact.name;
+  return acc;
+}, {} as Record<string, string>);
 
 export type GraphLink = {
   source: string;
   target: string;
-  type: 'domain' | 'dependency' | 'produces';
+  type: 'domain' | 'dependency' | 'produces' | 'consumes';
 };
+
+const moduleById: Record<string, ModuleNode> = modules.reduce((acc, module) => {
+  acc[module.id] = module;
+  return acc;
+}, {} as Record<string, ModuleNode>);
 
 export const moduleLinks: GraphLink[] = modules.flatMap((module) => {
   const domainLinks: GraphLink[] = module.domains.map((domainId) => ({
@@ -469,98 +702,19 @@ export const moduleLinks: GraphLink[] = modules.flatMap((module) => {
 
   const produceLinks: GraphLink[] = module.produces.map((artifactId) => ({
     source: module.id,
-    target: `artifact-${artifactId}`,
+    target: artifactId,
     type: 'produces'
   }));
 
-  return [...domainLinks, ...dependencyLinks, ...produceLinks];
+  const consumeLinks: GraphLink[] = module.dataIn
+    .filter((input) => input.sourceId && artifactNameById[input.sourceId])
+    .map((input) => ({
+      source: input.sourceId as string,
+      target: module.id,
+      type: 'consumes'
+    }));
+
+  return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
 });
 
-export type ArtifactNode = {
-  id: string;
-  name: string;
-  description: string;
-};
-
-export const artifacts: ArtifactNode[] = [
-  {
-    id: 'artifact-economics-report',
-    name: 'Экономический отчёт',
-    description: 'Отчётность по ключевым экономическим показателям.'
-  },
-  {
-    id: 'artifact-production-profiles',
-    name: 'Профили добычи',
-    description: 'Набор прогнозных кривых добычи для сценарного анализа.'
-  },
-  {
-    id: 'artifact-telemetry-aggregates',
-    name: 'Агрегаты телеметрии',
-    description: 'Сводные показатели телеметрии для витрин и отчётности.'
-  },
-  {
-    id: 'artifact-cost-breakdown',
-    name: 'Структура затрат',
-    description: 'Расшифровка затрат по статьям.'
-  },
-  {
-    id: 'artifact-normative-datasets',
-    name: 'Нормативные наборы',
-    description: 'Единая точка доступа к нормативной информации.'
-  },
-  {
-    id: 'artifact-legacy-costs',
-    name: 'Устаревшие расчёты затрат',
-    description: 'Набор результатов старой методики расчётов.'
-  },
-  {
-    id: 'artifact-pipeline-alerts',
-    name: 'Оповещения трубопроводов',
-    description: 'События и предупреждения по состоянию трубопроводов.'
-  },
-  {
-    id: 'artifact-asset-catalog',
-    name: 'Каталог активов',
-    description: 'Карточки оборудования и объектов инфраструктуры.'
-  },
-  {
-    id: 'artifact-optimization-recommendations',
-    name: 'Рекомендации по оптимизации',
-    description: 'Набор рекомендаций по оптимальным режимам работы скважин.'
-  },
-  {
-    id: 'artifact-operations-dashboard',
-    name: 'Ситуационный дашборд',
-    description: 'Интерактивная панель ключевых показателей промысла.'
-  },
-  {
-    id: 'artifact-portfolio-scenarios',
-    name: 'Сценарии портфеля',
-    description: 'Набор сценариев инвестиционного портфеля компании.'
-  },
-  {
-    id: 'artifact-supply-orders',
-    name: 'Заявки на снабжение',
-    description: 'План поставок и обеспеченность материалами.'
-  },
-  {
-    id: 'artifact-hse-alerts',
-    name: 'Оповещения HSE',
-    description: 'Уведомления о нарушениях и инцидентах безопасности.'
-  },
-  {
-    id: 'artifact-financial-reports',
-    name: 'Финансовые отчёты',
-    description: 'Набор регламентированных отчётов по компании.'
-  },
-  {
-    id: 'artifact-maintenance-plans',
-    name: 'Планы ремонтов',
-    description: 'Согласованное расписание ППР с указанием ресурсов.'
-  },
-  {
-    id: 'artifact-legacy-production-profiles',
-    name: 'Устаревшие профили добычи',
-    description: 'Исторические прогнозы добычи из старой системы.'
-  }
-];
+export { moduleById };

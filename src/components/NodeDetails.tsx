@@ -1,15 +1,17 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
+import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
-import React from 'react';
-import { domainNameById } from '../data';
+import React, { useEffect, useState } from 'react';
+import { artifactNameById, domainNameById, moduleNameById, type ModuleInput, type ModuleOutput } from '../data';
 import type { GraphNode } from './GraphView';
 import styles from './NodeDetails.module.css';
 
 type NodeDetailsProps = {
   node: GraphNode | null;
   onClose: () => void;
+  onNavigate: (nodeId: string) => void;
 };
 
 const statusBadgeView: Record<string, 'success' | 'warning' | 'alert' | 'normal'> = {
@@ -18,7 +20,18 @@ const statusBadgeView: Record<string, 'success' | 'warning' | 'alert' | 'normal'
   deprecated: 'alert'
 };
 
-const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose }) => {
+type ConsumerOption = {
+  id: string;
+  label: string;
+};
+
+const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) => {
+  const [selectedOutputs, setSelectedOutputs] = useState<Record<string, ConsumerOption | null>>({});
+
+  useEffect(() => {
+    setSelectedOutputs({});
+  }, [node?.id]);
+
   if (!node) {
     return (
       <div className={styles.empty}>
@@ -114,6 +127,27 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose }) => {
           </Text>
         </div>
       )}
+      <ModuleIoSection
+        title="Данные In"
+        items={node.dataIn}
+        onNavigate={onNavigate}
+      />
+      <ModuleOutputSection
+        items={node.dataOut}
+        onNavigate={onNavigate}
+        selections={selectedOutputs}
+        onSelect={(id, value) => {
+          setSelectedOutputs((prev) => ({ ...prev, [id]: value }));
+        }}
+      />
+      <div className={styles.section}>
+        <Text size="s" weight="semibold">
+          Формула расчёта
+        </Text>
+        <Text size="s" className={styles.code}>
+          {node.formula}
+        </Text>
+      </div>
       <div className={styles.metrics}>
         <div>
           <Text size="xs" view="secondary">
@@ -156,5 +190,123 @@ function statusLabel(status: GraphNode & { type: 'module' }['status']) {
       return status;
   }
 }
+
+function resolveEntityName(id: string): string {
+  return moduleNameById[id] ?? artifactNameById[id] ?? domainNameById[id] ?? id;
+}
+
+type ModuleIoSectionProps = {
+  title: string;
+  items: ModuleInput[];
+  onNavigate: (nodeId: string) => void;
+};
+
+const ModuleIoSection: React.FC<ModuleIoSectionProps> = ({ title, items, onNavigate }) => {
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <div className={styles.section}>
+      <Text size="s" weight="semibold">
+        {title}
+      </Text>
+      <ul className={styles.ioList}>
+        {items.map((item) => {
+          const hasSource = Boolean(item.sourceId);
+          const sourceLabel = item.sourceId ? resolveEntityName(item.sourceId) : null;
+
+          return (
+            <li key={item.id} className={styles.ioItem}>
+              <Text size="s" weight="semibold">
+                {item.label}
+              </Text>
+              {hasSource ? (
+                <a
+                  href="#"
+                  className={styles.link}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (item.sourceId) {
+                      onNavigate(item.sourceId);
+                    }
+                  }}
+                >
+                  {sourceLabel}
+                </a>
+              ) : (
+                <Text size="xs" view="secondary">
+                  Источник вне графа
+                </Text>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
+type ModuleOutputSectionProps = {
+  items: ModuleOutput[];
+  onNavigate: (nodeId: string) => void;
+  selections: Record<string, ConsumerOption | null>;
+  onSelect: (id: string, value: ConsumerOption | null) => void;
+};
+
+const ModuleOutputSection: React.FC<ModuleOutputSectionProps> = ({
+  items,
+  onNavigate,
+  selections,
+  onSelect
+}) => {
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <div className={styles.section}>
+      <Text size="s" weight="semibold">
+        Данные Out
+      </Text>
+      <ul className={styles.ioList}>
+        {items.map((item) => {
+          const consumerOptions: ConsumerOption[] = (item.consumerIds ?? []).map((consumerId) => ({
+            id: consumerId,
+            label: resolveEntityName(consumerId)
+          }));
+
+          return (
+            <li key={item.id} className={styles.ioItem}>
+              <Text size="s" weight="semibold">
+                {item.label}
+              </Text>
+              {consumerOptions.length > 0 ? (
+                <Select<ConsumerOption>
+                  size="xs"
+                  placeholder="Перейти к потребителю"
+                  items={consumerOptions}
+                  value={selections[item.id] ?? null}
+                  getItemLabel={(option) => option.label}
+                  getItemKey={(option) => option.id}
+                  onChange={({ value }) => {
+                    onSelect(item.id, value ?? null);
+                    if (value) {
+                      onNavigate(value.id);
+                    }
+                  }}
+                />
+              ) : (
+                <Text size="xs" view="secondary">
+                  Потребители отсутствуют
+                </Text>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
 
 export default NodeDetails;
