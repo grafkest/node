@@ -72,12 +72,12 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, []);
 
   const domainNodes = useMemo(() => {
-    const flatDomains = flattenDomains(domains);
+    const flatDomains = flattenDomains(domains, visibleDomainIds);
     return flatDomains.map((domain) => ({
       ...domain,
       type: 'domain'
     }));
-  }, [domains]);
+  }, [domains, visibleDomainIds]);
 
   const moduleNodes = useMemo<GraphNode[]>(
     () =>
@@ -158,6 +158,12 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
   }, [highlightedNode, graphData]);
 
+  useEffect(() => {
+    if (import.meta.env.DEV && typeof window !== 'undefined' && graphRef.current) {
+      (window as typeof window & { __forceGraphRef?: ForceGraphMethods }).__forceGraphRef = graphRef.current;
+    }
+  }, [graphData]);
+
   return (
     <div ref={containerRef} className={styles.container}>
       <div className={styles.legend}>
@@ -186,8 +192,22 @@ const GraphView: React.FC<GraphViewProps> = ({
   );
 };
 
-function flattenDomains(domains: DomainNode[]): DomainNode[] {
-  return domains.flatMap((domain) => [domain, ...(domain.children ? flattenDomains(domain.children) : [])]);
+function flattenDomains(domains: DomainNode[], visibleDomainIds?: Set<string>): DomainNode[] {
+  const visible = visibleDomainIds && visibleDomainIds.size > 0 ? visibleDomainIds : null;
+
+  const collect = (node: DomainNode): DomainNode[] => {
+    const childLists = node.children?.map(collect) ?? [];
+    const hasVisibleChild = childLists.some((list) => list.length > 0);
+    const includeSelf = !visible || visible.has(node.id) || hasVisibleChild;
+
+    if (!includeSelf) {
+      return [];
+    }
+
+    return [node, ...childLists.flat()];
+  };
+
+  return domains.flatMap(collect);
 }
 
 type GraphPalette = {
