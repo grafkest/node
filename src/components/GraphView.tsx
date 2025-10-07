@@ -1,7 +1,7 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Loader } from '@consta/uikit/Loader';
 import { useTheme } from '@consta/uikit/Theme';
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D, { LinkObject, NodeObject, ForceGraphMethods } from 'react-force-graph-2d';
 import type { DomainNode, ModuleNode, ArtifactNode, GraphLink } from '../data';
 import styles from './GraphView.module.css';
@@ -38,6 +38,35 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
   const graphRef = useRef<ForceGraphMethods | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const element = containerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const observer = new window.ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+
+      const { width, height } = entry.contentRect;
+      setDimensions((prev) =>
+        prev.width === width && prev.height === height ? prev : { width, height }
+      );
+    });
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
 
   const graphData = useMemo(() => {
     const flatDomains = flattenDomains(domains);
@@ -85,7 +114,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, [highlightedNode, graphData]);
 
   return (
-    <div className={styles.container}>
+    <div ref={containerRef} className={styles.container}>
       <div className={styles.legend}>
         <Badge label="Модуль" size="s" view="filled" status="warning" />
         <Badge label="Домен" size="s" view="filled" status="info" />
@@ -94,8 +123,8 @@ const GraphView: React.FC<GraphViewProps> = ({
       <React.Suspense fallback={<Loader size="m" />}>
         <ForceGraph2D
           ref={graphRef}
-          width={undefined}
-          height={undefined}
+          width={dimensions.width || 600}
+          height={dimensions.height || 400}
           graphData={graphData}
           nodeLabel={(node: ForceNode) => node.name ?? node.id}
           linkColor={(link: ForceLink) =>
