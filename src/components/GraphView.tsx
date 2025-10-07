@@ -122,21 +122,14 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, [domainNodes, artifactNodes, moduleNodes]);
 
   const filteredLinks = useMemo(() => {
-    const domainFilter = new Set(visibleDomainIds);
     return links.filter((link) => {
       if (!showDependencies && link.type === 'dependency') {
         return false;
       }
 
-      if (visibleDomainIds.size > 0 && link.type === 'domain') {
-        const targetId =
-          typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
-        return domainFilter.has(targetId);
-      }
-
       return true;
     });
-  }, [links, showDependencies, visibleDomainIds]);
+  }, [links, showDependencies]);
 
   const graphData = useMemo(
     () => ({
@@ -169,7 +162,7 @@ const GraphView: React.FC<GraphViewProps> = ({
     <div ref={containerRef} className={styles.container}>
       <div className={styles.legend}>
         <Badge label="Модуль" size="s" view="filled" status="warning" />
-        <Badge label="Домен" size="s" view="filled" status="info" />
+        <Badge label="Домен" size="s" view="filled" status="system" />
         <Badge label="Артефакт" size="s" view="filled" status="success" />
       </div>
       <React.Suspense fallback={<Loader size="m" />}>
