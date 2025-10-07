@@ -13,6 +13,7 @@ import {
   moduleLinks,
   modules,
   type DomainNode,
+  type ModuleNode,
   type ModuleStatus
 } from './data';
 import styles from './App.module.css';
@@ -58,19 +59,26 @@ function App() {
     return dependents;
   }, []);
 
-  const filteredModules = useMemo(() => {
-    return modules.filter((module) => {
+  const matchesModuleFilters = useCallback(
+    (module: ModuleNode) => {
       const matchesDomain =
         selectedDomains.size === 0 || module.domains.some((domain) => selectedDomains.has(domain));
+      const normalizedSearch = search.trim().toLowerCase();
       const matchesSearch =
-        search.trim().length === 0 ||
-        module.name.toLowerCase().includes(search.toLowerCase()) ||
-        module.owner.toLowerCase().includes(search.toLowerCase());
+        normalizedSearch.length === 0 ||
+        module.name.toLowerCase().includes(normalizedSearch) ||
+        module.owner.toLowerCase().includes(normalizedSearch);
       const matchesStatus = statusFilters.has(module.status);
       const matchesTeam = teamFilter ? module.team === teamFilter : true;
       return matchesDomain && matchesSearch && matchesStatus && matchesTeam;
-    });
-  }, [selectedDomains, search, statusFilters, teamFilter]);
+    },
+    [search, selectedDomains, statusFilters, teamFilter]
+  );
+
+  const filteredModules = useMemo(
+    () => modules.filter((module) => matchesModuleFilters(module)),
+    [matchesModuleFilters]
+  );
 
   const artifactMap = useMemo(() => new Map(artifacts.map((artifact) => [artifact.id, artifact])), []);
   const domainMap = useMemo(
@@ -140,13 +148,13 @@ function App() {
         return;
       }
       const module = moduleById[moduleId];
-      if (module) {
+      if (module && matchesModuleFilters(module)) {
         extended.push(module);
       }
     });
 
     return extended;
-  }, [filteredModules, contextModuleIds]);
+  }, [filteredModules, contextModuleIds, matchesModuleFilters]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
