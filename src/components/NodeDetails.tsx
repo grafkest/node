@@ -3,7 +3,7 @@ import { Button } from '@consta/uikit/Button';
 import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
-import React from 'react';
+import React, { useState } from 'react';
 import { artifactNameById, domainNameById, moduleNameById, type ModuleInput, type ModuleOutput } from '../data';
 import type { GraphNode } from './GraphView';
 import styles from './NodeDetails.module.css';
@@ -265,18 +265,10 @@ const ModuleOutputSection: React.FC<ModuleOutputSectionProps> = ({
                 {item.label}
               </Text>
               {consumerOptions.length > 0 ? (
-                <Select<ConsumerOption>
-                  size="xs"
+                <ConsumerSelect
+                  options={consumerOptions}
+                  onNavigate={onNavigate}
                   placeholder="Перейти к потребителю"
-                  items={consumerOptions}
-                  value={null}
-                  getItemLabel={(option) => option.label}
-                  getItemKey={(option) => option.id}
-                  onChange={({ value }) => {
-                    if (value) {
-                      onNavigate(value.id);
-                    }
-                  }}
                 />
               ) : (
                 <Text size="xs" view="secondary">
@@ -288,6 +280,34 @@ const ModuleOutputSection: React.FC<ModuleOutputSectionProps> = ({
         })}
       </ul>
     </div>
+  );
+};
+
+type ConsumerSelectProps = {
+  options: ConsumerOption[];
+  placeholder: string;
+  onNavigate: (nodeId: string) => void;
+};
+
+const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, onNavigate }) => {
+  const [value, setValue] = useState<ConsumerOption | null>(null);
+
+  return (
+    <Select<ConsumerOption>
+      size="xs"
+      placeholder={placeholder}
+      items={options}
+      value={value}
+      getItemLabel={(option) => option.label}
+      getItemKey={(option) => option.id}
+      onChange={({ value: nextValue }) => {
+        setValue(nextValue ?? null);
+        if (nextValue) {
+          onNavigate(nextValue.id);
+          setTimeout(() => setValue(null), 0);
+        }
+      }}
+    />
   );
 };
 
