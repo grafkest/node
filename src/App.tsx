@@ -13,6 +13,7 @@ import {
   moduleLinks,
   modules,
   type DomainNode,
+  type ModuleNode,
   type ModuleStatus
 } from './data';
 import styles from './App.module.css';
@@ -58,19 +59,26 @@ function App() {
     return dependents;
   }, []);
 
-  const filteredModules = useMemo(() => {
-    return modules.filter((module) => {
+  const matchesModuleFilters = useCallback(
+    (module: ModuleNode) => {
       const matchesDomain =
-        selectedDomains.size === 0 || module.domains.some((domain) => selectedDomains.has(domain));
+        selectedDomains.size > 0 && module.domains.some((domain) => selectedDomains.has(domain));
+      const normalizedSearch = search.trim().toLowerCase();
       const matchesSearch =
-        search.trim().length === 0 ||
-        module.name.toLowerCase().includes(search.toLowerCase()) ||
-        module.owner.toLowerCase().includes(search.toLowerCase());
+        normalizedSearch.length === 0 ||
+        module.name.toLowerCase().includes(normalizedSearch) ||
+        module.owner.toLowerCase().includes(normalizedSearch);
       const matchesStatus = statusFilters.has(module.status);
       const matchesTeam = teamFilter ? module.team === teamFilter : true;
       return matchesDomain && matchesSearch && matchesStatus && matchesTeam;
-    });
-  }, [selectedDomains, search, statusFilters, teamFilter]);
+    },
+    [search, selectedDomains, statusFilters, teamFilter]
+  );
+
+  const filteredModules = useMemo(
+    () => modules.filter((module) => matchesModuleFilters(module)),
+    [matchesModuleFilters]
+  );
 
   const artifactMap = useMemo(() => new Map(artifacts.map((artifact) => [artifact.id, artifact])), []);
   const domainMap = useMemo(
@@ -140,13 +148,13 @@ function App() {
         return;
       }
       const module = moduleById[moduleId];
-      if (module) {
+      if (module && matchesModuleFilters(module)) {
         extended.push(module);
       }
     });
 
     return extended;
-  }, [filteredModules, contextModuleIds]);
+  }, [filteredModules, contextModuleIds, matchesModuleFilters]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
@@ -167,6 +175,11 @@ function App() {
 
     return ids;
   }, [graphModules, highlightedDomainId, domainAncestors]);
+
+  const graphDomains = useMemo(
+    () => filterDomainTreeByIds(domainTree, relevantDomainIds),
+    [relevantDomainIds]
+  );
 
   const graphArtifacts = useMemo(() => {
     const moduleIds = new Set(graphModules.map((module) => module.id));
@@ -311,46 +324,7 @@ function App() {
     showDependencies
   ]);
 
-  const ensureDomainsVisible = useCallback((domainIds: string[]) => {
-    setSelectedDomains((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-      domainIds.forEach((domainId) => {
-        if (!next.has(domainId)) {
-          changed = true;
-          next.add(domainId);
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, []);
-
   const handleSelectNode = (node: GraphNode | null) => {
-    if (node?.type === 'module') {
-      const relatedDomains = new Set(node.domains);
-      node.dependencies.forEach((dependencyId) => {
-        const dependency = moduleById[dependencyId];
-        dependency?.domains.forEach((domainId) => relatedDomains.add(domainId));
-      });
-      const dependents = moduleDependents.get(node.id);
-      dependents?.forEach((dependentId) => {
-        const dependent = moduleById[dependentId];
-        dependent?.domains.forEach((domainId) => relatedDomains.add(domainId));
-      });
-      ensureDomainsVisible(Array.from(relatedDomains));
-    }
-
-    if (node?.type === 'artifact') {
-      const related = new Set<string>([node.domainId]);
-      const producer = moduleById[node.producedBy];
-      producer?.domains.forEach((domainId) => related.add(domainId));
-      node.consumerIds.forEach((consumerId) => {
-        const consumer = moduleById[consumerId];
-        consumer?.domains.forEach((domainId) => related.add(domainId));
-      });
-      ensureDomainsVisible(Array.from(related));
-    }
-
     setSelectedNode(node);
   };
 
@@ -415,21 +389,12 @@ function App() {
           const dependent = moduleById[dependentId];
           dependent?.domains.forEach((domainId) => relatedDomains.add(domainId));
         });
-        ensureDomainsVisible(Array.from(relatedDomains));
         setSelectedNode({ ...module, type: 'module' });
         return;
       }
 
       const artifact = artifactMap.get(nodeId);
       if (artifact) {
-        const related = new Set<string>([artifact.domainId]);
-        const producer = moduleById[artifact.producedBy];
-        producer?.domains.forEach((domainId) => related.add(domainId));
-        artifact.consumerIds.forEach((consumerId) => {
-          const consumer = moduleById[consumerId];
-          consumer?.domains.forEach((domainId) => related.add(domainId));
-        });
-        ensureDomainsVisible(Array.from(related));
         setSelectedNode({ ...artifact, type: 'artifact', reuseScore: 0 });
         return;
       }
@@ -439,7 +404,7 @@ function App() {
         setSelectedNode({ ...domain, type: 'domain' });
       }
     },
-    [artifactMap, domainMap, ensureDomainsVisible, moduleDependents]
+    [artifactMap, domainMap, moduleDependents]
   );
 
   useEffect(() => {
@@ -502,7 +467,7 @@ function App() {
           <div className={styles.graphContainer}>
             <GraphView
               modules={graphModules}
-              domains={domainTree}
+              domains={graphDomains}
               artifacts={graphArtifacts}
               links={filteredLinks}
               showDependencies={showDependencies}
@@ -561,6 +526,28 @@ function buildDomainAncestors(domains: DomainNode[]): Map<string, string[]> {
   domains.forEach((domain) => visit(domain, []));
 
   return map;
+}
+
+function filterDomainTreeByIds(domains: DomainNode[], allowed: Set<string>): DomainNode[] {
+  if (allowed.size === 0) {
+    return [];
+  }
+
+  return domains
+    .map((domain) => {
+      const children = domain.children ? filterDomainTreeByIds(domain.children, allowed) : [];
+      const include = allowed.has(domain.id) || children.length > 0;
+
+      if (!include) {
+        return null;
+      }
+
+      return {
+        ...domain,
+        children: children.length > 0 ? children : undefined
+      };
+    })
+    .filter((domain): domain is DomainNode => domain !== null);
 }
 
 type LinkEndpoint = string | { id: string };
