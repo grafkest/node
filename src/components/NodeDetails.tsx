@@ -53,6 +53,12 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
   }
 
   if (node.type === 'artifact') {
+    const producerLabel = moduleNameById[node.producedBy] ?? node.producedBy;
+    const consumerLabels = node.consumerIds.map((consumerId) => ({
+      id: consumerId,
+      label: moduleNameById[consumerId] ?? consumerId
+    }));
+
     return (
       <div className={styles.container}>
         <header className={styles.header}>
@@ -61,9 +67,83 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
           </Text>
           <Button size="xs" label="Закрыть" view="ghost" onClick={onClose} />
         </header>
-        <Text size="s" view="secondary">
-          {node.description}
-        </Text>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Описание
+          </Text>
+          <Text size="s" view="secondary">
+            {node.description}
+          </Text>
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Доменная область
+          </Text>
+          <div className={styles.tagList}>
+            <Tag label={domainNameById[node.domainId] ?? node.domainId} size="xs" />
+          </div>
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Модуль-источник
+          </Text>
+          <a
+            href="#"
+            className={styles.link}
+            onClick={(event) => {
+              event.preventDefault();
+              onNavigate(node.producedBy);
+            }}
+          >
+            {producerLabel}
+          </a>
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Модули-потребители
+          </Text>
+          {consumerLabels.length > 0 ? (
+            <div className={styles.tagList}>
+              {consumerLabels.map((consumer) => (
+                <a
+                  key={consumer.id}
+                  href="#"
+                  className={styles.link}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onNavigate(consumer.id);
+                  }}
+                >
+                  {consumer.label}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <Text size="xs" view="secondary">
+              Потребители отсутствуют
+            </Text>
+          )}
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Тип данных
+          </Text>
+          <Text size="s">{node.dataType}</Text>
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Пример данных
+          </Text>
+          <a href={node.sampleUrl} className={styles.link} target="_blank" rel="noreferrer">
+            {node.sampleUrl}
+          </a>
+        </div>
       </div>
     );
   }

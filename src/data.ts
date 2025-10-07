@@ -404,38 +404,79 @@ export type ArtifactNode = {
   id: string;
   name: string;
   description: string;
+  domainId: string;
+  producedBy: string;
+  consumerIds: string[];
+  dataType: string;
+  sampleUrl: string;
 };
 
 export const artifacts: ArtifactNode[] = [
   {
     id: 'artifact-clean-telemetry',
     name: 'Очищенная телеметрия',
-    description: 'Нормализованные показания датчиков скважин.'
+    description:
+      'Нормализованные показания датчиков скважин, очищенные от выбросов и приведённые к единому формату.',
+    domainId: 'well-operations',
+    producedBy: 'module-telemetry-cleansing',
+    consumerIds: ['module-well-dashboard', 'module-lift-predictor'],
+    dataType: 'Временной ряд телеметрии',
+    sampleUrl: 'https://storage.example.com/datasets/telemetry-clean-sample.parquet'
   },
   {
     id: 'artifact-deviation-report',
     name: 'Отчёт об отклонениях',
-    description: 'Фактические и плановые показатели добычи по скважинам.'
+    description:
+      'Сводный отчёт по фактической добыче и плановым лимитам с выделением критических отклонений.',
+    domainId: 'well-operations',
+    producedBy: 'module-well-dashboard',
+    consumerIds: ['module-shift-planner', 'module-investment-evaluator'],
+    dataType: 'Агрегированные метрики',
+    sampleUrl: 'https://storage.example.com/datasets/deviation-report-sample.xlsx'
   },
   {
     id: 'artifact-shift-plan',
     name: 'Сменный план добычи',
-    description: 'Оптимизированный план добычи на смену.'
+    description:
+      'Оптимизированное сменное задание с разбивкой по скважинам и оборудованию.',
+    domainId: 'short-term-planning',
+    producedBy: 'module-shift-planner',
+    consumerIds: ['module-investment-evaluator'],
+    dataType: 'Операционный план',
+    sampleUrl: 'https://storage.example.com/datasets/shift-plan-sample.json'
   },
   {
     id: 'artifact-failure-forecast',
     name: 'Прогноз отказов УЭЦН',
-    description: 'Вероятности отказов оборудования по скважинам.'
+    description:
+      'Предсказанные вероятности отказов насосного оборудования и ожидаемый срок до события.',
+    domainId: 'lift-diagnostics',
+    producedBy: 'module-lift-predictor',
+    consumerIds: ['module-energy-optimizer'],
+    dataType: 'Вероятностная оценка',
+    sampleUrl: 'https://storage.example.com/datasets/failure-forecast-sample.csv'
   },
   {
     id: 'artifact-energy-balance',
     name: 'Баланс энергопотребления',
-    description: 'Расчётные показатели энергопотребления и экономии.'
+    description:
+      'Расчётные профили энергопотребления с учётом оптимизационных сценариев и тарифов.',
+    domainId: 'energy-optimization',
+    producedBy: 'module-energy-optimizer',
+    consumerIds: ['module-investment-evaluator'],
+    dataType: 'Энергетический баланс',
+    sampleUrl: 'https://storage.example.com/datasets/energy-balance-sample.csv'
   },
   {
     id: 'artifact-investment-brief',
     name: 'Инвестиционное досье',
-    description: 'Финансовые метрики и рекомендации по проекту.'
+    description:
+      'Инвестиционное досье с ключевыми финансовыми метриками, сценариями и рекомендациями.',
+    domainId: 'investment-analysis',
+    producedBy: 'module-investment-evaluator',
+    consumerIds: [],
+    dataType: 'Финансовый отчёт',
+    sampleUrl: 'https://storage.example.com/datasets/investment-brief-sample.pdf'
   }
 ];
 
