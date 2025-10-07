@@ -19,6 +19,7 @@ type GraphViewProps = {
   showDependencies: boolean;
   onSelect: (node: GraphNode | null) => void;
   highlightedNode: string | null;
+  visibleDomainIds: Set<string>;
 };
 
 type ForceNode = NodeObject & GraphNode;
@@ -31,7 +32,8 @@ const GraphView: React.FC<GraphViewProps> = ({
   links,
   showDependencies,
   onSelect,
-  highlightedNode
+  highlightedNode,
+  visibleDomainIds
 }) => {
   const { theme } = useTheme();
   const themeClassName = theme?.className ?? 'default';
@@ -68,13 +70,16 @@ const GraphView: React.FC<GraphViewProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  const graphData = useMemo(() => {
+  const domainNodes = useMemo(() => {
     const flatDomains = flattenDomains(domains);
-    const domainNodes: GraphNode[] = flatDomains.map((domain) => ({
+    return flatDomains.map((domain) => ({
       ...domain,
       type: 'domain'
     }));
+  }, [domains]);
 
+  const graphData = useMemo(() => {
+    const domainFilter = new Set(visibleDomainIds);
     const artifactNodes: GraphNode[] = artifacts.map((artifact) => ({
       ...artifact,
       type: 'artifact',
@@ -86,13 +91,25 @@ const GraphView: React.FC<GraphViewProps> = ({
       type: 'module'
     }));
 
-    const filteredLinks = links.filter((link) => link.type !== 'dependency' || showDependencies);
+    const filteredLinks = links.filter((link) => {
+      if (!showDependencies && link.type === 'dependency') {
+        return false;
+      }
+
+      if (visibleDomainIds.size > 0 && link.type === 'domain') {
+        const targetId =
+          typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
+        return domainFilter.has(targetId);
+      }
+
+      return true;
+    });
 
     return {
       nodes: [...domainNodes, ...artifactNodes, ...moduleNodes],
       links: filteredLinks
     };
-  }, [modules, domains, artifacts, links, showDependencies]);
+  }, [modules, domainNodes, artifacts, links, showDependencies, visibleDomainIds]);
 
   useEffect(() => {
     if (!highlightedNode || !graphRef.current) {
@@ -127,17 +144,9 @@ const GraphView: React.FC<GraphViewProps> = ({
           height={dimensions.height || 400}
           graphData={graphData}
           nodeLabel={(node: ForceNode) => node.name ?? node.id}
-          linkColor={(link: ForceLink) =>
-            link.type === 'dependency'
-              ? palette.linkDependency
-              : link.type === 'produces'
-                ? palette.linkProduces
-                : link.type === 'consumes'
-                  ? palette.linkConsumes
-                  : palette.linkRelates
-          }
+          linkColor={(link: ForceLink) => resolveLinkColor(link, palette, visibleDomainIds)}
           nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
-            drawNode(node, ctx, globalScale, highlightedNode, palette);
+            drawNode(node, ctx, globalScale, highlightedNode, palette, visibleDomainIds);
           }}
           nodeCanvasObjectMode={() => 'replace'}
           onNodeClick={(node) => {
@@ -169,11 +178,16 @@ function drawNode(
   ctx: CanvasRenderingContext2D,
   globalScale: number,
   highlighted: string | null,
-  palette: GraphPalette
+  palette: GraphPalette,
+  visibleDomainIds: Set<string>
 ) {
   const label = node.name ?? node.id;
   const fontSize = 12 / Math.sqrt(globalScale);
   const radius = node.type === 'module' ? 10 : node.type === 'domain' ? 8 : 6;
+  const isDomainDimmed =
+    node.type === 'domain' && visibleDomainIds.size > 0 && !visibleDomainIds.has(node.id);
+  const isHighlighted = highlighted && node.id === highlighted;
+  const baseAlpha = isHighlighted ? 1 : isDomainDimmed ? 0.2 : 1;
   ctx.save();
   ctx.beginPath();
   ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
@@ -183,15 +197,57 @@ function drawNode(
       : node.type === 'domain'
         ? palette.domain
         : palette.artifact;
-  ctx.globalAlpha = highlighted && node.id !== highlighted ? 0.5 : 1;
+  ctx.globalAlpha = highlighted && node.id !== highlighted ? 0.5 * baseAlpha : baseAlpha;
   ctx.fill();
   ctx.globalAlpha = 1;
   ctx.font = `${fontSize}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillStyle = palette.text;
+  if (isDomainDimmed && !isHighlighted) {
+    ctx.globalAlpha = 0.6;
+  }
   ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + radius + 4);
   ctx.restore();
+}
+
+function resolveLinkColor(link: ForceLink, palette: GraphPalette, visibleDomainIds: Set<string>) {
+  const baseColor =
+    link.type === 'dependency'
+      ? palette.linkDependency
+      : link.type === 'produces'
+        ? palette.linkProduces
+        : link.type === 'consumes'
+          ? palette.linkConsumes
+          : palette.linkRelates;
+
+  if (link.type !== 'domain' || visibleDomainIds.size === 0) {
+    return baseColor;
+  }
+
+  const targetId = typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
+  if (visibleDomainIds.has(targetId)) {
+    return baseColor;
+  }
+
+  return withAlpha(baseColor, 0.2);
+}
+
+function withAlpha(color: string, alpha: number) {
+  if (!color.startsWith('#')) {
+    return color;
+  }
+
+  const hex = color.slice(1);
+  if (hex.length !== 6) {
+    return color;
+  }
+
+  const bigint = Number.parseInt(hex, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function resolvePalette(themeClassName?: string): GraphPalette {

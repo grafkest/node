@@ -67,11 +67,6 @@ function App() {
     return ids;
   }, [filteredModules, highlightedDomainId]);
 
-  const filteredDomains = useMemo(
-    () => filterDomainsByIds(domainTree, relevantDomainIds),
-    [relevantDomainIds]
-  );
-
   const artifactMap = useMemo(() => new Map(artifacts.map((artifact) => [artifact.id, artifact])), []);
   const domainMap = useMemo(() => new Map(flattenDomainTree(domainTree).map((domain) => [domain.id, domain])), []);
 
@@ -180,12 +175,13 @@ function App() {
           <div className={styles.graphContainer}>
             <GraphView
               modules={filteredModules}
-              domains={filteredDomains}
+              domains={domainTree}
               artifacts={artifacts}
               links={filteredLinks}
               showDependencies={showDependencies}
               onSelect={(node) => setSelectedNode(node)}
               highlightedNode={selectedNode?.id ?? null}
+              visibleDomainIds={relevantDomainIds}
             />
           </div>
           <div className={styles.analytics}>
@@ -198,21 +194,6 @@ function App() {
       </main>
     </Layout>
   );
-}
-
-function filterDomainsByIds(domains: DomainNode[], allowed: Set<string>): DomainNode[] {
-  const includeAll = allowed.size === 0;
-
-  return domains
-    .map((domain) => {
-      const children = domain.children ? filterDomainsByIds(domain.children, allowed) : [];
-      const shouldInclude = includeAll || allowed.has(domain.id) || children.length > 0;
-      if (!shouldInclude) {
-        return null;
-      }
-      return { ...domain, children };
-    })
-    .filter(Boolean) as DomainNode[];
 }
 
 function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
