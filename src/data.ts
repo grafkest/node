@@ -44,9 +44,9 @@ export type ModuleNode = {
 
 export const domainTree: DomainNode[] = [
   {
-    id: 'competencies',
-    name: 'Компетенции',
-    description: 'Структура цифровых компетенций компании',
+    id: 'extraction',
+    name: 'Добыча',
+    description: 'Функции департамента управления добычей',
     children: [
       {
         id: 'production',

@@ -57,29 +57,34 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           Статусы
         </Text>
         <div className={styles.badgeList}>
-          {statuses.map((status) => (
-            <Badge
-              key={status}
-              label={statusLabels[status]}
-              size="s"
-              status={activeStatuses.has(status) ? 'system' : 'normal'}
-              minified
-              interactive
-              onClick={() => onToggleStatus(status)}
-            />
-          ))}
+          {statuses.map((status) => {
+            const isActive = activeStatuses.has(status);
+            return (
+              <Badge
+                key={status}
+                label={statusLabels[status]}
+                size="s"
+                status={isActive ? 'system' : 'normal'}
+                view={isActive ? 'filled' : 'stroked'}
+                interactive
+                onClick={() => onToggleStatus(status)}
+              />
+            );
+          })}
         </div>
       </div>
 
       <div className={styles.field}>
         <Text size="s" weight="semibold">
-          Команда
+          Название продукта
         </Text>
         <Select
-          placeholder="Все команды"
+          placeholder="Все продукты"
           size="s"
           items={teams}
           value={teamFilter}
+          getItemKey={(item) => item}
+          getItemLabel={(item) => item}
           onChange={({ value }) => onTeamChange(value ?? null)}
           form="default"
           className={styles.combobox}
