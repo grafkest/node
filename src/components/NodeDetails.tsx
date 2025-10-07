@@ -382,11 +382,13 @@ const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, o
       getItemKey={(option) => option.id}
       onChange={({ value: nextValue }) => {
         setValue(nextValue ?? null);
-      }}
-      onItemClick={({ item }) => {
-        setValue(item);
+
+        if (!nextValue) {
+          return;
+        }
+
         const runNavigation = () => {
-          onNavigate(item.id);
+          onNavigate(nextValue.id);
           setValue(null);
         };
 

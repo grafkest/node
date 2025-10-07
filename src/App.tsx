@@ -32,6 +32,31 @@ function App() {
 
   const domainDescendants = useMemo(() => buildDomainDescendants(domainTree), []);
 
+  const moduleDependents = useMemo(() => {
+    const dependents = new Map<string, Set<string>>();
+
+    modules.forEach((module) => {
+      module.dependencies.forEach((dependencyId) => {
+        if (!dependents.has(dependencyId)) {
+          dependents.set(dependencyId, new Set());
+        }
+        dependents.get(dependencyId)!.add(module.id);
+      });
+    });
+
+    artifacts.forEach((artifact) => {
+      if (!dependents.has(artifact.producedBy)) {
+        dependents.set(artifact.producedBy, new Set());
+      }
+      const entry = dependents.get(artifact.producedBy)!;
+      artifact.consumerIds.forEach((consumerId) => {
+        entry.add(consumerId);
+      });
+    });
+
+    return dependents;
+  }, []);
+
   const filteredModules = useMemo(() => {
     return modules.filter((module) => {
       const matchesDomain =
@@ -46,18 +71,81 @@ function App() {
     });
   }, [selectedDomains, search, statusFilters, teamFilter]);
 
+  const artifactMap = useMemo(() => new Map(artifacts.map((artifact) => [artifact.id, artifact])), []);
+  const domainMap = useMemo(
+    () => new Map(flattenDomainTree(domainTree).map((domain) => [domain.id, domain])),
+    []
+  );
+
+  const contextModuleIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    if (!selectedNode) {
+      return ids;
+    }
+
+    if (selectedNode.type === 'module') {
+      ids.add(selectedNode.id);
+      selectedNode.dependencies.forEach((dependencyId) => ids.add(dependencyId));
+
+      const dependents = moduleDependents.get(selectedNode.id);
+      dependents?.forEach((dependentId) => ids.add(dependentId));
+
+      selectedNode.dataIn.forEach((input) => {
+        if (!input.sourceId) {
+          return;
+        }
+        const sourceArtifact = artifactMap.get(input.sourceId);
+        if (sourceArtifact) {
+          ids.add(sourceArtifact.producedBy);
+        }
+      });
+
+      selectedNode.produces.forEach((artifactId) => {
+        const artifact = artifactMap.get(artifactId);
+        artifact?.consumerIds.forEach((consumerId) => ids.add(consumerId));
+      });
+
+      return ids;
+    }
+
+    if (selectedNode.type === 'artifact') {
+      ids.add(selectedNode.producedBy);
+      selectedNode.consumerIds.forEach((consumerId) => ids.add(consumerId));
+      return ids;
+    }
+
+    if (selectedNode.type === 'domain') {
+      modules.forEach((module) => {
+        if (module.domains.includes(selectedNode.id)) {
+          ids.add(module.id);
+        }
+      });
+    }
+
+    return ids;
+  }, [selectedNode, moduleDependents, artifactMap]);
+
   const graphModules = useMemo(() => {
-    if (selectedNode?.type !== 'module') {
+    if (contextModuleIds.size === 0) {
       return filteredModules;
     }
 
-    if (filteredModules.some((module) => module.id === selectedNode.id)) {
-      return filteredModules;
-    }
+    const existing = new Set(filteredModules.map((module) => module.id));
+    const extended = [...filteredModules];
 
-    const fallback = moduleById[selectedNode.id];
-    return fallback ? [...filteredModules, fallback] : filteredModules;
-  }, [filteredModules, selectedNode]);
+    contextModuleIds.forEach((moduleId) => {
+      if (existing.has(moduleId)) {
+        return;
+      }
+      const module = moduleById[moduleId];
+      if (module) {
+        extended.push(module);
+      }
+    });
+
+    return extended;
+  }, [filteredModules, contextModuleIds]);
 
   const filteredLinks = useMemo(() => {
     const moduleIds = new Set(graphModules.map((module) => module.id));
@@ -82,9 +170,6 @@ function App() {
     }
     return ids;
   }, [graphModules, highlightedDomainId]);
-
-  const artifactMap = useMemo(() => new Map(artifacts.map((artifact) => [artifact.id, artifact])), []);
-  const domainMap = useMemo(() => new Map(flattenDomainTree(domainTree).map((domain) => [domain.id, domain])), []);
 
   const graphArtifacts = useMemo(() => {
     const moduleIds = new Set(graphModules.map((module) => module.id));
@@ -132,11 +217,28 @@ function App() {
 
   const handleSelectNode = (node: GraphNode | null) => {
     if (node?.type === 'module') {
-      ensureDomainsVisible(node.domains);
+      const relatedDomains = new Set(node.domains);
+      node.dependencies.forEach((dependencyId) => {
+        const dependency = moduleById[dependencyId];
+        dependency?.domains.forEach((domainId) => relatedDomains.add(domainId));
+      });
+      const dependents = moduleDependents.get(node.id);
+      dependents?.forEach((dependentId) => {
+        const dependent = moduleById[dependentId];
+        dependent?.domains.forEach((domainId) => relatedDomains.add(domainId));
+      });
+      ensureDomainsVisible(Array.from(relatedDomains));
     }
 
     if (node?.type === 'artifact') {
-      ensureDomainsVisible([node.domainId]);
+      const related = new Set<string>([node.domainId]);
+      const producer = moduleById[node.producedBy];
+      producer?.domains.forEach((domainId) => related.add(domainId));
+      node.consumerIds.forEach((consumerId) => {
+        const consumer = moduleById[consumerId];
+        consumer?.domains.forEach((domainId) => related.add(domainId));
+      });
+      ensureDomainsVisible(Array.from(related));
     }
 
     setSelectedNode(node);
@@ -192,14 +294,31 @@ function App() {
   const handleNavigate = (nodeId: string) => {
     if (moduleById[nodeId]) {
       const module = moduleById[nodeId];
-      ensureDomainsVisible(module.domains);
+      const relatedDomains = new Set(module.domains);
+      module.dependencies.forEach((dependencyId) => {
+        const dependency = moduleById[dependencyId];
+        dependency?.domains.forEach((domainId) => relatedDomains.add(domainId));
+      });
+      const dependents = moduleDependents.get(module.id);
+      dependents?.forEach((dependentId) => {
+        const dependent = moduleById[dependentId];
+        dependent?.domains.forEach((domainId) => relatedDomains.add(domainId));
+      });
+      ensureDomainsVisible(Array.from(relatedDomains));
       setSelectedNode({ ...module, type: 'module' });
       return;
     }
 
     const artifact = artifactMap.get(nodeId);
     if (artifact) {
-      ensureDomainsVisible([artifact.domainId]);
+      const related = new Set<string>([artifact.domainId]);
+      const producer = moduleById[artifact.producedBy];
+      producer?.domains.forEach((domainId) => related.add(domainId));
+      artifact.consumerIds.forEach((consumerId) => {
+        const consumer = moduleById[consumerId];
+        consumer?.domains.forEach((domainId) => related.add(domainId));
+      });
+      ensureDomainsVisible(Array.from(related));
       setSelectedNode({ ...artifact, type: 'artifact', reuseScore: 0 });
       return;
     }
