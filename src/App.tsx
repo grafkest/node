@@ -26,6 +26,7 @@ function App() {
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
   const [showDependencies, setShowDependencies] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
 
   const teams = useMemo(() => Array.from(new Set(modules.map((module) => module.team))).sort(), []);
 
@@ -60,11 +61,11 @@ function App() {
     filteredModules.forEach((module) => {
       module.domains.forEach((domainId) => ids.add(domainId));
     });
-    if (selectedNode?.type === 'domain') {
-      ids.add(selectedNode.id);
+    if (highlightedDomainId) {
+      ids.add(highlightedDomainId);
     }
     return ids;
-  }, [filteredModules, selectedNode]);
+  }, [filteredModules, highlightedDomainId]);
 
   const filteredDomains = useMemo(
     () => filterDomainsByIds(domainTree, relevantDomainIds),
