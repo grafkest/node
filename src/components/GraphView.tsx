@@ -78,20 +78,33 @@ const GraphView: React.FC<GraphViewProps> = ({
     }));
   }, [domains]);
 
-  const graphData = useMemo(() => {
+  const moduleNodes = useMemo<GraphNode[]>(
+    () =>
+      modules.map((module) => ({
+        ...module,
+        type: 'module'
+      })),
+    [modules]
+  );
+
+  const artifactNodes = useMemo<GraphNode[]>(
+    () =>
+      artifacts.map((artifact) => ({
+        ...artifact,
+        type: 'artifact',
+        reuseScore: 0
+      })),
+    [artifacts]
+  );
+
+  const nodes = useMemo(
+    () => [...domainNodes, ...artifactNodes, ...moduleNodes],
+    [domainNodes, artifactNodes, moduleNodes]
+  );
+
+  const filteredLinks = useMemo(() => {
     const domainFilter = new Set(visibleDomainIds);
-    const artifactNodes: GraphNode[] = artifacts.map((artifact) => ({
-      ...artifact,
-      type: 'artifact',
-      reuseScore: 0
-    }));
-
-    const moduleNodes: GraphNode[] = modules.map((module) => ({
-      ...module,
-      type: 'module'
-    }));
-
-    const filteredLinks = links.filter((link) => {
+    return links.filter((link) => {
       if (!showDependencies && link.type === 'dependency') {
         return false;
       }
@@ -104,12 +117,15 @@ const GraphView: React.FC<GraphViewProps> = ({
 
       return true;
     });
+  }, [links, showDependencies, visibleDomainIds]);
 
-    return {
-      nodes: [...domainNodes, ...artifactNodes, ...moduleNodes],
+  const graphData = useMemo(
+    () => ({
+      nodes,
       links: filteredLinks
-    };
-  }, [modules, domainNodes, artifacts, links, showDependencies, visibleDomainIds]);
+    }),
+    [nodes, filteredLinks]
+  );
 
   useEffect(() => {
     if (!highlightedNode || !graphRef.current) {
