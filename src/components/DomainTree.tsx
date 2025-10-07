@@ -8,20 +8,28 @@ import styles from './DomainTree.module.css';
 type DomainTreeProps = {
   tree: DomainNode[];
   selected: Set<string>;
+  descendants: Map<string, string[]>;
   onToggle: (domainId: string) => void;
 };
 
 type TreeItemProps = {
   node: DomainNode;
   selected: Set<string>;
+  descendants: Map<string, string[]>;
   onToggle: (id: string) => void;
   depth?: number;
 };
 
-const TreeItem: React.FC<TreeItemProps> = ({ node, selected, onToggle, depth = 0 }) => {
+const TreeItem: React.FC<TreeItemProps> = ({ node, selected, descendants, onToggle, depth = 0 }) => {
   const [open, setOpen] = useState(true);
   const hasChildren = node.children && node.children.length > 0;
   const paddingLeft = useMemo(() => depth * 16, [depth]);
+  const cascade = useMemo(() => descendants.get(node.id) ?? [node.id], [descendants, node.id]);
+  const isChecked = useMemo(() => cascade.every((id) => selected.has(id)), [cascade, selected]);
+  const isIntermediate = useMemo(
+    () => !isChecked && cascade.some((id) => selected.has(id)),
+    [cascade, isChecked, selected]
+  );
 
   return (
     <div className={styles.item} style={{ paddingLeft }}>
@@ -36,7 +44,8 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, selected, onToggle, depth = 0
           >
             <div className={styles.checkboxRow}>
               <Checkbox
-                checked={selected.has(node.id)}
+                checked={isChecked}
+                intermediate={isIntermediate}
                 onChange={() => onToggle(node.id)}
                 size="s"
                 label={
@@ -53,20 +62,21 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, selected, onToggle, depth = 0
                 }
               />
             </div>
-            {open &&
-              node.children?.map((child) => (
-                <TreeItem
-                  key={child.id}
-                  node={child}
-                  selected={selected}
-                  onToggle={onToggle}
-                  depth={depth + 1}
-                />
-              ))}
+              {open &&
+                node.children?.map((child) => (
+                  <TreeItem
+                    key={child.id}
+                    node={child}
+                    selected={selected}
+                    descendants={descendants}
+                    onToggle={onToggle}
+                    depth={depth + 1}
+                  />
+                ))}
           </Collapse>
         ) : (
           <Checkbox
-            checked={selected.has(node.id)}
+            checked={isChecked}
             onChange={() => onToggle(node.id)}
             size="s"
             label={
@@ -89,11 +99,17 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, selected, onToggle, depth = 0
   );
 };
 
-const DomainTree: React.FC<DomainTreeProps> = ({ tree, selected, onToggle }) => {
+const DomainTree: React.FC<DomainTreeProps> = ({ tree, selected, descendants, onToggle }) => {
   return (
     <div className={styles.tree}>
       {tree.map((node) => (
-        <TreeItem key={node.id} node={node} selected={selected} onToggle={onToggle} />
+        <TreeItem
+          key={node.id}
+          node={node}
+          selected={selected}
+          descendants={descendants}
+          onToggle={onToggle}
+        />
       ))}
     </div>
   );
