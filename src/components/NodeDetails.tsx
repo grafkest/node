@@ -381,22 +381,14 @@ const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, o
       getItemLabel={(option) => option.label}
       getItemKey={(option) => option.id}
       onChange={({ value: nextValue }) => {
-        setValue(nextValue ?? null);
-
         if (!nextValue) {
+          setValue(null);
           return;
         }
 
-        const runNavigation = () => {
-          onNavigate(nextValue.id);
-          setValue(null);
-        };
-
-        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-          window.requestAnimationFrame(runNavigation);
-        } else {
-          setTimeout(runNavigation, 0);
-        }
+        setValue(nextValue);
+        onNavigate(nextValue.id);
+        setValue(null);
       }}
     />
   );
