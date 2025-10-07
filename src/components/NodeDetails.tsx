@@ -174,7 +174,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
       </div>
       <div className={styles.section}>
         <Text size="s" weight="semibold">
-          Команда
+          Название продукта
         </Text>
         <Text size="s">{node.team}</Text>
         <Text size="xs" view="secondary">

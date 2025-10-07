@@ -1,5 +1,5 @@
-import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
+import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Select } from '@consta/uikit/Select';
 import { Switch } from '@consta/uikit/Switch';
 import { Text } from '@consta/uikit/Text';
@@ -26,6 +26,11 @@ const statusLabels: Record<ModuleStatus, string> = {
   deprecated: 'Устаревший'
 };
 
+type StatusOption = {
+  id: ModuleStatus;
+  label: string;
+};
+
 const FiltersPanel: React.FC<FiltersPanelProps> = ({
   search,
   onSearchChange,
@@ -38,6 +43,20 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
   showDependencies,
   onToggleDependencies
 }) => {
+  const statusOptions = React.useMemo(
+    () =>
+      statuses.map<StatusOption>((status) => ({
+        id: status,
+        label: statusLabels[status]
+      })),
+    [statuses]
+  );
+
+  const selectedStatusOptions = React.useMemo(
+    () => statusOptions.filter((option) => activeStatuses.has(option.id)),
+    [statusOptions, activeStatuses]
+  );
+
   return (
     <div className={styles.filters}>
       <label className={styles.field}>
@@ -56,30 +75,40 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
         <Text size="s" weight="semibold">
           Статусы
         </Text>
-        <div className={styles.badgeList}>
-          {statuses.map((status) => (
-            <Badge
-              key={status}
-              label={statusLabels[status]}
-              size="s"
-              status={activeStatuses.has(status) ? 'system' : 'normal'}
-              minified
-              interactive
-              onClick={() => onToggleStatus(status)}
-            />
-          ))}
-        </div>
+        <CheckboxGroup
+          size="s"
+          direction="column"
+          items={statusOptions}
+          value={selectedStatusOptions}
+          getItemKey={(item) => item.id}
+          getItemLabel={(item) => item.label}
+          onChange={(nextItems) => {
+            const nextSelected = new Set(
+              (nextItems ?? []).map((item) => item.id)
+            );
+            statuses.forEach((status) => {
+              const shouldBeActive = nextSelected.has(status);
+              const isActive = activeStatuses.has(status);
+              if (shouldBeActive !== isActive) {
+                onToggleStatus(status);
+              }
+            });
+          }}
+          className={styles.statusGroup}
+        />
       </div>
 
       <div className={styles.field}>
         <Text size="s" weight="semibold">
-          Команда
+          Название продукта
         </Text>
         <Select
-          placeholder="Все команды"
+          placeholder="Все продукты"
           size="s"
           items={teams}
           value={teamFilter}
+          getItemKey={(item) => item}
+          getItemLabel={(item) => item}
           onChange={({ value }) => onTeamChange(value ?? null)}
           form="default"
           className={styles.combobox}

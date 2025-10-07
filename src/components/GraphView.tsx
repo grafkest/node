@@ -198,13 +198,15 @@ function flattenDomains(domains: DomainNode[], visibleDomainIds?: Set<string>): 
   const collect = (node: DomainNode): DomainNode[] => {
     const childLists = node.children?.map(collect) ?? [];
     const hasVisibleChild = childLists.some((list) => list.length > 0);
-    const includeSelf = !visible || visible.has(node.id) || hasVisibleChild;
+    const includeSelf = (!visible || visible.has(node.id) || hasVisibleChild) && (!node.children || node.children.length === 0);
+
+    const collectedChildren = childLists.flat();
 
     if (!includeSelf) {
-      return [];
+      return collectedChildren;
     }
 
-    return [node, ...childLists.flat()];
+    return [node, ...collectedChildren];
   };
 
   return domains.flatMap(collect);
