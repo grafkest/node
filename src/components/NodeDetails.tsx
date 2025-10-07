@@ -3,7 +3,7 @@ import { Button } from '@consta/uikit/Button';
 import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { artifactNameById, domainNameById, moduleNameById, type ModuleInput, type ModuleOutput } from '../data';
 import type { GraphNode } from './GraphView';
 import styles from './NodeDetails.module.css';
@@ -372,15 +372,6 @@ type ConsumerSelectProps = {
 const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, onNavigate }) => {
   const [value, setValue] = useState<ConsumerOption | null>(null);
 
-  useEffect(() => {
-    if (!value) {
-      return;
-    }
-
-    onNavigate(value.id);
-    setValue(null);
-  }, [value, onNavigate]);
-
   return (
     <Select<ConsumerOption>
       size="xs"
@@ -390,7 +381,14 @@ const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, o
       getItemLabel={(option) => option.label}
       getItemKey={(option) => option.id}
       onChange={({ value: nextValue }) => {
-        setValue(nextValue ?? null);
+        if (!nextValue) {
+          setValue(null);
+          return;
+        }
+
+        setValue(nextValue);
+        onNavigate(nextValue.id);
+        setValue(null);
       }}
     />
   );
