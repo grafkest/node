@@ -20,9 +20,7 @@ import styles from './App.module.css';
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 
 function App() {
-  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
-    new Set(['production-monitoring', 'production-planning'])
-  );
+  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
@@ -57,14 +55,42 @@ function App() {
     });
   }, [filteredModules, showDependencies]);
 
-  const filteredDomains = useMemo(() => filterDomains(domainTree, selectedDomains), [selectedDomains]);
+  const relevantDomainIds = useMemo(() => {
+    const ids = new Set<string>();
+    filteredModules.forEach((module) => {
+      module.domains.forEach((domainId) => ids.add(domainId));
+    });
+    if (selectedNode?.type === 'domain') {
+      ids.add(selectedNode.id);
+    }
+    return ids;
+  }, [filteredModules, selectedNode]);
+
+  const filteredDomains = useMemo(
+    () => filterDomainsByIds(domainTree, relevantDomainIds),
+    [relevantDomainIds]
+  );
 
   const artifactMap = useMemo(() => new Map(artifacts.map((artifact) => [artifact.id, artifact])), []);
   const domainMap = useMemo(() => new Map(flattenDomainTree(domainTree).map((domain) => [domain.id, domain])), []);
 
+  const ensureDomainsVisible = (domainIds: string[]) => {
+    setSelectedDomains((prev) => {
+      const missing = domainIds.some((domainId) => !prev.has(domainId));
+      if (!missing) {
+        return prev;
+      }
+      const next = new Set(prev);
+      domainIds.forEach((domainId) => next.add(domainId));
+      return next;
+    });
+  };
+
   const handleNavigate = (nodeId: string) => {
     if (moduleById[nodeId]) {
-      setSelectedNode({ ...moduleById[nodeId], type: 'module' });
+      const module = moduleById[nodeId];
+      ensureDomainsVisible(module.domains);
+      setSelectedNode({ ...module, type: 'module' });
       return;
     }
 
@@ -101,13 +127,19 @@ function App() {
             tree={domainTree}
             selected={selectedDomains}
             onToggle={(domainId) => {
-              setSelectedNode(null);
               setSelectedDomains((prev) => {
                 const next = new Set(prev);
                 if (next.has(domainId)) {
                   next.delete(domainId);
+                  if (selectedNode?.id === domainId) {
+                    setSelectedNode(null);
+                  }
                 } else {
                   next.add(domainId);
+                  const domain = domainMap.get(domainId);
+                  if (domain) {
+                    setSelectedNode({ ...domain, type: 'domain' });
+                  }
                 }
                 return next;
               });
@@ -167,17 +199,17 @@ function App() {
   );
 }
 
-function filterDomains(domains: DomainNode[], selected: Set<string>): DomainNode[] {
+function filterDomainsByIds(domains: DomainNode[], allowed: Set<string>): DomainNode[] {
+  const includeAll = allowed.size === 0;
+
   return domains
     .map((domain) => {
-      if (!domain.children) {
-        return selected.size === 0 || selected.has(domain.id) ? domain : null;
+      const children = domain.children ? filterDomainsByIds(domain.children, allowed) : [];
+      const shouldInclude = includeAll || allowed.has(domain.id) || children.length > 0;
+      if (!shouldInclude) {
+        return null;
       }
-      const filteredChildren = filterDomains(domain.children, selected);
-      if (filteredChildren.length > 0 || selected.has(domain.id) || selected.size === 0) {
-        return { ...domain, children: filteredChildren };
-      }
-      return null;
+      return { ...domain, children };
     })
     .filter(Boolean) as DomainNode[];
 }

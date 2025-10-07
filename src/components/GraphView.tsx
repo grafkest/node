@@ -1,8 +1,8 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Loader } from '@consta/uikit/Loader';
 import { useTheme } from '@consta/uikit/Theme';
-import React, { useMemo } from 'react';
-import ForceGraph2D, { NodeObject, LinkObject } from 'react-force-graph-2d';
+import React, { useEffect, useMemo, useRef } from 'react';
+import ForceGraph2D, { LinkObject, NodeObject, ForceGraphMethods } from 'react-force-graph-2d';
 import type { DomainNode, ModuleNode, ArtifactNode, GraphLink } from '../data';
 import styles from './GraphView.module.css';
 
@@ -37,6 +37,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const themeClassName = theme?.className ?? 'default';
 
   const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
+  const graphRef = useRef<ForceGraphMethods | null>(null);
 
   const graphData = useMemo(() => {
     const flatDomains = flattenDomains(domains);
@@ -64,6 +65,25 @@ const GraphView: React.FC<GraphViewProps> = ({
     };
   }, [modules, domains, artifacts, links, showDependencies]);
 
+  useEffect(() => {
+    if (!highlightedNode || !graphRef.current) {
+      return;
+    }
+
+    const target = (graphData.nodes as ForceNode[]).find((node) => node.id === highlightedNode);
+    if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
+      return;
+    }
+
+    const graph = graphRef.current;
+    graph.centerAt(target.x, target.y, 400);
+    if (typeof graph.zoom === 'function') {
+      const currentZoom = graph.zoom() as number;
+      const desiredZoom = currentZoom < 1.8 ? 1.8 : currentZoom;
+      graph.zoom(desiredZoom, 400);
+    }
+  }, [highlightedNode, graphData]);
+
   return (
     <div className={styles.container}>
       <div className={styles.legend}>
@@ -73,6 +93,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       </div>
       <React.Suspense fallback={<Loader size="m" />}>
         <ForceGraph2D
+          ref={graphRef}
           width={undefined}
           height={undefined}
           graphData={graphData}
