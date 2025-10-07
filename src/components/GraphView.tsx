@@ -41,6 +41,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const nodeCacheRef = useRef<Map<string, ForceNode>>(new Map());
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -97,10 +98,28 @@ const GraphView: React.FC<GraphViewProps> = ({
     [artifacts]
   );
 
-  const nodes = useMemo(
-    () => [...domainNodes, ...artifactNodes, ...moduleNodes],
-    [domainNodes, artifactNodes, moduleNodes]
-  );
+  const nodes = useMemo(() => {
+    const nextNodes: ForceNode[] = [];
+
+    const upsertNode = (node: GraphNode) => {
+      const cached = nodeCacheRef.current.get(node.id);
+      if (cached && cached.type === node.type) {
+        Object.assign(cached, node);
+        nextNodes.push(cached);
+        return;
+      }
+
+      const hydratedNode = { ...node } as ForceNode;
+      nodeCacheRef.current.set(node.id, hydratedNode);
+      nextNodes.push(hydratedNode);
+    };
+
+    domainNodes.forEach(upsertNode);
+    artifactNodes.forEach(upsertNode);
+    moduleNodes.forEach(upsertNode);
+
+    return nextNodes;
+  }, [domainNodes, artifactNodes, moduleNodes]);
 
   const filteredLinks = useMemo(() => {
     const domainFilter = new Set(visibleDomainIds);
