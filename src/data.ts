@@ -818,3 +818,23 @@ export const moduleLinks: GraphLink[] = modules.flatMap((module) => {
 });
 
 export { moduleById };
+
+export type ReuseTrendPoint = {
+  period: string;
+  averageScore: number;
+};
+
+export const reuseIndexHistory: ReuseTrendPoint[] = [
+  { period: '2023-11', averageScore: 0.42 },
+  { period: '2023-12', averageScore: 0.44 },
+  { period: '2024-01', averageScore: 0.45 },
+  { period: '2024-02', averageScore: 0.47 },
+  { period: '2024-03', averageScore: 0.5 },
+  { period: '2024-04', averageScore: 0.53 },
+  { period: '2024-05', averageScore: 0.55 },
+  { period: '2024-06', averageScore: 0.57 },
+  { period: '2024-07', averageScore: 0.6 },
+  { period: '2024-08', averageScore: 0.62 },
+  { period: '2024-09', averageScore: 0.65 },
+  { period: '2024-10', averageScore: 0.66 }
+];
