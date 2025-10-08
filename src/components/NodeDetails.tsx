@@ -1,10 +1,18 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
+import { Collapse } from '@consta/uikit/Collapse';
 import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
-import React, { useState } from 'react';
-import { artifactNameById, domainNameById, moduleNameById, type ModuleInput, type ModuleOutput } from '../data';
+import React, { useEffect, useState } from 'react';
+import {
+  artifactNameById,
+  domainNameById,
+  moduleNameById,
+  type ModuleInput,
+  type ModuleOutput,
+  type TeamMember
+} from '../data';
 import type { GraphNode } from './GraphView';
 import styles from './NodeDetails.module.css';
 
@@ -25,7 +33,44 @@ type ConsumerOption = {
   label: string;
 };
 
+type SectionId = 'general' | 'calculation' | 'technical' | 'nonFunctional';
+
+const defaultSectionState: Record<SectionId, boolean> = {
+  general: true,
+  calculation: false,
+  technical: false,
+  nonFunctional: false
+};
+
+const clientTypeLabels: Record<'desktop' | 'web', string> = {
+  desktop: 'Desktop-приложение',
+  web: 'Web-интерфейс'
+};
+
+const deploymentToolLabels: Record<'docker' | 'kubernetes', string> = {
+  docker: 'Docker',
+  kubernetes: 'Kubernetes'
+};
+
 const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) => {
+  const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>(
+    () => ({ ...defaultSectionState })
+  );
+  const [isTeamExpanded, setIsTeamExpanded] = useState(false);
+
+  useEffect(() => {
+    if (node?.type !== 'module') {
+      return;
+    }
+
+    setOpenSections({ ...defaultSectionState });
+    setIsTeamExpanded(false);
+  }, [node?.id, node?.type]);
+
+  const toggleSection = (section: SectionId) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
   if (!node) {
     return (
       <div className={styles.empty}>
@@ -148,6 +193,214 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
     );
   }
 
+  const sections: { id: SectionId; title: string; content: React.ReactNode }[] = [
+    {
+      id: 'general',
+      title: 'Общая информация',
+      content: (
+        <>
+          <InfoRow label="Описание модуля">
+            <Text size="s" className={styles.description}>
+              {node.description}
+            </Text>
+          </InfoRow>
+          <InfoRow label="Доменные области">
+            <div className={styles.tagList}>
+              {node.domains.map((domain) => (
+                <Tag key={domain} label={domainNameById[domain] ?? domain} size="xs" />
+              ))}
+            </div>
+          </InfoRow>
+          <InfoRow label="Название продукта">
+            <Text size="s">{node.productName}</Text>
+          </InfoRow>
+          <InfoRow label="Команда">
+            <Text size="s">{node.team}</Text>
+          </InfoRow>
+          <InfoRow label="Владелец РИД">
+            <>
+              <Text size="s">{node.ridOwner.company}</Text>
+              <Text size="xs" view="secondary">
+                {node.ridOwner.division}
+              </Text>
+            </>
+          </InfoRow>
+          <InfoRow label="Локализация функции">
+            <Text size="s">{node.localization}</Text>
+          </InfoRow>
+          <InfoRow label="Количество пользователей">
+            <Text size="s">
+              {node.userStats.companies} компаний, {node.userStats.licenses} лицензий
+            </Text>
+          </InfoRow>
+          <InfoRow label="Стек технологий">
+            <div className={styles.tagList}>
+              {node.technologyStack.map((technology) => (
+                <Tag key={technology} label={technology} size="xs" />
+              ))}
+            </div>
+          </InfoRow>
+          <InfoRow label="Команда проекта">
+            <TeamRoster
+              members={node.projectTeam}
+              expanded={isTeamExpanded}
+              onToggle={() => setIsTeamExpanded((prev) => !prev)}
+            />
+          </InfoRow>
+        </>
+      )
+    },
+    {
+      id: 'calculation',
+      title: 'Расчётный узел',
+      content: (
+        <>
+          <ModuleIoSection title="Данные In" items={node.dataIn} onNavigate={onNavigate} />
+          <ModuleOutputSection items={node.dataOut} onNavigate={onNavigate} />
+          <InfoRow label="Формула расчёта">
+            <Text size="s" className={styles.code}>
+              {node.formula}
+            </Text>
+          </InfoRow>
+        </>
+      )
+    },
+    {
+      id: 'technical',
+      title: 'Техническая информация',
+      content: (
+        <>
+          {node.repository && (
+            <InfoRow label="Репозиторий">
+              <a href={node.repository} target="_blank" rel="noreferrer" className={styles.link}>
+                {node.repository}
+              </a>
+            </InfoRow>
+          )}
+          {node.api && (
+            <InfoRow label="API">
+              <Text size="s" className={styles.code}>
+                {node.api}
+              </Text>
+            </InfoRow>
+          )}
+          <InfoRow label="Постановка на разработку">
+            <a href={node.specificationUrl} target="_blank" rel="noreferrer" className={styles.link}>
+              {node.specificationUrl}
+            </a>
+          </InfoRow>
+          <InfoRow label="Документация контрактов API">
+            <a href={node.apiContractsUrl} target="_blank" rel="noreferrer" className={styles.link}>
+              {node.apiContractsUrl}
+            </a>
+          </InfoRow>
+          <InfoRow label="Технический дизайн">
+            <a href={node.techDesignUrl} target="_blank" rel="noreferrer" className={styles.link}>
+              {node.techDesignUrl}
+            </a>
+          </InfoRow>
+          <InfoRow label="Архитектурная схема">
+            <a href={node.architectureDiagramUrl} target="_blank" rel="noreferrer" className={styles.link}>
+              {node.architectureDiagramUrl}
+            </a>
+          </InfoRow>
+          <InfoRow label="Интеграция с сервером лицензирования">
+            <Text size="s">{node.licenseServerIntegrated ? 'Да' : 'Нет'}</Text>
+          </InfoRow>
+          <InfoRow label="Перечень библиотек">
+            <ul className={styles.list}>
+              {node.libraries.map((library) => (
+                <li
+                  key={`${node.id}-${library.name}-${library.version}`}
+                  className={styles.listItem}
+                >
+                  <Text size="s">{library.name}</Text>
+                  <Text size="xs" view="secondary">
+                    v{library.version}
+                  </Text>
+                </li>
+              ))}
+            </ul>
+          </InfoRow>
+          <InfoRow label="Клиент">
+            <Text size="s">{clientTypeLabels[node.clientType]}</Text>
+          </InfoRow>
+          <InfoRow label="Средство развертывания">
+            <Text size="s">{deploymentToolLabels[node.deploymentTool]}</Text>
+          </InfoRow>
+          <div>
+            <Text size="xs" view="secondary">
+              Метрики по тестам
+            </Text>
+            <div className={styles.metrics}>
+              <div>
+                <Text size="xs" view="secondary">
+                  Покрытие
+                </Text>
+                <Text size="m" weight="semibold">
+                  {node.metrics.coverage}%
+                </Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Всего тестов
+                </Text>
+                <Text size="m" weight="semibold">
+                  {node.metrics.tests}
+                </Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Автоматизация
+                </Text>
+                <Text size="m" weight="semibold">
+                  {node.metrics.automationRate}%
+                </Text>
+              </div>
+            </div>
+          </div>
+        </>
+      )
+    },
+    {
+      id: 'nonFunctional',
+      title: 'Нефункциональные требования',
+      content: (
+        <>
+          <div className={styles.metrics}>
+            <div>
+              <Text size="xs" view="secondary">
+                Время отклика
+              </Text>
+              <Text size="m" weight="semibold">
+                {node.nonFunctional.responseTimeMs} мс
+              </Text>
+            </div>
+            <div>
+              <Text size="xs" view="secondary">
+                Пропускная способность
+              </Text>
+              <Text size="m" weight="semibold">
+                {node.nonFunctional.throughputRps} rps
+              </Text>
+            </div>
+            <div>
+              <Text size="xs" view="secondary">
+                Потребление ресурсов
+              </Text>
+              <Text size="m" weight="semibold">
+                {node.nonFunctional.resourceConsumption}
+              </Text>
+              <Text size="xs" view="secondary">
+                при {formatNumber(node.nonFunctional.baselineUsers)} пользователях
+              </Text>
+            </div>
+          </div>
+        </>
+      )
+    }
+  ];
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -159,87 +412,23 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
         </div>
         <Button size="xs" label="Закрыть" view="ghost" onClick={onClose} />
       </header>
-      <Text size="s" className={styles.description}>
-        {node.description}
-      </Text>
-      <div className={styles.section}>
-        <Text size="s" weight="semibold">
-          Доменные области
-        </Text>
-        <div className={styles.tagList}>
-          {node.domains.map((domain) => (
-            <Tag key={domain} label={domainNameById[domain] ?? domain} size="xs" />
-          ))}
-        </div>
-      </div>
-      <div className={styles.section}>
-        <Text size="s" weight="semibold">
-          Название продукта
-        </Text>
-        <Text size="s">{node.team}</Text>
-        <Text size="xs" view="secondary">
-          {node.owner}
-        </Text>
-      </div>
-      {node.repository && (
-        <div className={styles.section}>
-          <Text size="s" weight="semibold">
-            Репозиторий
-          </Text>
-          <a href={node.repository} target="_blank" rel="noreferrer" className={styles.link}>
-            {node.repository}
-          </a>
-        </div>
-      )}
-      {node.api && (
-        <div className={styles.section}>
-          <Text size="s" weight="semibold">
-            API
-          </Text>
-          <Text size="s" className={styles.code}>
-            {node.api}
-          </Text>
-        </div>
-      )}
-      <ModuleIoSection
-        title="Данные In"
-        items={node.dataIn}
-        onNavigate={onNavigate}
-      />
-      <ModuleOutputSection items={node.dataOut} onNavigate={onNavigate} />
-      <div className={styles.section}>
-        <Text size="s" weight="semibold">
-          Формула расчёта
-        </Text>
-        <Text size="s" className={styles.code}>
-          {node.formula}
-        </Text>
-      </div>
-      <div className={styles.metrics}>
-        <div>
-          <Text size="xs" view="secondary">
-            Покрытие тестами
-          </Text>
-          <Text size="m" weight="semibold">
-            {node.metrics.coverage}%
-          </Text>
-        </div>
-        <div>
-          <Text size="xs" view="secondary">
-            Количество тестов
-          </Text>
-          <Text size="m" weight="semibold">
-            {node.metrics.tests}
-          </Text>
-        </div>
-        <div>
-          <Text size="xs" view="secondary">
-            Задержка API
-          </Text>
-          <Text size="m" weight="semibold">
-            {node.metrics.latencyMs} мс
-          </Text>
-        </div>
+      <div className={styles.sections}>
+        {sections.map((section) => (
+          <Collapse
+            key={section.id}
+            label={
+              <div className={styles.collapseLabel}>
+                <Text size="s" weight="semibold">
+                  {section.title}
+                </Text>
+              </div>
+            }
+            isOpen={openSections[section.id]}
+            onClick={() => toggleSection(section.id)}
+          >
+            <div className={styles.sectionContent}>{section.content}</div>
+          </Collapse>
+        ))}
       </div>
     </div>
   );
@@ -261,6 +450,39 @@ function statusLabel(status: GraphNode & { type: 'module' }['status']) {
 function resolveEntityName(id: string): string {
   return moduleNameById[id] ?? artifactNameById[id] ?? domainNameById[id] ?? id;
 }
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('ru-RU').format(value);
+}
+
+const teamCountPluralRules = new Intl.PluralRules('ru');
+
+function formatTeamCount(count: number): string {
+  const category = teamCountPluralRules.select(count);
+
+  switch (category) {
+    case 'one':
+      return `${count} специалист`;
+    case 'few':
+      return `${count} специалиста`;
+    default:
+      return `${count} специалистов`;
+  }
+}
+
+type InfoRowProps = {
+  label: string;
+  children: React.ReactNode;
+};
+
+const InfoRow: React.FC<InfoRowProps> = ({ label, children }) => (
+  <div className={styles.keyValueItem}>
+    <Text size="xs" view="secondary">
+      {label}
+    </Text>
+    <div className={styles.value}>{children}</div>
+  </div>
+);
 
 type ModuleIoSectionProps = {
   title: string;
@@ -399,6 +621,49 @@ const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, o
         }
       }}
     />
+  );
+};
+
+type TeamRosterProps = {
+  members: TeamMember[];
+  expanded: boolean;
+  onToggle: () => void;
+};
+
+const TeamRoster: React.FC<TeamRosterProps> = ({ members, expanded, onToggle }) => {
+  const uniqueRoles = Array.from(new Set(members.map((member) => member.role)));
+
+  return (
+    <div className={styles.teamRoster}>
+      <div className={styles.teamRosterHeader}>
+        <div className={styles.teamSummary}>
+          <Text size="s">{formatTeamCount(members.length)}</Text>
+          <Text size="xs" view="secondary">
+            Роли: {uniqueRoles.length > 0 ? uniqueRoles.join(', ') : '—'}
+          </Text>
+        </div>
+        <Button
+          size="xs"
+          view="ghost"
+          label={expanded ? 'Скрыть состав' : 'Показать состав'}
+          onClick={onToggle}
+        />
+      </div>
+      {expanded && (
+        <ul className={styles.list}>
+          {members.map((member) => (
+            <li key={member.id} className={styles.listItem}>
+              <Text size="s" weight="semibold">
+                {member.fullName}
+              </Text>
+              <Text size="xs" view="secondary">
+                {member.role}
+              </Text>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 };
 

@@ -1,10 +1,12 @@
 import { Layout } from '@consta/uikit/Layout';
+import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
 import FiltersPanel from './components/FiltersPanel';
 import GraphView, { type GraphNode } from './components/GraphView';
+import StatsDashboard from './components/StatsDashboard';
 import NodeDetails from './components/NodeDetails';
 import {
   artifacts,
@@ -12,6 +14,7 @@ import {
   moduleById,
   moduleLinks,
   modules,
+  reuseIndexHistory,
   type DomainNode,
   type ModuleNode,
   type ModuleStatus
@@ -21,13 +24,23 @@ import styles from './App.module.css';
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const allTeams = Array.from(new Set(modules.map((module) => module.team))).sort();
 
+const viewTabs = [
+  { label: 'Связи', value: 'graph' },
+  { label: 'Статистика', value: 'stats' }
+] as const;
+
+type ViewMode = (typeof viewTabs)[number]['value'];
+
 function App() {
-  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
+  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
+    () => new Set(flattenDomainTree(domainTree).map((domain) => domain.id))
+  );
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
   const [teamFilter, setTeamFilter] = useState<string[]>(allTeams);
   const [showDependencies, setShowDependencies] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
 
   const teams = useMemo(() => allTeams, []);
@@ -68,7 +81,15 @@ function App() {
       const matchesSearch =
         normalizedSearch.length === 0 ||
         module.name.toLowerCase().includes(normalizedSearch) ||
-        module.owner.toLowerCase().includes(normalizedSearch);
+        module.productName.toLowerCase().includes(normalizedSearch) ||
+        module.team.toLowerCase().includes(normalizedSearch) ||
+        module.ridOwner.company.toLowerCase().includes(normalizedSearch) ||
+        module.ridOwner.division.toLowerCase().includes(normalizedSearch) ||
+        module.projectTeam.some(
+          (member) =>
+            member.fullName.toLowerCase().includes(normalizedSearch) ||
+            member.role.toLowerCase().includes(normalizedSearch)
+        );
       const matchesStatus = statusFilters.has(module.status);
       const matchesTeam =
         teamFilter.length === 0 ? false : teamFilter.includes(module.team);
@@ -417,75 +438,111 @@ function App() {
     }
   }, [handleNavigate]);
 
+  const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
+
+  const headerTitle = viewMode === 'graph' ? 'Граф модулей и доменных областей' : 'Статистика экосистемы решений';
+  const headerDescription =
+    viewMode === 'graph'
+      ? 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.'
+      : 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+
   return (
     <Layout className={styles.app} direction="column">
       <header className={styles.header}>
-        <div>
+        <div className={styles.headerContent}>
           <Text size="2xl" weight="bold">
-            Граф модулей и доменных областей
+            {headerTitle}
           </Text>
           <Text size="s" view="secondary">
-            Выберите домены, чтобы увидеть связанные модули и выявить пересечения.
+            {headerDescription}
           </Text>
         </div>
+        <Tabs
+          size="s"
+          items={viewTabs}
+          value={activeViewTab}
+          getItemKey={(item) => item.value}
+          getItemLabel={(item) => item.label}
+          onChange={(tab) => setViewMode(tab.value)}
+        />
       </header>
-      <main className={styles.main}>
-        <aside className={styles.sidebar}>
-          <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-            Домены
-          </Text>
-          <DomainTree tree={domainTree} selected={selectedDomains} onToggle={handleDomainToggle} descendants={domainDescendants} />
-          <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-            Фильтры
-          </Text>
-          <FiltersPanel
-            search={search}
-            onSearchChange={setSearch}
-            statuses={allStatuses}
-            activeStatuses={statusFilters}
-            onToggleStatus={(status) => {
-              setSelectedNode(null);
-              setStatusFilters((prev) => {
-                const next = new Set(prev);
-                if (next.has(status)) {
-                  next.delete(status);
-                } else {
-                  next.add(status);
-                }
-                return next;
-              });
-            }}
-            teams={teams}
-            teamFilter={teamFilter}
-            onTeamChange={(team) => {
-              setSelectedNode(null);
-              setTeamFilter(team);
-            }}
-            showDependencies={showDependencies}
-            onToggleDependencies={(value) => setShowDependencies(value)}
-          />
-        </aside>
-        <section className={styles.graphSection}>
-          <div className={styles.graphContainer}>
-            <GraphView
-              modules={graphModules}
-              domains={graphDomains}
-              artifacts={graphArtifacts}
-              links={filteredLinks}
-              showDependencies={showDependencies}
-              onSelect={handleSelectNode}
-              highlightedNode={selectedNode?.id ?? null}
-              visibleDomainIds={relevantDomainIds}
+      {viewMode === 'graph' ? (
+        <main className={styles.main}>
+          <aside className={styles.sidebar}>
+            <Text size="s" weight="semibold" className={styles.sidebarTitle}>
+              Домены
+            </Text>
+            <DomainTree
+              tree={domainTree}
+              selected={selectedDomains}
+              onToggle={handleDomainToggle}
+              descendants={domainDescendants}
             />
-          </div>
-          <div className={styles.analytics}>
-            <AnalyticsPanel modules={filteredModules} />
-          </div>
-        </section>
-        <aside className={styles.details}>
-          <NodeDetails node={selectedNode} onClose={() => setSelectedNode(null)} onNavigate={handleNavigate} />
-        </aside>
-      </main>
+            <Text size="s" weight="semibold" className={styles.sidebarTitle}>
+              Фильтры
+            </Text>
+            <FiltersPanel
+              search={search}
+              onSearchChange={setSearch}
+              statuses={allStatuses}
+              activeStatuses={statusFilters}
+              onToggleStatus={(status) => {
+                setSelectedNode(null);
+                setStatusFilters((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(status)) {
+                    next.delete(status);
+                  } else {
+                    next.add(status);
+                  }
+                  return next;
+                });
+              }}
+              teams={teams}
+              teamFilter={teamFilter}
+              onTeamChange={(team) => {
+                setSelectedNode(null);
+                setTeamFilter(team);
+              }}
+              showDependencies={showDependencies}
+              onToggleDependencies={(value) => setShowDependencies(value)}
+            />
+          </aside>
+          <section className={styles.graphSection}>
+            <div className={styles.graphContainer}>
+              <GraphView
+                modules={graphModules}
+                domains={graphDomains}
+                artifacts={graphArtifacts}
+                links={filteredLinks}
+                showDependencies={showDependencies}
+                onSelect={handleSelectNode}
+                highlightedNode={selectedNode?.id ?? null}
+                visibleDomainIds={relevantDomainIds}
+              />
+            </div>
+            <div className={styles.analytics}>
+              <AnalyticsPanel modules={filteredModules} />
+            </div>
+          </section>
+          <aside className={styles.details}>
+            <NodeDetails
+              node={selectedNode}
+              onClose={() => setSelectedNode(null)}
+              onNavigate={handleNavigate}
+            />
+          </aside>
+        </main>
+      ) : (
+        <main className={styles.statsMain}>
+          <StatsDashboard
+            modules={modules}
+            domains={domainTree}
+            artifacts={artifacts}
+            reuseHistory={reuseIndexHistory}
+          />
+        </main>
+      )}
     </Layout>
   );
 }
