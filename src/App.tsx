@@ -68,7 +68,15 @@ function App() {
       const matchesSearch =
         normalizedSearch.length === 0 ||
         module.name.toLowerCase().includes(normalizedSearch) ||
-        module.owner.toLowerCase().includes(normalizedSearch);
+        module.productName.toLowerCase().includes(normalizedSearch) ||
+        module.team.toLowerCase().includes(normalizedSearch) ||
+        module.ridOwner.company.toLowerCase().includes(normalizedSearch) ||
+        module.ridOwner.division.toLowerCase().includes(normalizedSearch) ||
+        module.projectTeam.some(
+          (member) =>
+            member.fullName.toLowerCase().includes(normalizedSearch) ||
+            member.role.toLowerCase().includes(normalizedSearch)
+        );
       const matchesStatus = statusFilters.has(module.status);
       const matchesTeam =
         teamFilter.length === 0 ? false : teamFilter.includes(module.team);

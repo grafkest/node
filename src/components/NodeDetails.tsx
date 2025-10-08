@@ -5,7 +5,14 @@ import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
 import React, { useEffect, useState } from 'react';
-import { artifactNameById, domainNameById, moduleNameById, type ModuleInput, type ModuleOutput } from '../data';
+import {
+  artifactNameById,
+  domainNameById,
+  moduleNameById,
+  type ModuleInput,
+  type ModuleOutput,
+  type TeamMember
+} from '../data';
 import type { GraphNode } from './GraphView';
 import styles from './NodeDetails.module.css';
 
@@ -49,6 +56,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>(
     () => ({ ...defaultSectionState })
   );
+  const [isTeamExpanded, setIsTeamExpanded] = useState(false);
 
   useEffect(() => {
     if (node?.type !== 'module') {
@@ -56,6 +64,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
     }
 
     setOpenSections({ ...defaultSectionState });
+    setIsTeamExpanded(false);
   }, [node?.id, node?.type]);
 
   const toggleSection = (section: SectionId) => {
@@ -208,11 +217,13 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
           <InfoRow label="Команда">
             <Text size="s">{node.team}</Text>
           </InfoRow>
-          <InfoRow label="Владелец продукта">
-            <Text size="s">{node.owner}</Text>
-          </InfoRow>
           <InfoRow label="Владелец РИД">
-            <Text size="s">{node.ridOwner}</Text>
+            <>
+              <Text size="s">{node.ridOwner.company}</Text>
+              <Text size="xs" view="secondary">
+                {node.ridOwner.division}
+              </Text>
+            </>
           </InfoRow>
           <InfoRow label="Локализация функции">
             <Text size="s">{node.localization}</Text>
@@ -230,18 +241,11 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
             </div>
           </InfoRow>
           <InfoRow label="Команда проекта">
-            <ul className={styles.list}>
-              {node.projectTeam.map((member) => (
-                <li key={member.id} className={styles.listItem}>
-                  <Text size="s" weight="semibold">
-                    {member.fullName}
-                  </Text>
-                  <Text size="xs" view="secondary">
-                    {member.role}
-                  </Text>
-                </li>
-              ))}
-            </ul>
+            <TeamRoster
+              members={node.projectTeam}
+              expanded={isTeamExpanded}
+              onToggle={() => setIsTeamExpanded((prev) => !prev)}
+            />
           </InfoRow>
         </>
       )
@@ -387,6 +391,9 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
               <Text size="m" weight="semibold">
                 {node.nonFunctional.resourceConsumption}
               </Text>
+              <Text size="xs" view="secondary">
+                при {formatNumber(node.nonFunctional.baselineUsers)} пользователях
+              </Text>
             </div>
           </div>
         </>
@@ -442,6 +449,25 @@ function statusLabel(status: GraphNode & { type: 'module' }['status']) {
 
 function resolveEntityName(id: string): string {
   return moduleNameById[id] ?? artifactNameById[id] ?? domainNameById[id] ?? id;
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('ru-RU').format(value);
+}
+
+const teamCountPluralRules = new Intl.PluralRules('ru');
+
+function formatTeamCount(count: number): string {
+  const category = teamCountPluralRules.select(count);
+
+  switch (category) {
+    case 'one':
+      return `${count} специалист`;
+    case 'few':
+      return `${count} специалиста`;
+    default:
+      return `${count} специалистов`;
+  }
 }
 
 type InfoRowProps = {
@@ -595,6 +621,49 @@ const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, o
         }
       }}
     />
+  );
+};
+
+type TeamRosterProps = {
+  members: TeamMember[];
+  expanded: boolean;
+  onToggle: () => void;
+};
+
+const TeamRoster: React.FC<TeamRosterProps> = ({ members, expanded, onToggle }) => {
+  const uniqueRoles = Array.from(new Set(members.map((member) => member.role)));
+
+  return (
+    <div className={styles.teamRoster}>
+      <div className={styles.teamRosterHeader}>
+        <div className={styles.teamSummary}>
+          <Text size="s">{formatTeamCount(members.length)}</Text>
+          <Text size="xs" view="secondary">
+            Роли: {uniqueRoles.length > 0 ? uniqueRoles.join(', ') : '—'}
+          </Text>
+        </div>
+        <Button
+          size="xs"
+          view="ghost"
+          label={expanded ? 'Скрыть состав' : 'Показать состав'}
+          onClick={onToggle}
+        />
+      </div>
+      {expanded && (
+        <ul className={styles.list}>
+          {members.map((member) => (
+            <li key={member.id} className={styles.listItem}>
+              <Text size="s" weight="semibold">
+                {member.fullName}
+              </Text>
+              <Text size="xs" view="secondary">
+                {member.role}
+              </Text>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 };
 

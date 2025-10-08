@@ -34,6 +34,11 @@ export type TeamMember = {
   role: TeamRole;
 };
 
+export type RidOwner = {
+  company: string;
+  division: string;
+};
+
 export type LibraryDependency = {
   name: string;
   version: string;
@@ -54,6 +59,7 @@ export type NonFunctionalRequirements = {
   responseTimeMs: number;
   throughputRps: number;
   resourceConsumption: string;
+  baselineUsers: number;
 };
 
 export type ModuleNode = {
@@ -62,12 +68,11 @@ export type ModuleNode = {
   description: string;
   domains: string[];
   team: string;
-  owner: string;
   productName: string;
   projectTeam: TeamMember[];
   technologyStack: string[];
   localization: string;
-  ridOwner: string;
+  ridOwner: RidOwner;
   userStats: UserStats;
   status: ModuleStatus;
   repository?: string;
@@ -170,7 +175,6 @@ export const modules: ModuleNode[] = [
       'Собирает телеметрию скважин, нормализует показания датчиков и обогащает их паспортами оборудования.',
     domains: ['well-operations', 'lift-diagnostics'],
     team: 'Field Data Platform',
-    owner: 'Наталья Коваль',
     productName: 'Well Insight Suite',
     projectTeam: [
       { id: 'telemetry-owner', fullName: 'Наталья Коваль', role: 'Владелец продукта' },
@@ -183,7 +187,10 @@ export const modules: ModuleNode[] = [
     ],
     technologyStack: ['TypeScript', 'NestJS', 'Apache Kafka', 'PostgreSQL'],
     localization: 'Мультиязычная (ru, en)',
-    ridOwner: 'АО «НефтеИнтеллект»',
+    ridOwner: {
+      company: 'АО «НефтеИнтеллект»',
+      division: 'Департамент цифровых сервисов'
+    },
     userStats: { companies: 12, licenses: 1850 },
     status: 'production',
     repository: 'https://git.example.com/upstream/telemetry-cleansing',
@@ -229,7 +236,8 @@ export const modules: ModuleNode[] = [
     nonFunctional: {
       responseTimeMs: 240,
       throughputRps: 320,
-      resourceConsumption: '4 vCPU / 12 GB RAM'
+      resourceConsumption: '4 vCPU / 12 GB RAM',
+      baselineUsers: 1200
     }
   },
   {
@@ -239,7 +247,6 @@ export const modules: ModuleNode[] = [
       'Агрегирует показатели фонда скважин, визуализирует отклонения факта от сменных лимитов и формирует предупреждения.',
     domains: ['well-operations', 'short-term-planning'],
     team: 'Production Control Room',
-    owner: 'Илья Киселёв',
     productName: 'Production Command Center',
     projectTeam: [
       { id: 'dashboard-owner', fullName: 'Илья Киселёв', role: 'Владелец продукта' },
@@ -252,7 +259,10 @@ export const modules: ModuleNode[] = [
     ],
     technologyStack: ['TypeScript', 'React', 'D3.js', 'Node.js'],
     localization: 'Мультиязычная (ru, en, kk)',
-    ridOwner: 'АО «НефтеИнтеллект»',
+    ridOwner: {
+      company: 'АО «НефтеИнтеллект»',
+      division: 'Центр производственного контроля'
+    },
     userStats: { companies: 18, licenses: 4200 },
     status: 'production',
     repository: 'https://git.example.com/production/well-dashboard',
@@ -299,7 +309,8 @@ export const modules: ModuleNode[] = [
     nonFunctional: {
       responseTimeMs: 360,
       throughputRps: 210,
-      resourceConsumption: '6 vCPU / 16 GB RAM'
+      resourceConsumption: '6 vCPU / 16 GB RAM',
+      baselineUsers: 1800
     }
   },
   {
@@ -309,7 +320,6 @@ export const modules: ModuleNode[] = [
       'Оптимизирует сменные задания на основе фактических ограничений, отклонений и доступности оборудования.',
     domains: ['short-term-planning'],
     team: 'Production Planning',
-    owner: 'Елена Савина',
     productName: 'Shift Orchestrator',
     projectTeam: [
       { id: 'shift-owner', fullName: 'Елена Савина', role: 'Владелец продукта' },
@@ -322,7 +332,10 @@ export const modules: ModuleNode[] = [
     ],
     technologyStack: ['Kotlin', 'Spring Boot', 'PostgreSQL', 'Camunda'],
     localization: 'Только русский язык',
-    ridOwner: 'АО «НефтеИнтеллект»',
+    ridOwner: {
+      company: 'АО «НефтеИнтеллект»',
+      division: 'Управление оперативного планирования'
+    },
     userStats: { companies: 9, licenses: 1150 },
     status: 'production',
     repository: 'https://git.example.com/production/shift-planner',
@@ -369,7 +382,8 @@ export const modules: ModuleNode[] = [
     nonFunctional: {
       responseTimeMs: 540,
       throughputRps: 120,
-      resourceConsumption: '6 vCPU / 24 GB RAM'
+      resourceConsumption: '6 vCPU / 24 GB RAM',
+      baselineUsers: 650
     }
   },
   {
@@ -379,7 +393,6 @@ export const modules: ModuleNode[] = [
       'Использует исторические ремонты и текущие режимы работы для расчёта вероятности отказов погружных установок.',
     domains: ['lift-diagnostics'],
     team: 'Reliability Engineering',
-    owner: 'Сергей Баширов',
     productName: 'Reliability Intelligence Platform',
     projectTeam: [
       { id: 'lift-owner', fullName: 'Сергей Баширов', role: 'Владелец продукта' },
@@ -392,7 +405,10 @@ export const modules: ModuleNode[] = [
     ],
     technologyStack: ['Python', 'FastAPI', 'PyTorch', 'Apache Kafka'],
     localization: 'Мультиязычная (ru, en)',
-    ridOwner: 'АО «НефтеИнтеллект»',
+    ridOwner: {
+      company: 'АО «НефтеИнтеллект»',
+      division: 'Лаборатория надежности оборудования'
+    },
     userStats: { companies: 7, licenses: 640 },
     status: 'in-dev',
     repository: 'https://git.example.com/reliability/lift-predictor',
@@ -439,7 +455,8 @@ export const modules: ModuleNode[] = [
     nonFunctional: {
       responseTimeMs: 620,
       throughputRps: 85,
-      resourceConsumption: '8 vCPU / 32 GB RAM (GPU)'
+      resourceConsumption: '8 vCPU / 32 GB RAM (GPU)',
+      baselineUsers: 320
     }
   },
   {
@@ -449,7 +466,6 @@ export const modules: ModuleNode[] = [
       'Рассчитывает режимы работы насосов для снижения энергозатрат с учётом риска отказов и тарифов.',
     domains: ['energy-optimization'],
     team: 'Energy Efficiency Lab',
-    owner: 'Мария Егорова',
     productName: 'Reliability Intelligence Platform',
     projectTeam: [
       { id: 'energy-owner', fullName: 'Мария Егорова', role: 'Владелец продукта' },
@@ -462,7 +478,10 @@ export const modules: ModuleNode[] = [
     ],
     technologyStack: ['Python', 'FastAPI', 'NumPy', 'Redis'],
     localization: 'Мультиязычная (ru, en)',
-    ridOwner: 'АО «НефтеИнтеллект»',
+    ridOwner: {
+      company: 'АО «НефтеИнтеллект»',
+      division: 'Центр энергоэффективности'
+    },
     userStats: { companies: 11, licenses: 980 },
     status: 'production',
     repository: 'https://git.example.com/energy/optimizer',
@@ -513,7 +532,8 @@ export const modules: ModuleNode[] = [
     nonFunctional: {
       responseTimeMs: 480,
       throughputRps: 150,
-      resourceConsumption: '6 vCPU / 20 GB RAM'
+      resourceConsumption: '6 vCPU / 20 GB RAM',
+      baselineUsers: 900
     }
   },
   {
@@ -523,7 +543,6 @@ export const modules: ModuleNode[] = [
       'Консолидирует производственные планы и энергопоказатели для расчёта NPV, IRR и формирования инвестиционного досье.',
     domains: ['investment-analysis'],
     team: 'Corporate Finance Analytics',
-    owner: 'Дмитрий Орлов',
     productName: 'Capital Strategy Workspace',
     projectTeam: [
       { id: 'invest-owner', fullName: 'Дмитрий Орлов', role: 'Владелец продукта' },
@@ -536,7 +555,10 @@ export const modules: ModuleNode[] = [
     ],
     technologyStack: ['C#', '.NET 7', 'React', 'MS SQL'],
     localization: 'Мультиязычная (ru, en)',
-    ridOwner: 'АО «НефтеИнтеллект»',
+    ridOwner: {
+      company: 'АО «НефтеИнтеллект»',
+      division: 'Дирекция корпоративных финансов'
+    },
     userStats: { companies: 15, licenses: 3100 },
     status: 'production',
     repository: 'https://git.example.com/finance/invest-evaluator',
@@ -587,7 +609,8 @@ export const modules: ModuleNode[] = [
     nonFunctional: {
       responseTimeMs: 850,
       throughputRps: 65,
-      resourceConsumption: '10 vCPU / 40 GB RAM'
+      resourceConsumption: '10 vCPU / 40 GB RAM',
+      baselineUsers: 450
     }
   },
   {
@@ -597,7 +620,6 @@ export const modules: ModuleNode[] = [
       'Хранит и классифицирует риски инвестиционных проектов, собирая информацию из аудитов и комплаенс-проверок.',
     domains: ['investment-analysis'],
     team: 'Project Governance',
-    owner: 'Анна Лебедева',
     productName: 'Capital Strategy Workspace',
     projectTeam: [
       { id: 'risk-owner', fullName: 'Анна Лебедева', role: 'Владелец продукта' },
@@ -610,7 +632,10 @@ export const modules: ModuleNode[] = [
     ],
     technologyStack: ['TypeScript', 'NestJS', 'PostgreSQL', 'RabbitMQ'],
     localization: 'Только русский язык',
-    ridOwner: 'АО «НефтеИнтеллект»',
+    ridOwner: {
+      company: 'АО «НефтеИнтеллект»',
+      division: 'Служба управления рисками'
+    },
     userStats: { companies: 6, licenses: 540 },
     status: 'in-dev',
     repository: 'https://git.example.com/governance/risk-register',
@@ -655,7 +680,8 @@ export const modules: ModuleNode[] = [
     nonFunctional: {
       responseTimeMs: 620,
       throughputRps: 55,
-      resourceConsumption: '4 vCPU / 10 GB RAM'
+      resourceConsumption: '4 vCPU / 10 GB RAM',
+      baselineUsers: 280
     }
   }
 ];

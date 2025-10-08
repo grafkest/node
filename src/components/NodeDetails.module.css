@@ -130,3 +130,22 @@
   flex-direction: column;
   gap: 2px;
 }
+
+.teamRoster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.teamRosterHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.teamSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
