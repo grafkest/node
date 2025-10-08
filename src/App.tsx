@@ -71,7 +71,7 @@ function App() {
         module.owner.toLowerCase().includes(normalizedSearch);
       const matchesStatus = statusFilters.has(module.status);
       const matchesTeam =
-        teamFilter.length > 0 ? teamFilter.includes(module.team) : true;
+        teamFilter.length === 0 ? false : teamFilter.includes(module.team);
       return matchesDomain && matchesSearch && matchesStatus && matchesTeam;
     },
     [search, selectedDomains, statusFilters, teamFilter]
