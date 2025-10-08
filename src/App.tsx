@@ -24,7 +24,7 @@ function App() {
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
-  const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<string[]>([]);
   const [showDependencies, setShowDependencies] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
@@ -69,7 +69,8 @@ function App() {
         module.name.toLowerCase().includes(normalizedSearch) ||
         module.owner.toLowerCase().includes(normalizedSearch);
       const matchesStatus = statusFilters.has(module.status);
-      const matchesTeam = teamFilter ? module.team === teamFilter : true;
+      const matchesTeam =
+        teamFilter.length > 0 ? teamFilter.includes(module.team) : true;
       return matchesDomain && matchesSearch && matchesStatus && matchesTeam;
     },
     [search, selectedDomains, statusFilters, teamFilter]
