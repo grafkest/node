@@ -137,7 +137,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           value={teamFilter}
           getItemKey={(item) => item}
           getItemLabel={(item) => item}
-          onChange={({ value }) => onTeamChange(value ?? [])}
+          onChange={(value) => onTeamChange(value ?? [])}
           form="default"
           multiple
           selectAll
@@ -159,7 +159,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           label="Сбросить фильтры"
           onClick={() => {
             onSearchChange('');
-            onTeamChange([]);
+            onTeamChange(teams);
             statuses.forEach((status) => {
               if (!activeStatuses.has(status)) {
                 onToggleStatus(status);
