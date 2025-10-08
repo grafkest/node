@@ -1,12 +1,12 @@
 import { Layout } from '@consta/uikit/Layout';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader } from '@consta/uikit/Loader';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
 import FiltersPanel from './components/FiltersPanel';
 import GraphView, { type GraphNode } from './components/GraphView';
-import StatsDashboard from './components/StatsDashboard';
 import NodeDetails from './components/NodeDetails';
 import {
   artifacts,
@@ -23,6 +23,10 @@ import styles from './App.module.css';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const allTeams = Array.from(new Set(modules.map((module) => module.team))).sort();
+
+const StatsDashboard = lazy(async () => ({
+  default: (await import('./components/StatsDashboard')).default
+}));
 
 const viewTabs = [
   { label: 'Связи', value: 'graph' },
@@ -42,6 +46,7 @@ function App() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
+  const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
 
   const teams = useMemo(() => allTeams, []);
 
@@ -439,12 +444,19 @@ function App() {
   }, [handleNavigate]);
 
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
+  const isGraphActive = viewMode === 'graph';
+  const isStatsActive = viewMode === 'stats';
 
-  const headerTitle = viewMode === 'graph' ? 'Граф модулей и доменных областей' : 'Статистика экосистемы решений';
-  const headerDescription =
-    viewMode === 'graph'
-      ? 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.'
-      : 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+  const headerTitle = isGraphActive ? 'Граф модулей и доменных областей' : 'Статистика экосистемы решений';
+  const headerDescription = isGraphActive
+    ? 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.'
+    : 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+
+  useEffect(() => {
+    if (viewMode === 'stats' && !statsActivated) {
+      setStatsActivated(true);
+    }
+  }, [statsActivated, viewMode]);
 
   return (
     <Layout className={styles.app} direction="column">
@@ -466,8 +478,12 @@ function App() {
           onChange={(tab) => setViewMode(tab.value)}
         />
       </header>
-      {viewMode === 'graph' ? (
-        <main className={styles.main}>
+      <main
+        className={styles.main}
+        hidden={!isGraphActive}
+        aria-hidden={!isGraphActive}
+        style={{ display: isGraphActive ? undefined : 'none' }}
+      >
           <aside className={styles.sidebar}>
             <Text size="s" weight="semibold" className={styles.sidebarTitle}>
               Домены
@@ -532,15 +548,22 @@ function App() {
               onNavigate={handleNavigate}
             />
           </aside>
-        </main>
-      ) : (
-        <main className={styles.statsMain}>
-          <StatsDashboard
-            modules={modules}
-            domains={domainTree}
-            artifacts={artifacts}
-            reuseHistory={reuseIndexHistory}
-          />
+      </main>
+      {(statsActivated || isStatsActive) && (
+        <main
+          className={styles.statsMain}
+          hidden={!isStatsActive}
+          aria-hidden={!isStatsActive}
+          style={{ display: isStatsActive ? undefined : 'none' }}
+        >
+          <Suspense fallback={<Loader size="m" />}>
+            <StatsDashboard
+              modules={modules}
+              domains={domainTree}
+              artifacts={artifacts}
+              reuseHistory={reuseIndexHistory}
+            />
+          </Suspense>
         </main>
       )}
     </Layout>
