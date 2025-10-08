@@ -444,12 +444,13 @@ function App() {
   }, [handleNavigate]);
 
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
+  const isGraphActive = viewMode === 'graph';
+  const isStatsActive = viewMode === 'stats';
 
-  const headerTitle = viewMode === 'graph' ? 'Граф модулей и доменных областей' : 'Статистика экосистемы решений';
-  const headerDescription =
-    viewMode === 'graph'
-      ? 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.'
-      : 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+  const headerTitle = isGraphActive ? 'Граф модулей и доменных областей' : 'Статистика экосистемы решений';
+  const headerDescription = isGraphActive
+    ? 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.'
+    : 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
 
   useEffect(() => {
     if (viewMode === 'stats' && !statsActivated) {
@@ -479,8 +480,9 @@ function App() {
       </header>
       <main
         className={styles.main}
-        hidden={viewMode !== 'graph'}
-        aria-hidden={viewMode !== 'graph'}
+        hidden={!isGraphActive}
+        aria-hidden={!isGraphActive}
+        style={{ display: isGraphActive ? undefined : 'none' }}
       >
           <aside className={styles.sidebar}>
             <Text size="s" weight="semibold" className={styles.sidebarTitle}>
@@ -547,11 +549,12 @@ function App() {
             />
           </aside>
       </main>
-      {(statsActivated || viewMode === 'stats') && (
+      {(statsActivated || isStatsActive) && (
         <main
           className={styles.statsMain}
-          hidden={viewMode !== 'stats'}
-          aria-hidden={viewMode !== 'stats'}
+          hidden={!isStatsActive}
+          aria-hidden={!isStatsActive}
+          style={{ display: isStatsActive ? undefined : 'none' }}
         >
           <Suspense fallback={<Loader size="m" />}>
             <StatsDashboard
