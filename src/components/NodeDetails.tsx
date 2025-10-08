@@ -37,9 +37,9 @@ type SectionId = 'general' | 'calculation' | 'technical' | 'nonFunctional';
 
 const defaultSectionState: Record<SectionId, boolean> = {
   general: true,
-  calculation: true,
-  technical: true,
-  nonFunctional: true
+  calculation: false,
+  technical: false,
+  nonFunctional: false
 };
 
 const clientTypeLabels: Record<'desktop' | 'web', string> = {

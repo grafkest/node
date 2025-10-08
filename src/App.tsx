@@ -22,7 +22,9 @@ const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const allTeams = Array.from(new Set(modules.map((module) => module.team))).sort();
 
 function App() {
-  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
+  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
+    () => new Set(flattenDomainTree(domainTree).map((domain) => domain.id))
+  );
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
   const [teamFilter, setTeamFilter] = useState<string[]>(allTeams);
