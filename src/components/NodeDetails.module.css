@@ -84,3 +84,49 @@
   align-items: center;
   gap: 12px;
 }
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.collapseLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0 4px;
+}
+
+.keyValueItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.value {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
