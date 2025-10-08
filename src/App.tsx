@@ -46,6 +46,7 @@ function App() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
+  const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
 
   const teams = useMemo(() => allTeams, []);
 
@@ -450,6 +451,12 @@ function App() {
       ? 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.'
       : 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
 
+  useEffect(() => {
+    if (viewMode === 'stats' && !statsActivated) {
+      setStatsActivated(true);
+    }
+  }, [statsActivated, viewMode]);
+
   return (
     <Layout className={styles.app} direction="column">
       <header className={styles.header}>
@@ -470,8 +477,11 @@ function App() {
           onChange={(tab) => setViewMode(tab.value)}
         />
       </header>
-      {viewMode === 'graph' ? (
-        <main className={styles.main}>
+      <main
+        className={styles.main}
+        hidden={viewMode !== 'graph'}
+        aria-hidden={viewMode !== 'graph'}
+      >
           <aside className={styles.sidebar}>
             <Text size="s" weight="semibold" className={styles.sidebarTitle}>
               Домены
@@ -536,9 +546,13 @@ function App() {
               onNavigate={handleNavigate}
             />
           </aside>
-        </main>
-      ) : (
-        <main className={styles.statsMain}>
+      </main>
+      {(statsActivated || viewMode === 'stats') && (
+        <main
+          className={styles.statsMain}
+          hidden={viewMode !== 'stats'}
+          aria-hidden={viewMode !== 'stats'}
+        >
           <Suspense fallback={<Loader size="m" />}>
             <StatsDashboard
               modules={modules}
