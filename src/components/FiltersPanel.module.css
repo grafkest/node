@@ -35,6 +35,25 @@
   width: 100%;
 }
 
+.comboboxOption {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.comboboxOptionHovered {
+  background: var(--color-control-bg-ghost-hover, rgba(0, 0, 0, 0.05));
+}
+
+.comboboxOptionActive {
+  background: var(--color-control-bg-ghost-press, rgba(0, 0, 0, 0.08));
+}
+
+.comboboxCheckbox {
+  width: 100%;
+}
+
 .switchRow {
   display: flex;
   flex-direction: column;

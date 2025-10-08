@@ -19,17 +19,18 @@ import {
 import styles from './App.module.css';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
+const allTeams = Array.from(new Set(modules.map((module) => module.team))).sort();
 
 function App() {
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
-  const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<string[]>(allTeams);
   const [showDependencies, setShowDependencies] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
 
-  const teams = useMemo(() => Array.from(new Set(modules.map((module) => module.team))).sort(), []);
+  const teams = useMemo(() => allTeams, []);
 
   const domainDescendants = useMemo(() => buildDomainDescendants(domainTree), []);
   const domainAncestors = useMemo(() => buildDomainAncestors(domainTree), []);
@@ -69,7 +70,8 @@ function App() {
         module.name.toLowerCase().includes(normalizedSearch) ||
         module.owner.toLowerCase().includes(normalizedSearch);
       const matchesStatus = statusFilters.has(module.status);
-      const matchesTeam = teamFilter ? module.team === teamFilter : true;
+      const matchesTeam =
+        teamFilter.length === 0 ? false : teamFilter.includes(module.team);
       return matchesDomain && matchesSearch && matchesStatus && matchesTeam;
     },
     [search, selectedDomains, statusFilters, teamFilter]

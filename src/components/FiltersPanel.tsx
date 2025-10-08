@@ -1,9 +1,12 @@
 import { Button } from '@consta/uikit/Button';
+import { Checkbox } from '@consta/uikit/Checkbox';
 import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
-import { Select } from '@consta/uikit/Select';
+import { Combobox } from '@consta/uikit/Combobox';
 import { Switch } from '@consta/uikit/Switch';
 import { Text } from '@consta/uikit/Text';
+import clsx from 'clsx';
 import React from 'react';
+import type { ComboboxPropRenderItem } from '@consta/uikit/Combobox';
 import type { ModuleStatus } from '../data';
 import styles from './FiltersPanel.module.css';
 
@@ -14,8 +17,8 @@ type FiltersPanelProps = {
   activeStatuses: Set<ModuleStatus>;
   onToggleStatus: (status: ModuleStatus) => void;
   teams: string[];
-  teamFilter: string | null;
-  onTeamChange: (team: string | null) => void;
+  teamFilter: string[];
+  onTeamChange: (team: string[]) => void;
   showDependencies: boolean;
   onToggleDependencies: (value: boolean) => void;
 };
@@ -55,6 +58,31 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
   const selectedStatusOptions = React.useMemo(
     () => statusOptions.filter((option) => activeStatuses.has(option.id)),
     [statusOptions, activeStatuses]
+  );
+
+  const renderTeamOption = React.useCallback<ComboboxPropRenderItem<string>>(
+    ({ item, active, hovered, onClick, onMouseEnter, ref }) => (
+      <div
+        ref={ref}
+        className={clsx(styles.comboboxOption, {
+          [styles.comboboxOptionHovered]: hovered,
+          [styles.comboboxOptionActive]: active
+        })}
+        onMouseEnter={onMouseEnter}
+        onClick={(event) => {
+          onClick(event);
+        }}
+      >
+        <Checkbox
+          size="s"
+          readOnly
+          checked={teamFilter.includes(item)}
+          label={item}
+          className={styles.comboboxCheckbox}
+        />
+      </div>
+    ),
+    [teamFilter]
   );
 
   return (
@@ -102,15 +130,18 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
         <Text size="s" weight="semibold">
           Название продукта
         </Text>
-        <Select
+        <Combobox
           placeholder="Все продукты"
           size="s"
           items={teams}
           value={teamFilter}
           getItemKey={(item) => item}
           getItemLabel={(item) => item}
-          onChange={({ value }) => onTeamChange(value ?? null)}
+          onChange={(value) => onTeamChange(value ?? [])}
           form="default"
+          multiple
+          selectAll
+          renderItem={renderTeamOption}
           className={styles.combobox}
         />
       </div>
@@ -128,7 +159,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           label="Сбросить фильтры"
           onClick={() => {
             onSearchChange('');
-            onTeamChange(null);
+            onTeamChange(teams);
             statuses.forEach((status) => {
               if (!activeStatuses.has(status)) {
                 onToggleStatus(status);
