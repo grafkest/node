@@ -1,12 +1,12 @@
 import { Layout } from '@consta/uikit/Layout';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader } from '@consta/uikit/Loader';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
 import FiltersPanel from './components/FiltersPanel';
 import GraphView, { type GraphNode } from './components/GraphView';
-import StatsDashboard from './components/StatsDashboard';
 import NodeDetails from './components/NodeDetails';
 import {
   artifacts,
@@ -23,6 +23,10 @@ import styles from './App.module.css';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const allTeams = Array.from(new Set(modules.map((module) => module.team))).sort();
+
+const StatsDashboard = lazy(async () => ({
+  default: (await import('./components/StatsDashboard')).default
+}));
 
 const viewTabs = [
   { label: 'Связи', value: 'graph' },
@@ -535,12 +539,14 @@ function App() {
         </main>
       ) : (
         <main className={styles.statsMain}>
-          <StatsDashboard
-            modules={modules}
-            domains={domainTree}
-            artifacts={artifacts}
-            reuseHistory={reuseIndexHistory}
-          />
+          <Suspense fallback={<Loader size="m" />}>
+            <StatsDashboard
+              modules={modules}
+              domains={domainTree}
+              artifacts={artifacts}
+              reuseHistory={reuseIndexHistory}
+            />
+          </Suspense>
         </main>
       )}
     </Layout>
