@@ -97,55 +97,72 @@ export type ModuleNode = {
 
 export const domainTree: DomainNode[] = [
   {
-    id: 'extraction',
-    name: 'Добыча',
-    description: 'Функции департамента управления добычей',
+    id: 'infrastructure-planning',
+    name: 'Инфраструктурное планирование',
+    description:
+      'Концептуальное проектирование и реинжиниринг наземной инфраструктуры месторождений',
     children: [
       {
-        id: 'production',
-        name: 'Управление добычей',
-        description: 'Контроль фонда скважин и планирование добычи',
-        children: [
-          {
-            id: 'well-operations',
-            name: 'Мониторинг скважин',
-            description: 'Наблюдение за фондом скважин и оперативные метрики'
-          },
-          {
-            id: 'short-term-planning',
-            name: 'Планирование смен',
-            description: 'Формирование и контроль сменных заданий'
-          }
-        ]
+        id: 'data-preparation',
+        name: 'Подготовка исходных данных',
+        description:
+          'Сбор и нормализация исходных данных для моделирования схем обустройства'
       },
       {
-        id: 'engineering',
-        name: 'Инженерная аналитика',
-        description: 'Диагностика оборудования и энергоэффективность',
-        children: [
-          {
-            id: 'lift-diagnostics',
-            name: 'Диагностика УЭЦН',
-            description: 'Прогнозирование отказов насосного оборудования'
-          },
-          {
-            id: 'energy-optimization',
-            name: 'Оптимизация энергии',
-            description: 'Балансировка потребления и снижение энергозатрат'
-          }
-        ]
+        id: 'layout-optimization',
+        name: 'Оптимизация размещения',
+        description:
+          'Автоматическое размещение объектов с учётом технологических и топографических ограничений'
       },
       {
-        id: 'economics',
-        name: 'Экономика проекта',
-        description: 'Финансовая оценка и инвестиционные решения',
-        children: [
-          {
-            id: 'investment-analysis',
-            name: 'Оценка инвестиций',
-            description: 'Расчёт эффективности и рисков портфеля проектов'
-          }
-        ]
+        id: 'economic-evaluation',
+        name: 'Экономическая оценка',
+        description:
+          'Формирование экономических показателей и подготовка досье по варианту инфраструктуры'
+      }
+    ]
+  },
+  {
+    id: 'digital-operations',
+    name: 'Цифровое управление добычей',
+    description: 'Мониторинг, оптимизация и дистанционное управление объектами добычи',
+    children: [
+      {
+        id: 'real-time-monitoring',
+        name: 'Онлайн-мониторинг',
+        description: 'Сбор и визуализация телеметрии наземной инфраструктуры в реальном времени'
+      },
+      {
+        id: 'production-optimization',
+        name: 'Оптимизация режимов',
+        description: 'Рекомендации по повышению эффективности работы фонда'
+      },
+      {
+        id: 'remote-control',
+        name: 'Дистанционное управление',
+        description: 'Удалённое управление производственными узлами и интеграция с АСУТП'
+      }
+    ]
+  },
+  {
+    id: 'workover-operations',
+    name: 'Внутрискважинные операции',
+    description: 'Планирование, контроль и аналитика работ по ремонту скважин',
+    children: [
+      {
+        id: 'workover-planning',
+        name: 'Планирование ГТМ и ТКРС',
+        description: 'Формирование и согласование программ работ по скважинам'
+      },
+      {
+        id: 'field-execution',
+        name: 'Исполнение в поле',
+        description: 'Контроль исполнения ремонтов и взаимодействие с подрядчиками'
+      },
+      {
+        id: 'quality-analytics',
+        name: 'Аналитика качества работ',
+        description: 'Оценка эффективности ремонтов и выявление узких мест процессов'
       }
     ]
   }
@@ -169,522 +186,671 @@ export const domainNameById: Record<string, string> = (() => {
 
 export const modules: ModuleNode[] = [
   {
-    id: 'module-telemetry-cleansing',
-    name: 'Очистка телеметрии',
+    id: 'module-infraplan-datahub',
+    name: 'INFRAPLAN DataHub',
     description:
-      'Собирает телеметрию скважин, нормализует показания датчиков и обогащает их паспортами оборудования.',
-    domains: ['well-operations', 'lift-diagnostics'],
-    team: 'Field Data Platform',
-    productName: 'Well Insight Suite',
+      'Консолидирует инженерные и производственные данные, нормализует их и подготавливает к инфраструктурному моделированию.',
+    domains: ['data-preparation'],
+    team: 'INFRAPLAN Data Services',
+    productName: 'Nedra.Production INFRAPLAN',
     projectTeam: [
-      { id: 'telemetry-owner', fullName: 'Наталья Коваль', role: 'Владелец продукта' },
-      { id: 'telemetry-rd', fullName: 'Роман Кузнецов', role: 'Эксперт R&D' },
-      { id: 'telemetry-analyst', fullName: 'Павел Лобанов', role: 'Аналитик' },
-      { id: 'telemetry-backend', fullName: 'Василий Титов', role: 'Backend' },
-      { id: 'telemetry-frontend', fullName: 'Евгения Громова', role: 'Frontend' },
-      { id: 'telemetry-architect', fullName: 'Артём Есипов', role: 'Архитектор' },
-      { id: 'telemetry-tester', fullName: 'Марина Куприянова', role: 'Тестировщик' }
+      { id: 'infraplan-owner', fullName: 'Алексей Сорокин', role: 'Владелец продукта' },
+      { id: 'infraplan-rd', fullName: 'Виктория Бережная', role: 'Эксперт R&D' },
+      { id: 'infraplan-analyst', fullName: 'Мария Гусева', role: 'Аналитик' },
+      { id: 'infraplan-backend', fullName: 'Сергей Трофимов', role: 'Backend' },
+      { id: 'infraplan-frontend', fullName: 'Юлия Рогова', role: 'Frontend' },
+      { id: 'infraplan-architect', fullName: 'Дмитрий Валов', role: 'Архитектор' },
+      { id: 'infraplan-tester', fullName: 'Лилия Нуриева', role: 'Тестировщик' }
     ],
-    technologyStack: ['TypeScript', 'NestJS', 'Apache Kafka', 'PostgreSQL'],
+    technologyStack: ['TypeScript', 'NestJS', 'PostgreSQL', 'Apache Airflow'],
     localization: 'Мультиязычная (ru, en)',
     ridOwner: {
-      company: 'АО «НефтеИнтеллект»',
-      division: 'Департамент цифровых сервисов'
+      company: 'АО «Nedra Digital»',
+      division: 'Дирекция концептуального проектирования'
     },
-    userStats: { companies: 12, licenses: 1850 },
+    userStats: { companies: 14, licenses: 620 },
     status: 'production',
-    repository: 'https://git.example.com/upstream/telemetry-cleansing',
-    api: 'Kafka stream telemetry.normalized',
-    specificationUrl: 'https://confluence.example.com/pages/viewpage.action?pageId=11001',
-    apiContractsUrl: 'https://docs.example.com/apis/telemetry-cleansing',
-    techDesignUrl: 'https://confluence.example.com/display/FD/Telemetry+Cleansing+Design',
-    architectureDiagramUrl: 'https://diagrams.example.com/telemetry-cleansing',
+    repository: 'https://git.nedra.digital/infraplan/data-hub',
+    api: 'REST /api/v2/infraplan/source-packs',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=80101',
+    apiContractsUrl: 'https://kb.nedra.digital/display/IP/API+Infraplan+DataHub',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=80212',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/infraplan-datahub',
     licenseServerIntegrated: true,
     libraries: [
-      { name: '@nestjs/core', version: '9.4.2' },
-      { name: 'rxjs', version: '7.8.1' },
-      { name: 'kafkajs', version: '2.2.4' }
+      { name: '@nestjs/core', version: '10.3.2' },
+      { name: 'typeorm', version: '0.3.20' },
+      { name: 'airflow-client', version: '2.9.0' }
     ],
     clientType: 'web',
     deploymentTool: 'kubernetes',
     dependencies: [],
-    produces: ['artifact-clean-telemetry'],
-    reuseScore: 0.86,
+    produces: ['artifact-infraplan-source-pack'],
+    reuseScore: 0.81,
     metrics: {
-      tests: 210,
+      tests: 194,
+      coverage: 92,
+      automationRate: 89
+    },
+    dataIn: [
+      {
+        id: 'raw-geodata',
+        label: 'Геодезические данные месторождений'
+      },
+      {
+        id: 'production-limits',
+        label: 'Технологические ограничения добычи'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'normalized-inputs',
+        label: 'Стандартизированный пакет исходных данных',
+        consumerIds: ['module-infraplan-layout']
+      }
+    ],
+    formula: 'normalized = preprocess(raw) ⊕ constraints',
+    nonFunctional: {
+      responseTimeMs: 350,
+      throughputRps: 160,
+      resourceConsumption: '4 vCPU / 16 GB RAM',
+      baselineUsers: 95
+    }
+  },
+  {
+    id: 'module-infraplan-layout',
+    name: 'INFRAPLAN Layout Engine',
+    description:
+      'Автоматизирует подбор вариантов размещения объектов обустройства с учётом рельефа, технологических и экологических ограничений.',
+    domains: ['layout-optimization'],
+    team: 'INFRAPLAN Modeling',
+    productName: 'Nedra.Production INFRAPLAN',
+    projectTeam: [
+      { id: 'layout-owner', fullName: 'Надежда Малахова', role: 'Владелец продукта' },
+      { id: 'layout-rd', fullName: 'Павел Колосов', role: 'Эксперт R&D' },
+      { id: 'layout-analyst', fullName: 'Олеся Харитонова', role: 'Аналитик' },
+      { id: 'layout-backend', fullName: 'Игорь Фирсов', role: 'Backend' },
+      { id: 'layout-frontend', fullName: 'Григорий Ким', role: 'Frontend' },
+      { id: 'layout-architect', fullName: 'Ирина Цой', role: 'Архитектор' },
+      { id: 'layout-tester', fullName: 'Полина Крючкова', role: 'Тестировщик' }
+    ],
+    technologyStack: ['Python', 'FastAPI', 'PostGIS', 'OptaPlanner'],
+    localization: 'Мультиязычная (ru, en)',
+    ridOwner: {
+      company: 'АО «Nedra Digital»',
+      division: 'Дирекция концептуального проектирования'
+    },
+    userStats: { companies: 9, licenses: 380 },
+    status: 'production',
+    repository: 'https://git.nedra.digital/infraplan/layout-engine',
+    api: 'REST /api/v1/infraplan/layouts',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=81145',
+    apiContractsUrl: 'https://kb.nedra.digital/display/IP/Layout+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=81192',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/infraplan-layout',
+    licenseServerIntegrated: true,
+    libraries: [
+      { name: 'fastapi', version: '0.111.0' },
+      { name: 'geopandas', version: '0.14.3' },
+      { name: 'optapy', version: '9.43.0' }
+    ],
+    clientType: 'web',
+    deploymentTool: 'kubernetes',
+    dependencies: ['module-infraplan-datahub'],
+    produces: ['artifact-infraplan-layout'],
+    reuseScore: 0.77,
+    metrics: {
+      tests: 156,
+      coverage: 88,
+      automationRate: 84
+    },
+    dataIn: [
+      {
+        id: 'normalized-inputs-ref',
+        label: 'Стандартизированный пакет исходных данных',
+        sourceId: 'artifact-infraplan-source-pack'
+      },
+      {
+        id: 'topology-constraints',
+        label: 'Ограничения по рельефу и охранным зонам'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'layout-scenarios',
+        label: 'Сценарии размещения объектов',
+        consumerIds: ['module-infraplan-economics']
+      }
+    ],
+    formula: 'total_cost = Σ(distance_i * cost_i) + Σ(site_j * capex_j)',
+    nonFunctional: {
+      responseTimeMs: 540,
+      throughputRps: 95,
+      resourceConsumption: '8 vCPU / 32 GB RAM',
+      baselineUsers: 60
+    }
+  },
+  {
+    id: 'module-infraplan-economics',
+    name: 'INFRAPLAN Economics',
+    description:
+      'Расчитывает экономическую эффективность вариантов обустройства и формирует инвестиционные досье.',
+    domains: ['economic-evaluation'],
+    team: 'INFRAPLAN Economics',
+    productName: 'Nedra.Production INFRAPLAN',
+    projectTeam: [
+      { id: 'econ-owner', fullName: 'Светлана Дорофеева', role: 'Владелец продукта' },
+      { id: 'econ-rd', fullName: 'Антон Власов', role: 'Эксперт R&D' },
+      { id: 'econ-analyst', fullName: 'Татьяна Бортникова', role: 'Аналитик' },
+      { id: 'econ-backend', fullName: 'Леонид Архипов', role: 'Backend' },
+      { id: 'econ-frontend', fullName: 'Андрей Усов', role: 'Frontend' },
+      { id: 'econ-architect', fullName: 'Валерий Макаров', role: 'Архитектор' },
+      { id: 'econ-tester', fullName: 'Елизавета Федорова', role: 'Тестировщик' }
+    ],
+    technologyStack: ['C#', '.NET 8', 'MS SQL', 'Power BI'],
+    localization: 'Мультиязычная (ru, en)',
+    ridOwner: {
+      company: 'АО «Nedra Digital»',
+      division: 'Дирекция концептуального проектирования'
+    },
+    userStats: { companies: 11, licenses: 450 },
+    status: 'production',
+    repository: 'https://git.nedra.digital/infraplan/economics',
+    api: 'REST /api/v1/infraplan/economics',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=82133',
+    apiContractsUrl: 'https://kb.nedra.digital/display/IP/Economics+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=82178',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/infraplan-economics',
+    licenseServerIntegrated: true,
+    libraries: [
+      { name: 'AutoMapper', version: '13.0.1' },
+      { name: 'MediatR', version: '12.1.1' },
+      { name: 'ClosedXML', version: '0.102.4' }
+    ],
+    clientType: 'desktop',
+    deploymentTool: 'kubernetes',
+    dependencies: ['module-infraplan-datahub', 'module-infraplan-layout'],
+    produces: ['artifact-infraplan-economic-report'],
+    reuseScore: 0.84,
+    metrics: {
+      tests: 208,
       coverage: 93,
       automationRate: 88
     },
     dataIn: [
       {
-        id: 'raw-telemetry',
-        label: 'Сырые данные датчиков'
+        id: 'source-pack-input',
+        label: 'Стандартизированный пакет исходных данных',
+        sourceId: 'artifact-infraplan-source-pack'
+      },
+      {
+        id: 'layout-input',
+        label: 'Сценарии размещения объектов',
+        sourceId: 'artifact-infraplan-layout'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'investment-scenarios',
+        label: 'Инвестиционные сценарии по вариантам',
+        consumerIds: []
+      }
+    ],
+    formula: 'NPV_variant = Σ((cash_flow_t - opex_t) / (1 + WACC)^t) - capex_variant',
+    nonFunctional: {
+      responseTimeMs: 780,
+      throughputRps: 55,
+      resourceConsumption: '10 vCPU / 40 GB RAM',
+      baselineUsers: 45
+    }
+  },
+  {
+    id: 'module-dtwin-monitoring',
+    name: 'DIGITAL TWIN Monitoring',
+    description:
+      'Собирает телеметрию наземной инфраструктуры в реальном времени и формирует интегрированное хранилище цифрового двойника.',
+    domains: ['real-time-monitoring'],
+    team: 'Digital Twin Telemetry',
+    productName: 'Nedra.Production DIGITAL TWIN',
+    projectTeam: [
+      { id: 'dtwin-mon-owner', fullName: 'Егор Панин', role: 'Владелец продукта' },
+      { id: 'dtwin-mon-rd', fullName: 'Раиса Чистякова', role: 'Эксперт R&D' },
+      { id: 'dtwin-mon-analyst', fullName: 'Илья Константинов', role: 'Аналитик' },
+      { id: 'dtwin-mon-backend', fullName: 'Даниил Аргунов', role: 'Backend' },
+      { id: 'dtwin-mon-frontend', fullName: 'Екатерина Руднева', role: 'Frontend' },
+      { id: 'dtwin-mon-architect', fullName: 'Глеб Лапшин', role: 'Архитектор' },
+      { id: 'dtwin-mon-tester', fullName: 'Алина Токарева', role: 'Тестировщик' }
+    ],
+    technologyStack: ['Go', 'gRPC', 'Apache Kafka', 'ClickHouse'],
+    localization: 'Мультиязычная (ru, en, ar)',
+    ridOwner: {
+      company: 'АО «Nedra Digital»',
+      division: 'Операционный центр цифровых двойников'
+    },
+    userStats: { companies: 12, licenses: 2100 },
+    status: 'production',
+    repository: 'https://git.nedra.digital/dtwin/monitoring',
+    api: 'gRPC dtwin.Telemetry/Stream',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=83114',
+    apiContractsUrl: 'https://kb.nedra.digital/display/DT/Telemetry+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=83180',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/dtwin-monitoring',
+    licenseServerIntegrated: true,
+    libraries: [
+      { name: 'segmentio/kafka-go', version: '0.4.46' },
+      { name: 'prometheus/client_golang', version: '1.19.0' },
+      { name: 'clickhouse-go', version: '2.0.5' }
+    ],
+    clientType: 'web',
+    deploymentTool: 'kubernetes',
+    dependencies: [],
+    produces: ['artifact-dtwin-telemetry-cube'],
+    reuseScore: 0.9,
+    metrics: {
+      tests: 312,
+      coverage: 95,
+      automationRate: 92
+    },
+    dataIn: [
+      {
+        id: 'scada-stream',
+        label: 'Поток телеметрии АСУ ТП'
+      },
+      {
+        id: 'field-sensor-payload',
+        label: 'Данные датчиков и подключённых устройств'
       },
       {
         id: 'equipment-passports',
-        label: 'Паспорта оборудования'
+        label: 'Паспорта оборудования и технологические схемы'
       }
     ],
     dataOut: [
       {
-        id: 'clean-telemetry',
-        label: 'Очищенная телеметрия',
-        consumerIds: ['module-well-dashboard', 'module-lift-predictor']
+        id: 'telemetry-cube',
+        label: 'Интегрированный куб телеметрии',
+        consumerIds: ['module-dtwin-optimizer']
       }
     ],
-    formula: 'value_norm = (value_raw - bias) * scale',
+    formula: 'metric = smooth(raw_signal, window=5)',
     nonFunctional: {
-      responseTimeMs: 240,
-      throughputRps: 320,
-      resourceConsumption: '4 vCPU / 12 GB RAM',
-      baselineUsers: 1200
-    }
-  },
-  {
-    id: 'module-well-dashboard',
-    name: 'Дашборд фонда скважин',
-    description:
-      'Агрегирует показатели фонда скважин, визуализирует отклонения факта от сменных лимитов и формирует предупреждения.',
-    domains: ['well-operations', 'short-term-planning'],
-    team: 'Production Control Room',
-    productName: 'Production Command Center',
-    projectTeam: [
-      { id: 'dashboard-owner', fullName: 'Илья Киселёв', role: 'Владелец продукта' },
-      { id: 'dashboard-rd', fullName: 'Станислав Ершов', role: 'Эксперт R&D' },
-      { id: 'dashboard-analyst', fullName: 'Ольга Захарова', role: 'Аналитик' },
-      { id: 'dashboard-frontend', fullName: 'Екатерина Белова', role: 'Frontend' },
-      { id: 'dashboard-backend', fullName: 'Алексей Гущин', role: 'Backend' },
-      { id: 'dashboard-architect', fullName: 'Владимир Копылов', role: 'Архитектор' },
-      { id: 'dashboard-tester', fullName: 'Галина Рябова', role: 'Тестировщик' }
-    ],
-    technologyStack: ['TypeScript', 'React', 'D3.js', 'Node.js'],
-    localization: 'Мультиязычная (ru, en, kk)',
-    ridOwner: {
-      company: 'АО «НефтеИнтеллект»',
-      division: 'Центр производственного контроля'
-    },
-    userStats: { companies: 18, licenses: 4200 },
-    status: 'production',
-    repository: 'https://git.example.com/production/well-dashboard',
-    api: 'REST /api/v1/wells/dashboard',
-    specificationUrl: 'https://confluence.example.com/pages/viewpage.action?pageId=11852',
-    apiContractsUrl: 'https://docs.example.com/apis/well-dashboard',
-    techDesignUrl: 'https://confluence.example.com/display/PC/well-dashboard-tech-design',
-    architectureDiagramUrl: 'https://diagrams.example.com/well-dashboard',
-    licenseServerIntegrated: true,
-    libraries: [
-      { name: 'react', version: '18.2.0' },
-      { name: '@tanstack/react-query', version: '4.35.3' },
-      { name: 'echarts', version: '5.5.0' }
-    ],
-    clientType: 'web',
-    deploymentTool: 'kubernetes',
-    dependencies: ['module-telemetry-cleansing'],
-    produces: ['artifact-deviation-report'],
-    reuseScore: 0.74,
-    metrics: {
-      tests: 168,
-      coverage: 88,
-      automationRate: 82
-    },
-    dataIn: [
-      {
-        id: 'normalized-telemetry',
-        label: 'Очищенная телеметрия',
-        sourceId: 'artifact-clean-telemetry'
-      },
-      {
-        id: 'shift-targets',
-        label: 'Сменные лимиты добычи'
-      }
-    ],
-    dataOut: [
-      {
-        id: 'deviation-metrics',
-        label: 'Показатели отклонений',
-        consumerIds: ['module-shift-planner', 'module-investment-evaluator']
-      }
-    ],
-    formula: 'deviation = fact_volume - plan_volume',
-    nonFunctional: {
-      responseTimeMs: 360,
-      throughputRps: 210,
-      resourceConsumption: '6 vCPU / 16 GB RAM',
-      baselineUsers: 1800
-    }
-  },
-  {
-    id: 'module-shift-planner',
-    name: 'Сменное планирование добычи',
-    description:
-      'Оптимизирует сменные задания на основе фактических ограничений, отклонений и доступности оборудования.',
-    domains: ['short-term-planning'],
-    team: 'Production Planning',
-    productName: 'Shift Orchestrator',
-    projectTeam: [
-      { id: 'shift-owner', fullName: 'Елена Савина', role: 'Владелец продукта' },
-      { id: 'shift-rd', fullName: 'Николай Дорошин', role: 'Эксперт R&D' },
-      { id: 'shift-analyst', fullName: 'Ксения Литвинова', role: 'Аналитик' },
-      { id: 'shift-backend', fullName: 'Максим Фадеев', role: 'Backend' },
-      { id: 'shift-frontend', fullName: 'Инна Котова', role: 'Frontend' },
-      { id: 'shift-architect', fullName: 'Рустам Ганиев', role: 'Архитектор' },
-      { id: 'shift-tester', fullName: 'Дарья Королёва', role: 'Тестировщик' }
-    ],
-    technologyStack: ['Kotlin', 'Spring Boot', 'PostgreSQL', 'Camunda'],
-    localization: 'Только русский язык',
-    ridOwner: {
-      company: 'АО «НефтеИнтеллект»',
-      division: 'Управление оперативного планирования'
-    },
-    userStats: { companies: 9, licenses: 1150 },
-    status: 'production',
-    repository: 'https://git.example.com/production/shift-planner',
-    api: 'REST /api/v1/plans/shift',
-    specificationUrl: 'https://confluence.example.com/pages/viewpage.action?pageId=21045',
-    apiContractsUrl: 'https://docs.example.com/apis/shift-planner',
-    techDesignUrl: 'https://confluence.example.com/display/PC/shift-planner-design',
-    architectureDiagramUrl: 'https://diagrams.example.com/shift-planner',
-    licenseServerIntegrated: false,
-    libraries: [
-      { name: 'spring-boot-starter-web', version: '3.1.2' },
-      { name: 'camunda-bpm-spring-boot-starter', version: '7.19.0' },
-      { name: 'mapstruct', version: '1.5.5.Final' }
-    ],
-    clientType: 'desktop',
-    deploymentTool: 'kubernetes',
-    dependencies: ['module-well-dashboard'],
-    produces: ['artifact-shift-plan'],
-    reuseScore: 0.69,
-    metrics: {
-      tests: 124,
-      coverage: 85,
-      automationRate: 76
-    },
-    dataIn: [
-      {
-        id: 'deviation-input',
-        label: 'Показатели отклонений',
-        sourceId: 'artifact-deviation-report'
-      },
-      {
-        id: 'operational-constraints',
-        label: 'Ограничения по фонду'
-      }
-    ],
-    dataOut: [
-      {
-        id: 'shift-plan',
-        label: 'План смены добычи',
-        consumerIds: ['module-investment-evaluator']
-      }
-    ],
-    formula: 'plan = optimize(targets, constraints)',
-    nonFunctional: {
-      responseTimeMs: 540,
-      throughputRps: 120,
-      resourceConsumption: '6 vCPU / 24 GB RAM',
-      baselineUsers: 650
-    }
-  },
-  {
-    id: 'module-lift-predictor',
-    name: 'Прогноз отказов УЭЦН',
-    description:
-      'Использует исторические ремонты и текущие режимы работы для расчёта вероятности отказов погружных установок.',
-    domains: ['lift-diagnostics'],
-    team: 'Reliability Engineering',
-    productName: 'Reliability Intelligence Platform',
-    projectTeam: [
-      { id: 'lift-owner', fullName: 'Сергей Баширов', role: 'Владелец продукта' },
-      { id: 'lift-rd', fullName: 'Дарья Прокофьева', role: 'Эксперт R&D' },
-      { id: 'lift-analyst', fullName: 'Антон Тарский', role: 'Аналитик' },
-      { id: 'lift-backend', fullName: 'Владислав Кочетков', role: 'Backend' },
-      { id: 'lift-frontend', fullName: 'Светлана Бушуева', role: 'Frontend' },
-      { id: 'lift-architect', fullName: 'Игорь Щербаков', role: 'Архитектор' },
-      { id: 'lift-tester', fullName: 'Олеся Макарова', role: 'Тестировщик' }
-    ],
-    technologyStack: ['Python', 'FastAPI', 'PyTorch', 'Apache Kafka'],
-    localization: 'Мультиязычная (ru, en)',
-    ridOwner: {
-      company: 'АО «НефтеИнтеллект»',
-      division: 'Лаборатория надежности оборудования'
-    },
-    userStats: { companies: 7, licenses: 640 },
-    status: 'in-dev',
-    repository: 'https://git.example.com/reliability/lift-predictor',
-    api: 'gRPC reliability.FailurePredictor/Score',
-    specificationUrl: 'https://confluence.example.com/pages/viewpage.action?pageId=30551',
-    apiContractsUrl: 'https://docs.example.com/apis/lift-predictor',
-    techDesignUrl: 'https://confluence.example.com/display/RD/lift-predictor-design',
-    architectureDiagramUrl: 'https://diagrams.example.com/lift-predictor',
-    licenseServerIntegrated: false,
-    libraries: [
-      { name: 'fastapi', version: '0.111.0' },
-      { name: 'pydantic', version: '1.10.13' },
-      { name: 'torch', version: '2.1.0' }
-    ],
-    clientType: 'web',
-    deploymentTool: 'docker',
-    dependencies: ['module-telemetry-cleansing'],
-    produces: ['artifact-failure-forecast'],
-    reuseScore: 0.58,
-    metrics: {
-      tests: 98,
-      coverage: 80,
-      automationRate: 72
-    },
-    dataIn: [
-      {
-        id: 'telemetry-input',
-        label: 'Очищенная телеметрия',
-        sourceId: 'artifact-clean-telemetry'
-      },
-      {
-        id: 'maintenance-history',
-        label: 'История ремонтов'
-      }
-    ],
-    dataOut: [
-      {
-        id: 'failure-probability',
-        label: 'Прогноз отказов',
-        consumerIds: ['module-energy-optimizer']
-      }
-    ],
-    formula: 'p_fail = model(telemetry, history)',
-    nonFunctional: {
-      responseTimeMs: 620,
-      throughputRps: 85,
-      resourceConsumption: '8 vCPU / 32 GB RAM (GPU)',
+      responseTimeMs: 180,
+      throughputRps: 520,
+      resourceConsumption: '12 vCPU / 48 GB RAM',
       baselineUsers: 320
     }
   },
   {
-    id: 'module-energy-optimizer',
-    name: 'Оптимизация энергопотребления',
+    id: 'module-dtwin-optimizer',
+    name: 'DIGITAL TWIN Optimizer',
     description:
-      'Рассчитывает режимы работы насосов для снижения энергозатрат с учётом риска отказов и тарифов.',
-    domains: ['energy-optimization'],
-    team: 'Energy Efficiency Lab',
-    productName: 'Reliability Intelligence Platform',
+      'Генерирует рекомендации по управлению режимами объектов и прогнозирует эффект от внедрения цифрового двойника.',
+    domains: ['production-optimization'],
+    team: 'Digital Twin Orchestration',
+    productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
-      { id: 'energy-owner', fullName: 'Мария Егорова', role: 'Владелец продукта' },
-      { id: 'energy-rd', fullName: 'Виктор Маликов', role: 'Эксперт R&D' },
-      { id: 'energy-analyst', fullName: 'Людмила Котова', role: 'Аналитик' },
-      { id: 'energy-backend', fullName: 'Григорий Аверин', role: 'Backend' },
-      { id: 'energy-frontend', fullName: 'Елена Серова', role: 'Frontend' },
-      { id: 'energy-architect', fullName: 'Кирилл Никитин', role: 'Архитектор' },
-      { id: 'energy-tester', fullName: 'Жанна Фирсова', role: 'Тестировщик' }
+      { id: 'dtwin-opt-owner', fullName: 'Тимур Алиев', role: 'Владелец продукта' },
+      { id: 'dtwin-opt-rd', fullName: 'Елизар Копылов', role: 'Эксперт R&D' },
+      { id: 'dtwin-opt-analyst', fullName: 'Жанна Алимбекова', role: 'Аналитик' },
+      { id: 'dtwin-opt-backend', fullName: 'Пётр Швецов', role: 'Backend' },
+      { id: 'dtwin-opt-frontend', fullName: 'Анастасия Кручинина', role: 'Frontend' },
+      { id: 'dtwin-opt-architect', fullName: 'Кирилл Рыбаков', role: 'Архитектор' },
+      { id: 'dtwin-opt-tester', fullName: 'Софья Герасимова', role: 'Тестировщик' }
     ],
-    technologyStack: ['Python', 'FastAPI', 'NumPy', 'Redis'],
+    technologyStack: ['Python', 'PyTorch', 'FastAPI', 'Redis'],
     localization: 'Мультиязычная (ru, en)',
     ridOwner: {
-      company: 'АО «НефтеИнтеллект»',
-      division: 'Центр энергоэффективности'
+      company: 'АО «Nedra Digital»',
+      division: 'Операционный центр цифровых двойников'
     },
-    userStats: { companies: 11, licenses: 980 },
+    userStats: { companies: 10, licenses: 1500 },
     status: 'production',
-    repository: 'https://git.example.com/energy/optimizer',
-    api: 'REST /api/v1/energy/optimization',
-    specificationUrl: 'https://confluence.example.com/pages/viewpage.action?pageId=31502',
-    apiContractsUrl: 'https://docs.example.com/apis/energy-optimizer',
-    techDesignUrl: 'https://confluence.example.com/display/EN/energy-optimizer-design',
-    architectureDiagramUrl: 'https://diagrams.example.com/energy-optimizer',
+    repository: 'https://git.nedra.digital/dtwin/optimizer',
+    api: 'REST /api/v1/dtwin/optimization-orders',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=84102',
+    apiContractsUrl: 'https://kb.nedra.digital/display/DT/Optimizer+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=84164',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/dtwin-optimizer',
     licenseServerIntegrated: true,
     libraries: [
       { name: 'fastapi', version: '0.111.0' },
-      { name: 'numpy', version: '1.26.4' },
-      { name: 'scikit-learn', version: '1.4.2' }
+      { name: 'torch', version: '2.2.2' },
+      { name: 'redis', version: '5.0.1' }
     ],
     clientType: 'web',
     deploymentTool: 'kubernetes',
-    dependencies: ['module-lift-predictor'],
-    produces: ['artifact-energy-balance'],
-    reuseScore: 0.77,
+    dependencies: ['module-dtwin-monitoring'],
+    produces: ['artifact-dtwin-optimization-orders'],
+    reuseScore: 0.88,
     metrics: {
-      tests: 156,
-      coverage: 87,
-      automationRate: 81
+      tests: 248,
+      coverage: 91,
+      automationRate: 90
     },
     dataIn: [
       {
-        id: 'failure-forecast',
-        label: 'Прогноз отказов УЭЦН',
-        sourceId: 'artifact-failure-forecast'
+        id: 'telemetry-cube-input',
+        label: 'Интегрированный куб телеметрии',
+        sourceId: 'artifact-dtwin-telemetry-cube'
       },
       {
-        id: 'energy-tariffs',
-        label: 'Тарифы на электроэнергию'
+        id: 'operational-constraints',
+        label: 'Ограничения по режимам и безопасные диапазоны'
       }
     ],
     dataOut: [
       {
-        id: 'energy-balance',
-        label: 'Баланс энергопотребления',
-        consumerIds: ['module-investment-evaluator']
-      },
-      {
-        id: 'efficiency-advice',
-        label: 'Рекомендации по энергоэффективности'
+        id: 'optimization-orders',
+        label: 'Команды оптимизации режимов',
+        consumerIds: ['module-dtwin-remote-control']
       }
     ],
-    formula: 'balance = Σ(load_i * tariff_i) - savings_risk_adjusted',
+    formula: 'optimal_mode = argmax(strategy_score)',
     nonFunctional: {
-      responseTimeMs: 480,
-      throughputRps: 150,
-      resourceConsumption: '6 vCPU / 20 GB RAM',
-      baselineUsers: 900
+      responseTimeMs: 260,
+      throughputRps: 210,
+      resourceConsumption: '16 vCPU / 64 GB RAM (GPU)',
+      baselineUsers: 240
     }
   },
   {
-    id: 'module-investment-evaluator',
-    name: 'Оценка инвестиционной эффективности',
+    id: 'module-dtwin-remote-control',
+    name: 'DIGITAL TWIN Remote Ops',
     description:
-      'Консолидирует производственные планы и энергопоказатели для расчёта NPV, IRR и формирования инвестиционного досье.',
-    domains: ['investment-analysis'],
-    team: 'Corporate Finance Analytics',
-    productName: 'Capital Strategy Workspace',
+      'Обеспечивает дистанционное управление производственными узлами и обратную связь по выполнению команд.',
+    domains: ['remote-control'],
+    team: 'Digital Twin Remote Ops',
+    productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
-      { id: 'invest-owner', fullName: 'Дмитрий Орлов', role: 'Владелец продукта' },
-      { id: 'invest-rd', fullName: 'Вера Литвиненко', role: 'Эксперт R&D' },
-      { id: 'invest-analyst', fullName: 'Олег Каменев', role: 'Аналитик' },
-      { id: 'invest-backend', fullName: 'Михаил Греков', role: 'Backend' },
-      { id: 'invest-frontend', fullName: 'Анна Шульгина', role: 'Frontend' },
-      { id: 'invest-architect', fullName: 'Игорь Цветков', role: 'Архитектор' },
-      { id: 'invest-tester', fullName: 'Полина Юрьева', role: 'Тестировщик' }
+      { id: 'dtwin-remote-owner', fullName: 'Оксана Кривцова', role: 'Владелец продукта' },
+      { id: 'dtwin-remote-rd', fullName: 'Игорь Шамов', role: 'Эксперт R&D' },
+      { id: 'dtwin-remote-analyst', fullName: 'Руслан Сабиров', role: 'Аналитик' },
+      { id: 'dtwin-remote-backend', fullName: 'Тарас Мельник', role: 'Backend' },
+      { id: 'dtwin-remote-frontend', fullName: 'Елена Сучкова', role: 'Frontend' },
+      { id: 'dtwin-remote-architect', fullName: 'Геннадий Борисов', role: 'Архитектор' },
+      { id: 'dtwin-remote-tester', fullName: 'Зульфия Хасанова', role: 'Тестировщик' }
     ],
-    technologyStack: ['C#', '.NET 7', 'React', 'MS SQL'],
+    technologyStack: ['TypeScript', 'Node.js', 'gRPC', 'WebSocket'],
     localization: 'Мультиязычная (ru, en)',
     ridOwner: {
-      company: 'АО «НефтеИнтеллект»',
-      division: 'Дирекция корпоративных финансов'
+      company: 'АО «Nedra Digital»',
+      division: 'Операционный центр цифровых двойников'
     },
-    userStats: { companies: 15, licenses: 3100 },
-    status: 'production',
-    repository: 'https://git.example.com/finance/invest-evaluator',
-    api: 'REST /api/v1/investments/score',
-    specificationUrl: 'https://confluence.example.com/pages/viewpage.action?pageId=40211',
-    apiContractsUrl: 'https://docs.example.com/apis/investment-evaluator',
-    techDesignUrl: 'https://confluence.example.com/display/FIN/investment-evaluator-design',
-    architectureDiagramUrl: 'https://diagrams.example.com/investment-evaluator',
-    licenseServerIntegrated: true,
-    libraries: [
-      { name: 'AutoMapper', version: '12.0.1' },
-      { name: 'Dapper', version: '2.1.35' },
-      { name: 'Serilog', version: '3.0.1' }
-    ],
-    clientType: 'desktop',
-    deploymentTool: 'kubernetes',
-    dependencies: ['module-shift-planner', 'module-energy-optimizer'],
-    produces: ['artifact-investment-brief'],
-    reuseScore: 0.83,
-    metrics: {
-      tests: 204,
-      coverage: 91,
-      automationRate: 86
-    },
-    dataIn: [
-      {
-        id: 'shift-plan-input',
-        label: 'План смены',
-        sourceId: 'artifact-shift-plan'
-      },
-      {
-        id: 'energy-balance-input',
-        label: 'Баланс энергопотребления',
-        sourceId: 'artifact-energy-balance'
-      }
-    ],
-    dataOut: [
-      {
-        id: 'investment-brief',
-        label: 'Инвестиционный отчёт'
-      },
-      {
-        id: 'capital-metrics',
-        label: 'Показатели NPV и IRR'
-      }
-    ],
-    formula: 'NPV = Σ((cash_in_t - cash_out_t) / (1 + WACC)^t) - CAPEX',
-    nonFunctional: {
-      responseTimeMs: 850,
-      throughputRps: 65,
-      resourceConsumption: '10 vCPU / 40 GB RAM',
-      baselineUsers: 450
-    }
-  },
-  {
-    id: 'module-risk-register',
-    name: 'Реестр проектных рисков',
-    description:
-      'Хранит и классифицирует риски инвестиционных проектов, собирая информацию из аудитов и комплаенс-проверок.',
-    domains: ['investment-analysis'],
-    team: 'Project Governance',
-    productName: 'Capital Strategy Workspace',
-    projectTeam: [
-      { id: 'risk-owner', fullName: 'Анна Лебедева', role: 'Владелец продукта' },
-      { id: 'risk-rd', fullName: 'Руслан Фетисов', role: 'Эксперт R&D' },
-      { id: 'risk-analyst', fullName: 'Ирина Сидорова', role: 'Аналитик' },
-      { id: 'risk-backend', fullName: 'Георгий Аксенов', role: 'Backend' },
-      { id: 'risk-frontend', fullName: 'Алёна Крайнова', role: 'Frontend' },
-      { id: 'risk-architect', fullName: 'Виталий Муромцев', role: 'Архитектор' },
-      { id: 'risk-tester', fullName: 'Наталия Фомина', role: 'Тестировщик' }
-    ],
-    technologyStack: ['TypeScript', 'NestJS', 'PostgreSQL', 'RabbitMQ'],
-    localization: 'Только русский язык',
-    ridOwner: {
-      company: 'АО «НефтеИнтеллект»',
-      division: 'Служба управления рисками'
-    },
-    userStats: { companies: 6, licenses: 540 },
+    userStats: { companies: 5, licenses: 420 },
     status: 'in-dev',
-    repository: 'https://git.example.com/governance/risk-register',
-    api: 'REST /api/v1/risks',
-    specificationUrl: 'https://confluence.example.com/pages/viewpage.action?pageId=41222',
-    apiContractsUrl: 'https://docs.example.com/apis/risk-register',
-    techDesignUrl: 'https://confluence.example.com/display/GOV/risk-register-design',
-    architectureDiagramUrl: 'https://diagrams.example.com/risk-register',
+    repository: 'https://git.nedra.digital/dtwin/remote-ops',
+    api: 'gRPC dtwin.RemoteControl/Dispatch',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=85133',
+    apiContractsUrl: 'https://kb.nedra.digital/display/DT/Remote+Ops+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=85188',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/dtwin-remote-ops',
     licenseServerIntegrated: false,
     libraries: [
-      { name: '@nestjs/swagger', version: '7.1.12' },
-      { name: 'typeorm', version: '0.3.20' },
-      { name: 'pg', version: '8.11.3' }
+      { name: '@grpc/grpc-js', version: '1.10.4' },
+      { name: 'ws', version: '8.17.1' },
+      { name: '@nestjs/microservices', version: '10.3.2' }
     ],
     clientType: 'web',
     deploymentTool: 'docker',
-    dependencies: [],
-    produces: [],
-    reuseScore: 0.42,
+    dependencies: ['module-dtwin-optimizer'],
+    produces: ['artifact-dtwin-remote-commands'],
+    reuseScore: 0.64,
     metrics: {
-      tests: 48,
-      coverage: 72,
-      automationRate: 60
+      tests: 132,
+      coverage: 85,
+      automationRate: 78
     },
     dataIn: [
       {
-        id: 'audit-reports',
-        label: 'Отчёты аудитов'
+        id: 'optimization-orders-input',
+        label: 'Команды оптимизации режимов',
+        sourceId: 'artifact-dtwin-optimization-orders'
       },
       {
-        id: 'compliance-checks',
-        label: 'Комплаенс чек-листы'
+        id: 'scada-feedback',
+        label: 'Обратная связь от исполнительных устройств'
       }
     ],
     dataOut: [
       {
-        id: 'risk-dashboard',
-        label: 'Дашборд рисков'
+        id: 'remote-command-stream',
+        label: 'Поток дистанционных команд',
+        consumerIds: []
       }
     ],
-    formula: 'risk_score = probability * impact',
+    formula: 'command = translate(order, device_profile)',
+    nonFunctional: {
+      responseTimeMs: 140,
+      throughputRps: 95,
+      resourceConsumption: '6 vCPU / 18 GB RAM',
+      baselineUsers: 120
+    }
+  },
+  {
+    id: 'module-wwo-planner',
+    name: 'WWO Planner',
+    description:
+      'Формирует и согласует программы ремонтно-изоляционных и капитальных работ по скважинам.',
+    domains: ['workover-planning'],
+    team: 'WWO Planning Office',
+    productName: 'Nedra.Production WWO',
+    projectTeam: [
+      { id: 'wwo-plan-owner', fullName: 'Галина Кручина', role: 'Владелец продукта' },
+      { id: 'wwo-plan-rd', fullName: 'Владимир Романов', role: 'Эксперт R&D' },
+      { id: 'wwo-plan-analyst', fullName: 'Сергей Ежов', role: 'Аналитик' },
+      { id: 'wwo-plan-backend', fullName: 'Ирина Сафонова', role: 'Backend' },
+      { id: 'wwo-plan-frontend', fullName: 'Степан Юрин', role: 'Frontend' },
+      { id: 'wwo-plan-architect', fullName: 'Рита Лапина', role: 'Архитектор' },
+      { id: 'wwo-plan-tester', fullName: 'Дарья Мартынова', role: 'Тестировщик' }
+    ],
+    technologyStack: ['Java', 'Spring Boot', 'Camunda', 'Oracle DB'],
+    localization: 'Только русский язык',
+    ridOwner: {
+      company: 'АО «Nedra Digital»',
+      division: 'Центр внутрискважинных операций'
+    },
+    userStats: { companies: 8, licenses: 730 },
+    status: 'production',
+    repository: 'https://git.nedra.digital/wwo/planner',
+    api: 'REST /api/v1/wwo/plans',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=86172',
+    apiContractsUrl: 'https://kb.nedra.digital/display/WWO/Planner+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=86218',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/wwo-planner',
+    licenseServerIntegrated: true,
+    libraries: [
+      { name: 'spring-boot-starter-web', version: '3.3.2' },
+      { name: 'camunda-bpm-spring-boot-starter', version: '7.20.0' },
+      { name: 'oracle-ojdbc8', version: '23.2.0.0' }
+    ],
+    clientType: 'desktop',
+    deploymentTool: 'kubernetes',
+    dependencies: [],
+    produces: ['artifact-wwo-plan'],
+    reuseScore: 0.79,
+    metrics: {
+      tests: 188,
+      coverage: 86,
+      automationRate: 82
+    },
+    dataIn: [
+      {
+        id: 'operations-history',
+        label: 'История внутрискважинных работ',
+        sourceId: 'artifact-wwo-operations-log'
+      },
+      {
+        id: 'resource-register',
+        label: 'Каталог бригад и оборудования'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'approved-workover-plan',
+        label: 'Утверждённые программы работ по скважинам',
+        consumerIds: ['module-wwo-execution', 'module-wwo-analytics']
+      }
+    ],
+    formula: 'schedule = optimize(tasks, crews, constraints)',
     nonFunctional: {
       responseTimeMs: 620,
-      throughputRps: 55,
-      resourceConsumption: '4 vCPU / 10 GB RAM',
-      baselineUsers: 280
+      throughputRps: 75,
+      resourceConsumption: '8 vCPU / 28 GB RAM',
+      baselineUsers: 210
+    }
+  },
+  {
+    id: 'module-wwo-execution',
+    name: 'WWO Field Execution',
+    description:
+      'Контролирует выполнение ремонтных и изоляционных работ, собирает фактические параметры и фотоотчёты с площадки.',
+    domains: ['field-execution'],
+    team: 'WWO Field Operations',
+    productName: 'Nedra.Production WWO',
+    projectTeam: [
+      { id: 'wwo-exec-owner', fullName: 'Фарид Мансуров', role: 'Владелец продукта' },
+      { id: 'wwo-exec-rd', fullName: 'Маргарита Курганская', role: 'Эксперт R&D' },
+      { id: 'wwo-exec-analyst', fullName: 'Даниил Сомов', role: 'Аналитик' },
+      { id: 'wwo-exec-backend', fullName: 'Руслан Абдулов', role: 'Backend' },
+      { id: 'wwo-exec-frontend', fullName: 'Алёна Лещёва', role: 'Frontend' },
+      { id: 'wwo-exec-architect', fullName: 'Павел Саврасов', role: 'Архитектор' },
+      { id: 'wwo-exec-tester', fullName: 'Инга Хамзатова', role: 'Тестировщик' }
+    ],
+    technologyStack: ['Kotlin', 'Android', 'RealmDB', 'MQTT'],
+    localization: 'Мультиязычная (ru, en)',
+    ridOwner: {
+      company: 'АО «Nedra Digital»',
+      division: 'Центр внутрискважинных операций'
+    },
+    userStats: { companies: 6, licenses: 1250 },
+    status: 'production',
+    repository: 'https://git.nedra.digital/wwo/execution',
+    api: 'REST /api/v1/wwo/operations-log',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=87155',
+    apiContractsUrl: 'https://kb.nedra.digital/display/WWO/Execution+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=87192',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/wwo-execution',
+    licenseServerIntegrated: true,
+    libraries: [
+      { name: 'ktor', version: '2.3.12' },
+      { name: 'realm-android', version: '10.16.1' },
+      { name: 'eclipse-paho-mqtt', version: '1.2.5' }
+    ],
+    clientType: 'desktop',
+    deploymentTool: 'docker',
+    dependencies: ['module-wwo-planner'],
+    produces: ['artifact-wwo-operations-log'],
+    reuseScore: 0.71,
+    metrics: {
+      tests: 142,
+      coverage: 83,
+      automationRate: 79
+    },
+    dataIn: [
+      {
+        id: 'workover-plan-input',
+        label: 'Утверждённые программы работ',
+        sourceId: 'artifact-wwo-plan'
+      },
+      {
+        id: 'field-directives',
+        label: 'Локальные распоряжения и регламенты'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'operations-log',
+        label: 'Фактический журнал операций',
+        consumerIds: ['module-wwo-analytics']
+      }
+    ],
+    formula: 'compliance_rate = completed_operations / planned_operations',
+    nonFunctional: {
+      responseTimeMs: 210,
+      throughputRps: 120,
+      resourceConsumption: '4 vCPU / 12 GB RAM',
+      baselineUsers: 480
+    }
+  },
+  {
+    id: 'module-wwo-analytics',
+    name: 'WWO Analytics',
+    description:
+      'Анализирует эффективность ремонтов, выявляет отклонения и поддерживает управленческие решения по фонду скважин.',
+    domains: ['quality-analytics'],
+    team: 'WWO Analytics Lab',
+    productName: 'Nedra.Production WWO',
+    projectTeam: [
+      { id: 'wwo-analytics-owner', fullName: 'Ольга Вершинина', role: 'Владелец продукта' },
+      { id: 'wwo-analytics-rd', fullName: 'Денис Лаптев', role: 'Эксперт R&D' },
+      { id: 'wwo-analytics-analyst', fullName: 'Жанна Егорова', role: 'Аналитик' },
+      { id: 'wwo-analytics-backend', fullName: 'Никита Яшин', role: 'Backend' },
+      { id: 'wwo-analytics-frontend', fullName: 'Инна Миронова', role: 'Frontend' },
+      { id: 'wwo-analytics-architect', fullName: 'Марк Федоров', role: 'Архитектор' },
+      { id: 'wwo-analytics-tester', fullName: 'Яна Андреева', role: 'Тестировщик' }
+    ],
+    technologyStack: ['TypeScript', 'React', 'Apache Superset', 'GraphQL'],
+    localization: 'Мультиязычная (ru, en)',
+    ridOwner: {
+      company: 'АО «Nedra Digital»',
+      division: 'Центр внутрискважинных операций'
+    },
+    userStats: { companies: 7, licenses: 980 },
+    status: 'in-dev',
+    repository: 'https://git.nedra.digital/wwo/analytics',
+    api: 'GraphQL /wwo/analytics',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=88104',
+    apiContractsUrl: 'https://kb.nedra.digital/display/WWO/Analytics+API',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=88156',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/wwo-analytics',
+    licenseServerIntegrated: true,
+    libraries: [
+      { name: 'react', version: '18.3.1' },
+      { name: '@apollo/client', version: '3.10.5' },
+      { name: '@consta/charts', version: '1.0.0' }
+    ],
+    clientType: 'web',
+    deploymentTool: 'kubernetes',
+    dependencies: ['module-wwo-planner', 'module-wwo-execution'],
+    produces: ['artifact-wwo-performance-dashboard'],
+    reuseScore: 0.67,
+    metrics: {
+      tests: 118,
+      coverage: 82,
+      automationRate: 76
+    },
+    dataIn: [
+      {
+        id: 'operations-log-input',
+        label: 'Фактический журнал операций',
+        sourceId: 'artifact-wwo-operations-log'
+      },
+      {
+        id: 'plan-baseline',
+        label: 'Утверждённые программы работ',
+        sourceId: 'artifact-wwo-plan'
+      },
+      {
+        id: 'quality-standards',
+        label: 'Стандарты и регламенты работ'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'workover-kpi',
+        label: 'Индекс эффективности внутрискважинных работ'
+      }
+    ],
+    formula: 'kpi = Σ(metric_i * weight_i)',
+    nonFunctional: {
+      responseTimeMs: 480,
+      throughputRps: 90,
+      resourceConsumption: '6 vCPU / 20 GB RAM',
+      baselineUsers: 260
     }
   }
 ];
+
 
 export const moduleNameById: Record<string, string> = modules.reduce((acc, module) => {
   acc[module.id] = module.name;
@@ -704,72 +870,106 @@ export type ArtifactNode = {
 
 export const artifacts: ArtifactNode[] = [
   {
-    id: 'artifact-clean-telemetry',
-    name: 'Очищенная телеметрия',
+    id: 'artifact-infraplan-source-pack',
+    name: 'Пакет исходных данных INFRAPLAN',
     description:
-      'Нормализованные показания датчиков скважин, очищенные от выбросов и приведённые к единому формату.',
-    domainId: 'well-operations',
-    producedBy: 'module-telemetry-cleansing',
-    consumerIds: ['module-well-dashboard', 'module-lift-predictor'],
-    dataType: 'Временной ряд телеметрии',
-    sampleUrl: 'https://storage.example.com/datasets/telemetry-clean-sample.parquet'
+      'Нормализованный набор инженерных и технологических данных для моделирования инфраструктуры.',
+    domainId: 'data-preparation',
+    producedBy: 'module-infraplan-datahub',
+    consumerIds: ['module-infraplan-layout', 'module-infraplan-economics'],
+    dataType: 'Инженерные данные',
+    sampleUrl: 'https://storage.nedra.digital/samples/infraplan-source-pack.zip'
   },
   {
-    id: 'artifact-deviation-report',
-    name: 'Отчёт об отклонениях',
+    id: 'artifact-infraplan-layout',
+    name: 'Сценарии размещения объектов',
     description:
-      'Сводный отчёт по фактической добыче и плановым лимитам с выделением критических отклонений.',
-    domainId: 'well-operations',
-    producedBy: 'module-well-dashboard',
-    consumerIds: ['module-shift-planner', 'module-investment-evaluator'],
-    dataType: 'Агрегированные метрики',
-    sampleUrl: 'https://storage.example.com/datasets/deviation-report-sample.xlsx'
+      'Набор оптимизированных конфигураций размещения площадных и линейных объектов обустройства.',
+    domainId: 'layout-optimization',
+    producedBy: 'module-infraplan-layout',
+    consumerIds: ['module-infraplan-economics'],
+    dataType: 'Геомодели',
+    sampleUrl: 'https://storage.nedra.digital/samples/infraplan-layout.json'
   },
   {
-    id: 'artifact-shift-plan',
-    name: 'Сменный план добычи',
+    id: 'artifact-infraplan-economic-report',
+    name: 'Экономический отчёт INFRAPLAN',
     description:
-      'Оптимизированное сменное задание с разбивкой по скважинам и оборудованию.',
-    domainId: 'short-term-planning',
-    producedBy: 'module-shift-planner',
-    consumerIds: ['module-investment-evaluator'],
-    dataType: 'Операционный план',
-    sampleUrl: 'https://storage.example.com/datasets/shift-plan-sample.json'
-  },
-  {
-    id: 'artifact-failure-forecast',
-    name: 'Прогноз отказов УЭЦН',
-    description:
-      'Предсказанные вероятности отказов насосного оборудования и ожидаемый срок до события.',
-    domainId: 'lift-diagnostics',
-    producedBy: 'module-lift-predictor',
-    consumerIds: ['module-energy-optimizer'],
-    dataType: 'Вероятностная оценка',
-    sampleUrl: 'https://storage.example.com/datasets/failure-forecast-sample.csv'
-  },
-  {
-    id: 'artifact-energy-balance',
-    name: 'Баланс энергопотребления',
-    description:
-      'Расчётные профили энергопотребления с учётом оптимизационных сценариев и тарифов.',
-    domainId: 'energy-optimization',
-    producedBy: 'module-energy-optimizer',
-    consumerIds: ['module-investment-evaluator'],
-    dataType: 'Энергетический баланс',
-    sampleUrl: 'https://storage.example.com/datasets/energy-balance-sample.csv'
-  },
-  {
-    id: 'artifact-investment-brief',
-    name: 'Инвестиционное досье',
-    description:
-      'Инвестиционное досье с ключевыми финансовыми метриками, сценариями и рекомендациями.',
-    domainId: 'investment-analysis',
-    producedBy: 'module-investment-evaluator',
+      'Инвестиционные показатели по каждому варианту инфраструктуры с расчётом NPV, IRR и срока окупаемости.',
+    domainId: 'economic-evaluation',
+    producedBy: 'module-infraplan-economics',
     consumerIds: [],
-    dataType: 'Финансовый отчёт',
-    sampleUrl: 'https://storage.example.com/datasets/investment-brief-sample.pdf'
+    dataType: 'Финансовая аналитика',
+    sampleUrl: 'https://storage.nedra.digital/samples/infraplan-economics.pdf'
+  },
+  {
+    id: 'artifact-dtwin-telemetry-cube',
+    name: 'Куб телеметрии DIGITAL TWIN',
+    description:
+      'Агрегированные данные телеметрии по объектам наземной инфраструктуры в режиме реального времени.',
+    domainId: 'real-time-monitoring',
+    producedBy: 'module-dtwin-monitoring',
+    consumerIds: ['module-dtwin-optimizer'],
+    dataType: 'Потоковые данные',
+    sampleUrl: 'https://storage.nedra.digital/samples/dtwin-telemetry.parquet'
+  },
+  {
+    id: 'artifact-dtwin-optimization-orders',
+    name: 'Пакет команд оптимизации',
+    description:
+      'Рекомендации цифрового двойника по изменению режимов работы оборудования и инфраструктуры.',
+    domainId: 'production-optimization',
+    producedBy: 'module-dtwin-optimizer',
+    consumerIds: ['module-dtwin-remote-control'],
+    dataType: 'Управляющие команды',
+    sampleUrl: 'https://storage.nedra.digital/samples/dtwin-optimization-orders.json'
+  },
+  {
+    id: 'artifact-dtwin-remote-commands',
+    name: 'Поток дистанционных команд',
+    description:
+      'Структурированный поток управляющих команд, передаваемых на исполнительные устройства.',
+    domainId: 'remote-control',
+    producedBy: 'module-dtwin-remote-control',
+    consumerIds: [],
+    dataType: 'Управляющие сигналы',
+    sampleUrl: 'https://storage.nedra.digital/samples/dtwin-remote-commands.avro'
+  },
+  {
+    id: 'artifact-wwo-plan',
+    name: 'План внутрискважинных работ',
+    description:
+      'Утверждённый календарь ГТМ и ТКРС по фонду скважин с назначением подрядчиков и ресурсов.',
+    domainId: 'workover-planning',
+    producedBy: 'module-wwo-planner',
+    consumerIds: ['module-wwo-execution', 'module-wwo-analytics'],
+    dataType: 'Производственный план',
+    sampleUrl: 'https://storage.nedra.digital/samples/wwo-plan.xlsx'
+  },
+  {
+    id: 'artifact-wwo-operations-log',
+    name: 'Журнал исполнения WWO',
+    description:
+      'Фактический журнал проведения ремонтных работ с показателями продолжительности и качественными отметками.',
+    domainId: 'field-execution',
+    producedBy: 'module-wwo-execution',
+    consumerIds: ['module-wwo-analytics', 'module-wwo-planner'],
+    dataType: 'Операционные данные',
+    sampleUrl: 'https://storage.nedra.digital/samples/wwo-operations-log.csv'
+  },
+  {
+    id: 'artifact-wwo-performance-dashboard',
+    name: 'Дашборд эффективности WWO',
+    description:
+      'Набор визуализаций KPI по ремонтам, экономическому эффекту и соблюдению регламентов.',
+    domainId: 'quality-analytics',
+    producedBy: 'module-wwo-analytics',
+    consumerIds: [],
+    dataType: 'BI-отчёт',
+    sampleUrl: 'https://storage.nedra.digital/samples/wwo-performance-dashboard.pdf'
   }
 ];
+
 
 export const artifactNameById: Record<string, string> = artifacts.reduce((acc, artifact) => {
   acc[artifact.id] = artifact.name;
