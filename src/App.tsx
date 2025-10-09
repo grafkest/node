@@ -22,7 +22,7 @@ import {
 import styles from './App.module.css';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
-const allTeams = Array.from(new Set(modules.map((module) => module.team))).sort();
+const allProducts = Array.from(new Set(modules.map((module) => module.productName))).sort();
 
 const StatsDashboard = lazy(async () => ({
   default: (await import('./components/StatsDashboard')).default
@@ -41,14 +41,14 @@ function App() {
   );
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
-  const [teamFilter, setTeamFilter] = useState<string[]>(allTeams);
-  const [showDependencies, setShowDependencies] = useState(true);
+  const [productFilter, setProductFilter] = useState<string[]>(allProducts);
+  const [showAllConnections, setShowAllConnections] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
   const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
 
-  const teams = useMemo(() => allTeams, []);
+  const products = useMemo(() => allProducts, []);
 
   const domainDescendants = useMemo(() => buildDomainDescendants(domainTree), []);
   const domainAncestors = useMemo(() => buildDomainAncestors(domainTree), []);
@@ -96,11 +96,13 @@ function App() {
             member.role.toLowerCase().includes(normalizedSearch)
         );
       const matchesStatus = statusFilters.has(module.status);
-      const matchesTeam =
-        teamFilter.length === 0 ? false : teamFilter.includes(module.team);
-      return matchesDomain && matchesSearch && matchesStatus && matchesTeam;
+      const matchesProduct =
+        productFilter.length === 0
+          ? false
+          : productFilter.includes(module.productName);
+      return matchesDomain && matchesSearch && matchesStatus && matchesProduct;
     },
-    [search, selectedDomains, statusFilters, teamFilter]
+    [search, selectedDomains, statusFilters, productFilter]
   );
 
   const filteredModules = useMemo(
@@ -248,10 +250,6 @@ function App() {
       const sourceId = getLinkEndpointId(link.source);
       const targetId = getLinkEndpointId(link.target);
 
-      if (!showDependencies && link.type === 'dependency') {
-        return false;
-      }
-
       if (link.type === 'dependency') {
         return moduleIds.has(sourceId) && moduleIds.has(targetId);
       }
@@ -265,12 +263,34 @@ function App() {
       }
 
       if (link.type === 'consumes') {
-        return artifactIds.has(sourceId) && moduleIds.has(targetId);
+        if (!artifactIds.has(sourceId) || !moduleIds.has(targetId)) {
+          return false;
+        }
+
+        if (showAllConnections) {
+          return true;
+        }
+
+        const artifact = artifactMap.get(sourceId);
+        if (!artifact) {
+          return false;
+        }
+
+        const producerProduct = moduleById[artifact.producedBy]?.productName ?? null;
+        const consumerProduct = moduleById[targetId]?.productName ?? null;
+
+        return Boolean(producerProduct && consumerProduct && producerProduct === consumerProduct);
       }
 
       return false;
     });
-  }, [graphModules, graphArtifacts, relevantDomainIds, showDependencies]);
+  }, [
+    artifactMap,
+    graphModules,
+    graphArtifacts,
+    relevantDomainIds,
+    showAllConnections
+  ]);
 
   useEffect(() => {
     if (import.meta.env.DEV && typeof window !== 'undefined') {
@@ -281,10 +301,6 @@ function App() {
       const recomputedLinks = moduleLinks.filter((link) => {
         const sourceId = getLinkEndpointId(link.source);
         const targetId = getLinkEndpointId(link.target);
-
-        if (!showDependencies && link.type === 'dependency') {
-          return false;
-        }
 
         if (link.type === 'dependency') {
           return moduleIds.has(sourceId) && moduleIds.has(targetId);
@@ -299,7 +315,27 @@ function App() {
         }
 
         if (link.type === 'consumes') {
-          return artifactIds.has(sourceId) && moduleIds.has(targetId);
+          if (!artifactIds.has(sourceId) || !moduleIds.has(targetId)) {
+            return false;
+          }
+
+          if (showAllConnections) {
+            return true;
+          }
+
+          const artifact = artifactMap.get(sourceId);
+          if (!artifact) {
+            return false;
+          }
+
+          const producerProduct = moduleById[artifact.producedBy]?.productName ?? null;
+          const consumerProduct = moduleById[targetId]?.productName ?? null;
+
+          return Boolean(
+            producerProduct &&
+              consumerProduct &&
+              producerProduct === consumerProduct
+          );
         }
 
         return false;
@@ -311,9 +347,7 @@ function App() {
           const sourceId = getLinkEndpointId(link.source);
           const targetId = getLinkEndpointId(link.target);
           let reason = 'filtered';
-          if (!showDependencies && link.type === 'dependency') {
-            reason = 'hidden dependency toggle';
-          } else if (link.type === 'dependency') {
+          if (link.type === 'dependency') {
             reason = `missing module: ${moduleIds.has(sourceId) ? '' : sourceId} ${
               moduleIds.has(targetId) ? '' : targetId
             }`;
@@ -324,7 +358,16 @@ function App() {
           } else if (link.type === 'produces') {
             reason = `produces source=${moduleIds.has(sourceId)} target=${artifactIds.has(targetId)}`;
           } else if (link.type === 'consumes') {
-            reason = `consumes source=${artifactIds.has(sourceId)} target=${moduleIds.has(targetId)}`;
+            const artifact = artifactMap.get(sourceId);
+            const producerProduct = artifact
+              ? moduleById[artifact.producedBy]?.productName ?? null
+              : null;
+            const consumerProduct = moduleById[targetId]?.productName ?? null;
+            const sameProduct =
+              producerProduct && consumerProduct && producerProduct === consumerProduct;
+            reason = `consumes source=${artifactIds.has(sourceId)} target=${moduleIds.has(
+              targetId
+            )} sameProduct=${sameProduct} toggle=${showAllConnections}`;
           }
 
           return { ...link, reason };
@@ -347,9 +390,10 @@ function App() {
     filteredLinks,
     graphArtifacts,
     graphModules,
+    artifactMap,
     relevantDomainIds,
     selectedDomains,
-    showDependencies
+    showAllConnections
   ]);
 
   const handleSelectNode = (node: GraphNode | null) => {
@@ -514,14 +558,14 @@ function App() {
                   return next;
                 });
               }}
-              teams={teams}
-              teamFilter={teamFilter}
-              onTeamChange={(team) => {
+              products={products}
+              productFilter={productFilter}
+              onProductChange={(nextProducts) => {
                 setSelectedNode(null);
-                setTeamFilter(team);
+                setProductFilter(nextProducts);
               }}
-              showDependencies={showDependencies}
-              onToggleDependencies={(value) => setShowDependencies(value)}
+              showAllConnections={showAllConnections}
+              onToggleConnections={(value) => setShowAllConnections(value)}
             />
           </aside>
           <section className={styles.graphSection}>
@@ -531,7 +575,6 @@ function App() {
                 domains={graphDomains}
                 artifacts={graphArtifacts}
                 links={filteredLinks}
-                showDependencies={showDependencies}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}

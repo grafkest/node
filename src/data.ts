@@ -246,7 +246,11 @@ export const modules: ModuleNode[] = [
       {
         id: 'normalized-inputs',
         label: 'Стандартизированный пакет исходных данных',
-        consumerIds: ['module-infraplan-layout']
+        consumerIds: [
+          'module-infraplan-layout',
+          'module-infraplan-economics',
+          'module-dtwin-optimizer'
+        ]
       }
     ],
     formula: 'normalized = preprocess(raw) ⊕ constraints',
@@ -532,6 +536,11 @@ export const modules: ModuleNode[] = [
         id: 'telemetry-cube-input',
         label: 'Интегрированный куб телеметрии',
         sourceId: 'artifact-dtwin-telemetry-cube'
+      },
+      {
+        id: 'infraplan-context',
+        label: 'Инфраструктурный контекст из INFRAPLAN',
+        sourceId: 'artifact-infraplan-source-pack'
       },
       {
         id: 'operational-constraints',
@@ -876,7 +885,11 @@ export const artifacts: ArtifactNode[] = [
       'Нормализованный набор инженерных и технологических данных для моделирования инфраструктуры.',
     domainId: 'data-preparation',
     producedBy: 'module-infraplan-datahub',
-    consumerIds: ['module-infraplan-layout', 'module-infraplan-economics'],
+    consumerIds: [
+      'module-infraplan-layout',
+      'module-infraplan-economics',
+      'module-dtwin-optimizer'
+    ],
     dataType: 'Инженерные данные',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-source-pack.zip'
   },

@@ -16,11 +16,11 @@ type FiltersPanelProps = {
   statuses: ModuleStatus[];
   activeStatuses: Set<ModuleStatus>;
   onToggleStatus: (status: ModuleStatus) => void;
-  teams: string[];
-  teamFilter: string[];
-  onTeamChange: (team: string[]) => void;
-  showDependencies: boolean;
-  onToggleDependencies: (value: boolean) => void;
+  products: string[];
+  productFilter: string[];
+  onProductChange: (products: string[]) => void;
+  showAllConnections: boolean;
+  onToggleConnections: (value: boolean) => void;
 };
 
 const statusLabels: Record<ModuleStatus, string> = {
@@ -40,11 +40,11 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
   statuses,
   activeStatuses,
   onToggleStatus,
-  teams,
-  teamFilter,
-  onTeamChange,
-  showDependencies,
-  onToggleDependencies
+  products,
+  productFilter,
+  onProductChange,
+  showAllConnections,
+  onToggleConnections
 }) => {
   const statusOptions = React.useMemo(
     () =>
@@ -60,7 +60,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
     [statusOptions, activeStatuses]
   );
 
-  const renderTeamOption = React.useCallback<ComboboxPropRenderItem<string>>(
+  const renderProductOption = React.useCallback<ComboboxPropRenderItem<string>>(
     ({ item, active, hovered, onClick, onMouseEnter, ref }) => (
       <div
         ref={ref}
@@ -76,13 +76,13 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
         <Checkbox
           size="s"
           readOnly
-          checked={teamFilter.includes(item)}
+          checked={productFilter.includes(item)}
           label={item}
           className={styles.comboboxCheckbox}
         />
       </div>
     ),
-    [teamFilter]
+    [productFilter]
   );
 
   return (
@@ -133,24 +133,24 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
         <Combobox
           placeholder="Все продукты"
           size="s"
-          items={teams}
-          value={teamFilter}
+          items={products}
+          value={productFilter}
           getItemKey={(item) => item}
           getItemLabel={(item) => item}
-          onChange={(value) => onTeamChange(value ?? [])}
+          onChange={(value) => onProductChange(value ?? [])}
           form="default"
           multiple
           selectAll
-          renderItem={renderTeamOption}
+          renderItem={renderProductOption}
           className={styles.combobox}
         />
       </div>
 
       <div className={styles.switchRow}>
         <Switch
-          checked={showDependencies}
-          onChange={({ checked }) => onToggleDependencies(checked)}
-          label="Показывать зависимости между модулями"
+          checked={showAllConnections}
+          onChange={({ target }) => onToggleConnections(target.checked)}
+          label="Показывать связи между продуктами"
           size="s"
         />
         <Button
@@ -159,7 +159,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           label="Сбросить фильтры"
           onClick={() => {
             onSearchChange('');
-            onTeamChange(teams);
+            onProductChange(products);
             statuses.forEach((status) => {
               if (!activeStatuses.has(status)) {
                 onToggleStatus(status);
