@@ -16,7 +16,6 @@ type GraphViewProps = {
   domains: DomainNode[];
   artifacts: ArtifactNode[];
   links: GraphLink[];
-  showDependencies: boolean;
   onSelect: (node: GraphNode | null) => void;
   highlightedNode: string | null;
   visibleDomainIds: Set<string>;
@@ -30,7 +29,6 @@ const GraphView: React.FC<GraphViewProps> = ({
   domains,
   artifacts,
   links,
-  showDependencies,
   onSelect,
   highlightedNode,
   visibleDomainIds
@@ -121,22 +119,12 @@ const GraphView: React.FC<GraphViewProps> = ({
     return nextNodes;
   }, [domainNodes, artifactNodes, moduleNodes]);
 
-  const filteredLinks = useMemo(() => {
-    return links.filter((link) => {
-      if (!showDependencies && link.type === 'dependency') {
-        return false;
-      }
-
-      return true;
-    });
-  }, [links, showDependencies]);
-
   const graphData = useMemo(
     () => ({
       nodes,
-      links: filteredLinks
+      links
     }),
-    [nodes, filteredLinks]
+    [nodes, links]
   );
 
   useEffect(() => {

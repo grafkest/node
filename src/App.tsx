@@ -42,7 +42,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
   const [teamFilter, setTeamFilter] = useState<string[]>(allTeams);
-  const [showDependencies, setShowDependencies] = useState(true);
+  const [showAllConnections, setShowAllConnections] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
@@ -248,10 +248,6 @@ function App() {
       const sourceId = getLinkEndpointId(link.source);
       const targetId = getLinkEndpointId(link.target);
 
-      if (!showDependencies && link.type === 'dependency') {
-        return false;
-      }
-
       if (link.type === 'dependency') {
         return moduleIds.has(sourceId) && moduleIds.has(targetId);
       }
@@ -265,12 +261,34 @@ function App() {
       }
 
       if (link.type === 'consumes') {
-        return artifactIds.has(sourceId) && moduleIds.has(targetId);
+        if (!artifactIds.has(sourceId) || !moduleIds.has(targetId)) {
+          return false;
+        }
+
+        if (showAllConnections) {
+          return true;
+        }
+
+        const artifact = artifactMap.get(sourceId);
+        if (!artifact) {
+          return false;
+        }
+
+        const producerProduct = moduleById[artifact.producedBy]?.productName ?? null;
+        const consumerProduct = moduleById[targetId]?.productName ?? null;
+
+        return Boolean(producerProduct && consumerProduct && producerProduct === consumerProduct);
       }
 
       return false;
     });
-  }, [graphModules, graphArtifacts, relevantDomainIds, showDependencies]);
+  }, [
+    artifactMap,
+    graphModules,
+    graphArtifacts,
+    relevantDomainIds,
+    showAllConnections
+  ]);
 
   useEffect(() => {
     if (import.meta.env.DEV && typeof window !== 'undefined') {
@@ -281,10 +299,6 @@ function App() {
       const recomputedLinks = moduleLinks.filter((link) => {
         const sourceId = getLinkEndpointId(link.source);
         const targetId = getLinkEndpointId(link.target);
-
-        if (!showDependencies && link.type === 'dependency') {
-          return false;
-        }
 
         if (link.type === 'dependency') {
           return moduleIds.has(sourceId) && moduleIds.has(targetId);
@@ -299,7 +313,27 @@ function App() {
         }
 
         if (link.type === 'consumes') {
-          return artifactIds.has(sourceId) && moduleIds.has(targetId);
+          if (!artifactIds.has(sourceId) || !moduleIds.has(targetId)) {
+            return false;
+          }
+
+          if (showAllConnections) {
+            return true;
+          }
+
+          const artifact = artifactMap.get(sourceId);
+          if (!artifact) {
+            return false;
+          }
+
+          const producerProduct = moduleById[artifact.producedBy]?.productName ?? null;
+          const consumerProduct = moduleById[targetId]?.productName ?? null;
+
+          return Boolean(
+            producerProduct &&
+              consumerProduct &&
+              producerProduct === consumerProduct
+          );
         }
 
         return false;
@@ -311,9 +345,7 @@ function App() {
           const sourceId = getLinkEndpointId(link.source);
           const targetId = getLinkEndpointId(link.target);
           let reason = 'filtered';
-          if (!showDependencies && link.type === 'dependency') {
-            reason = 'hidden dependency toggle';
-          } else if (link.type === 'dependency') {
+          if (link.type === 'dependency') {
             reason = `missing module: ${moduleIds.has(sourceId) ? '' : sourceId} ${
               moduleIds.has(targetId) ? '' : targetId
             }`;
@@ -324,7 +356,16 @@ function App() {
           } else if (link.type === 'produces') {
             reason = `produces source=${moduleIds.has(sourceId)} target=${artifactIds.has(targetId)}`;
           } else if (link.type === 'consumes') {
-            reason = `consumes source=${artifactIds.has(sourceId)} target=${moduleIds.has(targetId)}`;
+            const artifact = artifactMap.get(sourceId);
+            const producerProduct = artifact
+              ? moduleById[artifact.producedBy]?.productName ?? null
+              : null;
+            const consumerProduct = moduleById[targetId]?.productName ?? null;
+            const sameProduct =
+              producerProduct && consumerProduct && producerProduct === consumerProduct;
+            reason = `consumes source=${artifactIds.has(sourceId)} target=${moduleIds.has(
+              targetId
+            )} sameProduct=${sameProduct} toggle=${showAllConnections}`;
           }
 
           return { ...link, reason };
@@ -347,9 +388,10 @@ function App() {
     filteredLinks,
     graphArtifacts,
     graphModules,
+    artifactMap,
     relevantDomainIds,
     selectedDomains,
-    showDependencies
+    showAllConnections
   ]);
 
   const handleSelectNode = (node: GraphNode | null) => {
@@ -520,8 +562,8 @@ function App() {
                 setSelectedNode(null);
                 setTeamFilter(team);
               }}
-              showDependencies={showDependencies}
-              onToggleDependencies={(value) => setShowDependencies(value)}
+              showAllConnections={showAllConnections}
+              onToggleConnections={(value) => setShowAllConnections(value)}
             />
           </aside>
           <section className={styles.graphSection}>
@@ -531,7 +573,6 @@ function App() {
                 domains={graphDomains}
                 artifacts={graphArtifacts}
                 links={filteredLinks}
-                showDependencies={showDependencies}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}

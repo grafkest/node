@@ -19,8 +19,8 @@ type FiltersPanelProps = {
   teams: string[];
   teamFilter: string[];
   onTeamChange: (team: string[]) => void;
-  showDependencies: boolean;
-  onToggleDependencies: (value: boolean) => void;
+  showAllConnections: boolean;
+  onToggleConnections: (value: boolean) => void;
 };
 
 const statusLabels: Record<ModuleStatus, string> = {
@@ -43,8 +43,8 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
   teams,
   teamFilter,
   onTeamChange,
-  showDependencies,
-  onToggleDependencies
+  showAllConnections,
+  onToggleConnections
 }) => {
   const statusOptions = React.useMemo(
     () =>
@@ -148,9 +148,9 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
 
       <div className={styles.switchRow}>
         <Switch
-          checked={showDependencies}
-          onChange={({ checked }) => onToggleDependencies(checked)}
-          label="Показывать зависимости между модулями"
+          checked={showAllConnections}
+          onChange={({ checked }) => onToggleConnections(checked)}
+          label="Показывать связи между продуктами"
           size="s"
         />
         <Button
