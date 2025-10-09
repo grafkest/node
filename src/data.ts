@@ -246,7 +246,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'normalized-inputs',
         label: 'Стандартизированный пакет исходных данных',
-        consumerIds: ['module-infraplan-layout', 'module-dtwin-monitoring']
+        consumerIds: ['module-infraplan-layout']
       }
     ],
     formula: 'normalized = preprocess(raw) ⊕ constraints',
@@ -319,7 +319,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'layout-scenarios',
         label: 'Сценарии размещения объектов',
-        consumerIds: ['module-infraplan-economics', 'module-dtwin-optimizer']
+        consumerIds: ['module-infraplan-economics']
       }
     ],
     formula: 'total_cost = Σ(distance_i * cost_i) + Σ(site_j * capex_j)',
@@ -393,7 +393,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'investment-scenarios',
         label: 'Инвестиционные сценарии по вариантам',
-        consumerIds: ['module-dtwin-optimizer', 'module-wwo-planner']
+        consumerIds: []
       }
     ],
     formula: 'NPV_variant = Σ((cash_flow_t - opex_t) / (1 + WACC)^t) - capex_variant',
@@ -443,7 +443,7 @@ export const modules: ModuleNode[] = [
     ],
     clientType: 'web',
     deploymentTool: 'kubernetes',
-    dependencies: ['module-infraplan-datahub'],
+    dependencies: [],
     produces: ['artifact-dtwin-telemetry-cube'],
     reuseScore: 0.9,
     metrics: {
@@ -461,16 +461,15 @@ export const modules: ModuleNode[] = [
         label: 'Данные датчиков и подключённых устройств'
       },
       {
-        id: 'infraplan-context',
-        label: 'Стандартизированный пакет исходных данных',
-        sourceId: 'artifact-infraplan-source-pack'
+        id: 'equipment-passports',
+        label: 'Паспорта оборудования и технологические схемы'
       }
     ],
     dataOut: [
       {
         id: 'telemetry-cube',
         label: 'Интегрированный куб телеметрии',
-        consumerIds: ['module-dtwin-optimizer', 'module-wwo-analytics']
+        consumerIds: ['module-dtwin-optimizer']
       }
     ],
     formula: 'metric = smooth(raw_signal, window=5)',
@@ -520,7 +519,7 @@ export const modules: ModuleNode[] = [
     ],
     clientType: 'web',
     deploymentTool: 'kubernetes',
-    dependencies: ['module-dtwin-monitoring', 'module-infraplan-economics'],
+    dependencies: ['module-dtwin-monitoring'],
     produces: ['artifact-dtwin-optimization-orders'],
     reuseScore: 0.88,
     metrics: {
@@ -535,16 +534,15 @@ export const modules: ModuleNode[] = [
         sourceId: 'artifact-dtwin-telemetry-cube'
       },
       {
-        id: 'investment-scenarios-input',
-        label: 'Инвестиционные сценарии по вариантам',
-        sourceId: 'artifact-infraplan-economic-report'
+        id: 'operational-constraints',
+        label: 'Ограничения по режимам и безопасные диапазоны'
       }
     ],
     dataOut: [
       {
         id: 'optimization-orders',
         label: 'Команды оптимизации режимов',
-        consumerIds: ['module-dtwin-remote-control', 'module-wwo-planner']
+        consumerIds: ['module-dtwin-remote-control']
       }
     ],
     formula: 'optimal_mode = argmax(strategy_score)',
@@ -617,7 +615,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'remote-command-stream',
         label: 'Поток дистанционных команд',
-        consumerIds: ['module-wwo-execution']
+        consumerIds: []
       }
     ],
     formula: 'command = translate(order, device_profile)',
@@ -667,7 +665,7 @@ export const modules: ModuleNode[] = [
     ],
     clientType: 'desktop',
     deploymentTool: 'kubernetes',
-    dependencies: ['module-dtwin-monitoring', 'module-dtwin-optimizer'],
+    dependencies: [],
     produces: ['artifact-wwo-plan'],
     reuseScore: 0.79,
     metrics: {
@@ -677,18 +675,13 @@ export const modules: ModuleNode[] = [
     },
     dataIn: [
       {
-        id: 'telemetry-context',
-        label: 'Интегрированный куб телеметрии',
-        sourceId: 'artifact-dtwin-telemetry-cube'
+        id: 'operations-history',
+        label: 'История внутрискважинных работ',
+        sourceId: 'artifact-wwo-operations-log'
       },
       {
-        id: 'optimization-orders-ref',
-        label: 'Команды оптимизации режимов',
-        sourceId: 'artifact-dtwin-optimization-orders'
-      },
-      {
-        id: 'workover-history',
-        label: 'История внутрискважинных работ'
+        id: 'resource-register',
+        label: 'Каталог бригад и оборудования'
       }
     ],
     dataOut: [
@@ -745,7 +738,7 @@ export const modules: ModuleNode[] = [
     ],
     clientType: 'desktop',
     deploymentTool: 'docker',
-    dependencies: ['module-wwo-planner', 'module-dtwin-remote-control'],
+    dependencies: ['module-wwo-planner'],
     produces: ['artifact-wwo-operations-log'],
     reuseScore: 0.71,
     metrics: {
@@ -760,9 +753,8 @@ export const modules: ModuleNode[] = [
         sourceId: 'artifact-wwo-plan'
       },
       {
-        id: 'remote-command-input',
-        label: 'Поток дистанционных команд',
-        sourceId: 'artifact-dtwin-remote-commands'
+        id: 'field-directives',
+        label: 'Локальные распоряжения и регламенты'
       }
     ],
     dataOut: [
@@ -819,7 +811,7 @@ export const modules: ModuleNode[] = [
     ],
     clientType: 'web',
     deploymentTool: 'kubernetes',
-    dependencies: ['module-wwo-execution', 'module-dtwin-monitoring'],
+    dependencies: ['module-wwo-planner', 'module-wwo-execution'],
     produces: ['artifact-wwo-performance-dashboard'],
     reuseScore: 0.67,
     metrics: {
@@ -834,9 +826,9 @@ export const modules: ModuleNode[] = [
         sourceId: 'artifact-wwo-operations-log'
       },
       {
-        id: 'telemetry-kpi-context',
-        label: 'Интегрированный куб телеметрии',
-        sourceId: 'artifact-dtwin-telemetry-cube'
+        id: 'plan-baseline',
+        label: 'Утверждённые программы работ',
+        sourceId: 'artifact-wwo-plan'
       },
       {
         id: 'quality-standards',
@@ -884,7 +876,7 @@ export const artifacts: ArtifactNode[] = [
       'Нормализованный набор инженерных и технологических данных для моделирования инфраструктуры.',
     domainId: 'data-preparation',
     producedBy: 'module-infraplan-datahub',
-    consumerIds: ['module-infraplan-layout', 'module-infraplan-economics', 'module-dtwin-monitoring'],
+    consumerIds: ['module-infraplan-layout', 'module-infraplan-economics'],
     dataType: 'Инженерные данные',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-source-pack.zip'
   },
@@ -895,7 +887,7 @@ export const artifacts: ArtifactNode[] = [
       'Набор оптимизированных конфигураций размещения площадных и линейных объектов обустройства.',
     domainId: 'layout-optimization',
     producedBy: 'module-infraplan-layout',
-    consumerIds: ['module-infraplan-economics', 'module-dtwin-optimizer'],
+    consumerIds: ['module-infraplan-economics'],
     dataType: 'Геомодели',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-layout.json'
   },
@@ -906,7 +898,7 @@ export const artifacts: ArtifactNode[] = [
       'Инвестиционные показатели по каждому варианту инфраструктуры с расчётом NPV, IRR и срока окупаемости.',
     domainId: 'economic-evaluation',
     producedBy: 'module-infraplan-economics',
-    consumerIds: ['module-dtwin-optimizer', 'module-wwo-planner'],
+    consumerIds: [],
     dataType: 'Финансовая аналитика',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-economics.pdf'
   },
@@ -917,7 +909,7 @@ export const artifacts: ArtifactNode[] = [
       'Агрегированные данные телеметрии по объектам наземной инфраструктуры в режиме реального времени.',
     domainId: 'real-time-monitoring',
     producedBy: 'module-dtwin-monitoring',
-    consumerIds: ['module-dtwin-optimizer', 'module-wwo-planner', 'module-wwo-analytics'],
+    consumerIds: ['module-dtwin-optimizer'],
     dataType: 'Потоковые данные',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-telemetry.parquet'
   },
@@ -928,7 +920,7 @@ export const artifacts: ArtifactNode[] = [
       'Рекомендации цифрового двойника по изменению режимов работы оборудования и инфраструктуры.',
     domainId: 'production-optimization',
     producedBy: 'module-dtwin-optimizer',
-    consumerIds: ['module-dtwin-remote-control', 'module-wwo-planner'],
+    consumerIds: ['module-dtwin-remote-control'],
     dataType: 'Управляющие команды',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-optimization-orders.json'
   },
@@ -939,7 +931,7 @@ export const artifacts: ArtifactNode[] = [
       'Структурированный поток управляющих команд, передаваемых на исполнительные устройства.',
     domainId: 'remote-control',
     producedBy: 'module-dtwin-remote-control',
-    consumerIds: ['module-wwo-execution'],
+    consumerIds: [],
     dataType: 'Управляющие сигналы',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-remote-commands.avro'
   },
@@ -961,7 +953,7 @@ export const artifacts: ArtifactNode[] = [
       'Фактический журнал проведения ремонтных работ с показателями продолжительности и качественными отметками.',
     domainId: 'field-execution',
     producedBy: 'module-wwo-execution',
-    consumerIds: ['module-wwo-analytics'],
+    consumerIds: ['module-wwo-analytics', 'module-wwo-planner'],
     dataType: 'Операционные данные',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-operations-log.csv'
   },
