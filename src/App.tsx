@@ -5,6 +5,7 @@ import { Loader } from '@consta/uikit/Loader';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
+import EntityCreation from './components/EntityCreation';
 import FiltersPanel from './components/FiltersPanel';
 import GraphView, { type GraphNode } from './components/GraphView';
 import NodeDetails from './components/NodeDetails';
@@ -30,7 +31,8 @@ const StatsDashboard = lazy(async () => ({
 
 const viewTabs = [
   { label: 'Связи', value: 'graph' },
-  { label: 'Статистика', value: 'stats' }
+  { label: 'Статистика', value: 'stats' },
+  { label: 'Добавление', value: 'create' }
 ] as const;
 
 type ViewMode = (typeof viewTabs)[number]['value'];
@@ -490,11 +492,27 @@ function App() {
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
   const isStatsActive = viewMode === 'stats';
+  const isCreateActive = viewMode === 'create';
 
-  const headerTitle = isGraphActive ? 'Граф модулей и доменных областей' : 'Статистика экосистемы решений';
-  const headerDescription = isGraphActive
-    ? 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.'
-    : 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+  const headerTitle = (() => {
+    if (isGraphActive) {
+      return 'Граф модулей и доменных областей';
+    }
+    if (isStatsActive) {
+      return 'Статистика экосистемы решений';
+    }
+    return 'Конструктор сущностей экосистемы';
+  })();
+
+  const headerDescription = (() => {
+    if (isGraphActive) {
+      return 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.';
+    }
+    if (isStatsActive) {
+      return 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+    }
+    return 'Добавляйте новые модули, домены и артефакты, связывая их с уже существующими элементами графа.';
+  })();
 
   useEffect(() => {
     if (viewMode === 'stats' && !statsActivated) {
@@ -609,6 +627,14 @@ function App() {
           </Suspense>
         </main>
       )}
+      <main
+        className={styles.creationMain}
+        hidden={!isCreateActive}
+        aria-hidden={!isCreateActive}
+        style={{ display: isCreateActive ? undefined : 'none' }}
+      >
+        <EntityCreation modules={modules} domains={domainTree} artifacts={artifacts} />
+      </main>
     </Layout>
   );
 }
