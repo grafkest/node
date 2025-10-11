@@ -261,6 +261,10 @@ function App() {
       ancestors?.forEach((ancestorId) => ids.add(ancestorId));
     };
 
+    selectedDomains.forEach((domainId) => {
+      addWithAncestors(domainId);
+    });
+
     graphModules.forEach((module) => {
       module.domains.forEach((domainId) => addWithAncestors(domainId));
     });
@@ -270,7 +274,7 @@ function App() {
     }
 
     return ids;
-  }, [graphModules, highlightedDomainId, domainAncestors]);
+  }, [graphModules, highlightedDomainId, domainAncestors, selectedDomains]);
 
   const graphDomains = useMemo(
     () => filterDomainTreeByIds(domainData, relevantDomainIds),
