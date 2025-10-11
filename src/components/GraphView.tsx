@@ -200,30 +200,48 @@ const GraphView: React.FC<GraphViewProps> = ({
     onLayoutChange(Object.fromEntries(entries));
   }, [onLayoutChange]);
 
-  const handleNodeDragEnd = useCallback((node: ForceNode) => {
-    if (node && typeof node.id === 'string') {
-      const nextX = typeof node.x === 'number' && Number.isFinite(node.x) ? roundCoordinate(node.x) : null;
-      const nextY = typeof node.y === 'number' && Number.isFinite(node.y) ? roundCoordinate(node.y) : null;
+  const handleNodeDragEnd = useCallback(
+    (node: ForceNode) => {
+      if (node && typeof node.id === 'string') {
+        const layout = layoutPositions[node.id];
 
-      if (nextX !== null) {
-        node.x = nextX;
-        node.fx = nextX;
-      } else {
-        node.fx = undefined;
+        const resolvedX = resolveCoordinate(node.x, node.fx, layout?.x ?? null, layout?.fx ?? null);
+        const resolvedY = resolveCoordinate(node.y, node.fy, layout?.y ?? null, layout?.fy ?? null);
+
+        if (resolvedX !== null) {
+          node.x = resolvedX;
+          node.fx = resolvedX;
+        } else {
+          node.fx = undefined;
+          if (layout?.x !== undefined) {
+            node.x = layout.x;
+          }
+        }
+
+        if (resolvedY !== null) {
+          node.y = resolvedY;
+          node.fy = resolvedY;
+        } else {
+          node.fy = undefined;
+          if (layout?.y !== undefined) {
+            node.y = layout.y;
+          }
+        }
+
+        if (typeof node.vx === 'number') {
+          node.vx = 0;
+        }
+        if (typeof node.vy === 'number') {
+          node.vy = 0;
+        }
+
+        nodeCacheRef.current.set(node.id, node);
       }
 
-      if (nextY !== null) {
-        node.y = nextY;
-        node.fy = nextY;
-      } else {
-        node.fy = undefined;
-      }
-
-      nodeCacheRef.current.set(node.id, node);
-    }
-
-    emitLayoutUpdate();
-  }, [emitLayoutUpdate]);
+      emitLayoutUpdate();
+    },
+    [emitLayoutUpdate, layoutPositions]
+  );
 
   const handleEngineStop = useCallback(() => {
     emitLayoutUpdate();
@@ -283,6 +301,31 @@ function applyLayoutPosition(node: ForceNode, layoutPositions: Record<string, Gr
 
 function roundCoordinate(value: number): number {
   return Number(value.toFixed(2));
+}
+
+function resolveCoordinate(
+  primary: unknown,
+  fallback: unknown,
+  stored: number | null,
+  storedFixed: number | null
+): number | null {
+  if (typeof primary === 'number' && Number.isFinite(primary)) {
+    return roundCoordinate(primary);
+  }
+
+  if (typeof fallback === 'number' && Number.isFinite(fallback)) {
+    return roundCoordinate(fallback);
+  }
+
+  if (typeof storedFixed === 'number' && Number.isFinite(storedFixed)) {
+    return roundCoordinate(storedFixed);
+  }
+
+  if (typeof stored === 'number' && Number.isFinite(stored)) {
+    return roundCoordinate(stored);
+  }
+
+  return null;
 }
 
 function flattenDomains(domains: DomainNode[], visibleDomainIds?: Set<string>): DomainNode[] {

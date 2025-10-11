@@ -857,6 +857,74 @@ export const modules: ModuleNode[] = [
       resourceConsumption: '6 vCPU / 20 GB RAM',
       baselineUsers: 260
     }
+  },
+  {
+    id: 'module-lab-experiments',
+    name: 'Digital Lab Experiments',
+    description:
+      'Площадка для быстрых продуктовых экспериментов, собирающая телеметрию и мгновенно распространяющая результаты в продуктовые команды.',
+    domains: ['real-time-monitoring', 'production-optimization'],
+    team: 'Лаборатория цифровых испытаний',
+    productName: 'Digital Operations Suite',
+    projectTeam: [
+      { id: 'lab-owner', fullName: 'Кира Левина', role: 'Владелец продукта' },
+      { id: 'lab-architect', fullName: 'Евгений Власов', role: 'Архитектор' },
+      { id: 'lab-backend', fullName: 'Тимур Назаров', role: 'Backend' },
+      { id: 'lab-frontend', fullName: 'Лидия Костина', role: 'Frontend' }
+    ],
+    technologyStack: ['TypeScript', 'FastAPI', 'Apache Kafka', 'ClickHouse'],
+    localization: 'ru',
+    ridOwner: { company: 'АО «Nedra Digital»', division: 'Дирекция цифровых операций' },
+    userStats: { companies: 3, licenses: 140 },
+    status: 'in-dev',
+    repository: 'https://git.nedra.digital/labs/digital-experiments',
+    api: 'gRPC telemetry.TelemetryService',
+    specificationUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=98501',
+    apiContractsUrl: 'https://kb.nedra.digital/display/LABS/Telemetry+Contracts',
+    techDesignUrl: 'https://kb.nedra.digital/pages/viewpage.action?pageId=98540',
+    architectureDiagramUrl: 'https://design.nedra.digital/diagrams/lab-experiments',
+    licenseServerIntegrated: false,
+    libraries: [
+      { name: '@nestjs/microservices', version: '10.3.2' },
+      { name: 'kafkajs', version: '2.2.4' },
+      { name: '@apollo/client', version: '3.10.8' }
+    ],
+    clientType: 'web',
+    deploymentTool: 'kubernetes',
+    dependencies: ['module-dtwin-monitoring'],
+    produces: [],
+    reuseScore: 0.34,
+    metrics: {
+      tests: 84,
+      coverage: 78,
+      automationRate: 71
+    },
+    dataIn: [
+      {
+        id: 'lab-live-stream',
+        label: 'Поток телеметрии промышленных датчиков',
+        sourceId: 'artifact-dtwin-telemetry-cube'
+      },
+      {
+        id: 'lab-layout-scenarios',
+        label: 'Сценарии размещения для экспериментов',
+        sourceId: 'artifact-infraplan-layout'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'lab-insights',
+        label: 'Отчёт по проведённым экспериментам',
+        consumerIds: ['module-dtwin-optimizer', 'module-wwo-analytics']
+      }
+    ],
+    formula: 'insight = normalize(stream) ⊕ simulate(layout)',
+    nonFunctional: {
+      responseTimeMs: 220,
+      throughputRps: 210,
+      resourceConsumption: '5 vCPU / 12 GB RAM',
+      baselineUsers: 65
+    }
   }
 ];
 
