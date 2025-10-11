@@ -2,7 +2,7 @@ import { Layout } from '@consta/uikit/Layout';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { Loader } from '@consta/uikit/Loader';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
 import EntityCreation, {
@@ -11,9 +11,9 @@ import EntityCreation, {
   type ModuleDraftPayload
 } from './components/EntityCreation';
 import FiltersPanel from './components/FiltersPanel';
-import GraphPersistenceControls, {
-  type GraphSnapshotPayload
-} from './components/GraphPersistenceControls';
+import GraphPersistenceControls from './components/GraphPersistenceControls';
+import { GRAPH_SNAPSHOT_VERSION, type GraphSnapshotPayload, type GraphSyncStatus } from './types/graph';
+import { fetchGraphSnapshot, persistGraphSnapshot } from './services/graphStorage';
 import GraphView, { type GraphNode } from './components/GraphView';
 import NodeDetails from './components/NodeDetails';
 import {
@@ -61,8 +61,72 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
   const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
+  const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<GraphSyncStatus | null>(null);
+  const [isSyncAvailable, setIsSyncAvailable] = useState(false);
+  const hasLoadedSnapshotRef = useRef(false);
+  const skipNextSyncRef = useRef(false);
 
   const products = useMemo(() => buildProductList(moduleData), [moduleData]);
+
+  const applySnapshot = useCallback(
+    (snapshot: GraphSnapshotPayload) => {
+      setDomainData(snapshot.domains);
+      setModuleData(snapshot.modules);
+      setArtifactData(snapshot.artifacts);
+      setSelectedNode(null);
+      setSearch('');
+      setStatusFilters(new Set(allStatuses));
+      setProductFilter(buildProductList(snapshot.modules));
+      setSelectedDomains(
+        new Set(flattenDomainTree(snapshot.domains).map((domain) => domain.id))
+      );
+      hasLoadedSnapshotRef.current = true;
+    },
+    []
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadSnapshot = async () => {
+      try {
+        const snapshot = await fetchGraphSnapshot(controller.signal);
+        applySnapshot(snapshot);
+        skipNextSyncRef.current = true;
+        setSnapshotError(null);
+        setIsSyncAvailable(true);
+        setSyncStatus({
+          state: 'idle',
+          message: 'Данные синхронизированы с сервером.'
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error('Не удалось загрузить граф из хранилища', error);
+        setSnapshotError(
+          'Не удалось загрузить данные из хранилища. Используются локальные данные.'
+        );
+        setIsSyncAvailable(false);
+        setSyncStatus({
+          state: 'error',
+          message: 'Нет связи с сервером. Изменения не сохранятся.'
+        });
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSnapshotLoading(false);
+        }
+      }
+    };
+
+    loadSnapshot();
+
+    return () => {
+      controller.abort();
+    };
+  }, [applySnapshot]);
 
   useEffect(() => {
     setProductFilter((prev) => {
@@ -103,6 +167,65 @@ function App() {
 
     return dependents;
   }, [moduleData, artifactData]);
+
+  useEffect(() => {
+    if (!isSyncAvailable || !hasLoadedSnapshotRef.current) {
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false;
+      return () => {
+        controller.abort();
+      };
+    }
+
+    setSyncStatus((prev) => {
+      if (prev?.state === 'error') {
+        return { state: 'saving', message: 'Повторяем синхронизацию...' };
+      }
+      return { state: 'saving', message: 'Сохраняем изменения в хранилище...' };
+    });
+
+    persistGraphSnapshot(
+      {
+        version: GRAPH_SNAPSHOT_VERSION,
+        exportedAt: new Date().toISOString(),
+        modules: moduleData,
+        domains: domainData,
+        artifacts: artifactData
+      },
+      controller.signal
+    )
+      .then(() => {
+        if (cancelled) {
+          return;
+        }
+        setSyncStatus({
+          state: 'idle',
+          message: `Сохранено ${new Date().toLocaleTimeString()}`
+        });
+      })
+      .catch((error) => {
+        if (cancelled || controller.signal.aborted) {
+          return;
+        }
+        console.error('Не удалось сохранить граф', error);
+        setSyncStatus({
+          state: 'error',
+          message:
+            error instanceof Error ? error.message : 'Не удалось сохранить данные.'
+        });
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [artifactData, domainData, moduleData, isSyncAvailable]);
 
   const matchesModuleFilters = useCallback(
     (module: ModuleNode) => {
@@ -362,8 +485,10 @@ function App() {
     });
   }, [
     artifactMap,
-    graphModules,
     graphArtifacts,
+    graphLinksAll,
+    graphModules,
+    moduleById,
     relevantDomainIds,
     showAllConnections
   ]);
@@ -468,10 +593,17 @@ function App() {
     graphModules,
     graphLinksAll,
     artifactMap,
+    moduleById,
     relevantDomainIds,
     selectedDomains,
     showAllConnections
   ]);
+
+  useEffect(() => {
+    if (viewMode === 'stats' && !statsActivated) {
+      setStatsActivated(true);
+    }
+  }, [statsActivated, viewMode]);
 
   const handleSelectNode = (node: GraphNode | null) => {
     setSelectedNode(node);
@@ -777,18 +909,25 @@ function App() {
     [artifactData, firstDomainId, moduleById]
   );
 
-  const handleImportGraph = useCallback((snapshot: GraphSnapshotPayload) => {
-    setDomainData(snapshot.domains);
-    setModuleData(snapshot.modules);
-    setArtifactData(snapshot.artifacts);
-    setSelectedNode(null);
-    setSearch('');
-    setStatusFilters(new Set(allStatuses));
-    setProductFilter(buildProductList(snapshot.modules));
-    setSelectedDomains(
-      new Set(flattenDomainTree(snapshot.domains).map((domain) => domain.id))
+  const handleImportGraph = useCallback(
+    (snapshot: GraphSnapshotPayload) => {
+      applySnapshot(snapshot);
+    },
+    [applySnapshot]
+  );
+
+  if (isSnapshotLoading) {
+    return (
+      <Layout className={styles.app} direction="column">
+        <div className={styles.loadingState}>
+          <Loader size="m" />
+          <Text size="s" view="secondary">
+            Загружаем актуальное состояние графа...
+          </Text>
+        </div>
+      </Layout>
     );
-  }, []);
+  }
 
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
@@ -815,14 +954,15 @@ function App() {
     return 'Добавляйте новые модули, домены и артефакты, связывая их с уже существующими элементами графа.';
   })();
 
-  useEffect(() => {
-    if (viewMode === 'stats' && !statsActivated) {
-      setStatsActivated(true);
-    }
-  }, [statsActivated, viewMode]);
-
   return (
     <Layout className={styles.app} direction="column">
+      {snapshotError && (
+        <div className={styles.errorBanner} role="status" aria-live="polite">
+          <Text size="s" view="alert">
+            {snapshotError}
+          </Text>
+        </div>
+      )}
       <header className={styles.header}>
         <div className={styles.headerContent}>
           <Text size="2xl" weight="bold">
@@ -942,6 +1082,7 @@ function App() {
           domains={domainData}
           artifacts={artifactData}
           onImport={handleImportGraph}
+          syncStatus={syncStatus}
         />
         <EntityCreation
           modules={moduleData}
