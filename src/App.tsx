@@ -244,13 +244,14 @@ function App() {
         return;
       }
       const module = moduleById[moduleId];
-      if (module && matchesModuleFilters(module)) {
+      if (module) {
         extended.push(module);
+        existing.add(moduleId);
       }
     });
 
     return extended;
-  }, [filteredModules, contextModuleIds, matchesModuleFilters]);
+  }, [filteredModules, contextModuleIds, moduleById]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
