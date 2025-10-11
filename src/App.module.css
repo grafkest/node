@@ -72,6 +72,13 @@
   overflow-y: auto;
 }
 
+.creationMain {
+  padding: 24px;
+  height: calc(100% - 92px);
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
 @media (max-width: 1440px) {
   .main {
     grid-template-columns: 280px 1fr 280px;

@@ -2,19 +2,19 @@ import { Bar, BarProps } from '@consta/charts/Bar';
 import { Card } from '@consta/uikit/Card';
 import { Text } from '@consta/uikit/Text';
 import React, { useMemo } from 'react';
-import { domainNameById } from '../data';
 import type { ModuleNode } from '../data';
 import styles from './AnalyticsPanel.module.css';
 
 type AnalyticsPanelProps = {
   modules: ModuleNode[];
+  domainNameMap: Record<string, string>;
 };
 
-const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ modules }) => {
+const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ modules, domainNameMap }) => {
   const data = useMemo(() => {
     const totals = modules.reduce<Record<string, { count: number; label: string }>>((acc, module) => {
       module.domains.forEach((domainId) => {
-        const label = domainNameById[domainId] ?? domainId;
+        const label = domainNameMap[domainId] ?? domainId;
         const current = acc[domainId] ?? { count: 0, label };
         acc[domainId] = {
           label,
@@ -32,7 +32,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ modules }) => {
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [modules]);
+  }, [domainNameMap, modules]);
 
   const chartProps: BarProps = {
     data,

@@ -7,7 +7,6 @@ import { Text } from '@consta/uikit/Text';
 import { useMemo } from 'react';
 import {
   artifacts as allArtifacts,
-  domainNameById,
   domainTree as allDomains,
   modules as allModules,
   type ArtifactNode,
@@ -74,6 +73,7 @@ const StatsDashboard = ({
   artifacts = defaultArtifacts,
   reuseHistory
 }: StatsDashboardProps) => {
+  const domainNameMap = useMemo(() => buildDomainNameMap(domains), [domains]);
   const systems = useMemo(() => {
     const map = new Map<string, SystemRow>();
 
@@ -415,7 +415,7 @@ const StatsDashboard = ({
             ) : (
               domainWithoutModules.map((domain) => (
                 <span key={domain.id} className={styles.domainPill}>
-                  {domainNameById[domain.id] ?? domain.name}
+                  {domainNameMap[domain.id] ?? domain.name}
                 </span>
               ))
             )}
@@ -520,6 +520,22 @@ function formatPeriod(period: string): string {
 
   const monthNames = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
   return `${monthNames[monthIndex - 1]} ${year}`;
+}
+
+function buildDomainNameMap(domains: DomainNode[]): Record<string, string> {
+  const map: Record<string, string> = {};
+
+  const traverse = (nodes: DomainNode[]) => {
+    nodes.forEach((domain) => {
+      map[domain.id] = domain.name;
+      if (domain.children) {
+        traverse(domain.children);
+      }
+    });
+  };
+
+  traverse(domains);
+  return map;
 }
 
 function average(values: number[]): number {
