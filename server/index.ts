@@ -15,6 +15,7 @@ import {
 import type { ArtifactNode, DomainNode, ModuleNode } from '../src/data';
 import {
   GRAPH_SNAPSHOT_VERSION,
+  type GraphLayoutSnapshot,
   type GraphSnapshotPayload
 } from '../src/types/graph';
 
@@ -245,13 +246,16 @@ function loadSnapshot(): GraphSnapshotPayload {
 
   const version = readMetadata('snapshotVersion');
   const exportedAt = readMetadata('updatedAt');
+  const layoutRaw = readMetadata('layout');
+  const layout = layoutRaw ? safeParseLayout(layoutRaw) : undefined;
 
   return {
     version: version ? Number.parseInt(version, 10) : GRAPH_SNAPSHOT_VERSION,
     exportedAt: exportedAt ?? undefined,
     domains: buildDomainTree(domainRows),
     modules: moduleRows.map((row) => JSON.parse(row.data) as ModuleNode),
-    artifacts: artifactRows.map((row) => JSON.parse(row.data) as ArtifactNode)
+    artifacts: artifactRows.map((row) => JSON.parse(row.data) as ArtifactNode),
+    layout
   };
 }
 
@@ -306,6 +310,7 @@ function persistSnapshot(snapshot: GraphSnapshotPayload): void {
 
     upsertMetadata('snapshotVersion', String(snapshot.version ?? GRAPH_SNAPSHOT_VERSION));
     upsertMetadata('updatedAt', snapshot.exportedAt ?? new Date().toISOString());
+    upsertMetadata('layout', JSON.stringify(normalizeLayout(snapshot.layout)));
 
     database.run('COMMIT');
     persistDatabase();
@@ -368,6 +373,53 @@ function buildDomainTree(rows: DomainRow[]): DomainNode[] {
   };
 
   return build(null);
+}
+
+function safeParseLayout(raw: string): GraphLayoutSnapshot | undefined {
+  try {
+    const parsed = JSON.parse(raw) as GraphLayoutSnapshot;
+    return normalizeLayout(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeLayout(layout: GraphLayoutSnapshot | undefined | null): GraphLayoutSnapshot {
+  if (!layout || typeof layout !== 'object' || !layout.nodes) {
+    return { nodes: {} };
+  }
+
+  const entries = Object.entries(layout.nodes).reduce<
+    Array<[string, GraphLayoutSnapshot['nodes'][string]]>
+  >((acc, [id, position]) => {
+    if (!position || typeof position !== 'object') {
+      return acc;
+    }
+
+    const x = Number((position as { x?: number }).x);
+    const y = Number((position as { y?: number }).y);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return acc;
+    }
+
+    const next: GraphLayoutSnapshot['nodes'][string] = { x, y };
+    const fx = (position as { fx?: number }).fx;
+    const fy = (position as { fy?: number }).fy;
+
+    if (Number.isFinite(fx)) {
+      next.fx = Number(fx);
+    }
+
+    if (Number.isFinite(fy)) {
+      next.fy = Number(fy);
+    }
+
+    acc.push([id, next]);
+    return acc;
+  }, []);
+
+  return { nodes: Object.fromEntries(entries) };
 }
 
 function readMetadata(key: string): string | null {

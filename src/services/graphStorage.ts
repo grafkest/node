@@ -1,4 +1,8 @@
-import { GRAPH_SNAPSHOT_VERSION, type GraphSnapshotPayload } from '../types/graph';
+import {
+  GRAPH_SNAPSHOT_VERSION,
+  type GraphLayoutSnapshot,
+  type GraphSnapshotPayload
+} from '../types/graph';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 const GRAPH_ENDPOINT = '/api/graph';
@@ -16,7 +20,8 @@ export async function fetchGraphSnapshot(signal?: AbortSignal): Promise<GraphSna
     exportedAt: snapshot.exportedAt,
     modules: snapshot.modules,
     domains: snapshot.domains,
-    artifacts: snapshot.artifacts
+    artifacts: snapshot.artifacts,
+    layout: normalizeLayout(snapshot.layout)
   };
 }
 
@@ -37,6 +42,41 @@ export async function persistGraphSnapshot(
       message ?? `Не удалось сохранить граф. Код ответа: ${response.status}`
     );
   }
+}
+
+function normalizeLayout(layout: GraphSnapshotPayload['layout']): GraphLayoutSnapshot | undefined {
+  if (!layout || typeof layout !== 'object' || !layout.nodes) {
+    return undefined;
+  }
+
+  const normalizedEntries = Object.entries(layout.nodes).reduce<
+    Array<[string, GraphLayoutSnapshot['nodes'][string]]>
+  >((acc, [id, position]) => {
+    if (!position || typeof position !== 'object') {
+      return acc;
+    }
+
+    const { x, y, fx, fy } = position as GraphLayoutSnapshot['nodes'][string];
+
+    if (typeof x !== 'number' || Number.isNaN(x) || typeof y !== 'number' || Number.isNaN(y)) {
+      return acc;
+    }
+
+    const next: GraphLayoutSnapshot['nodes'][string] = { x, y };
+
+    if (typeof fx === 'number' && !Number.isNaN(fx)) {
+      next.fx = fx;
+    }
+
+    if (typeof fy === 'number' && !Number.isNaN(fy)) {
+      next.fy = fy;
+    }
+
+    acc.push([id, next]);
+    return acc;
+  }, []);
+
+  return { nodes: Object.fromEntries(normalizedEntries) };
 }
 
 async function readErrorMessage(response: Response): Promise<string | null> {

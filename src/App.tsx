@@ -12,7 +12,12 @@ import EntityCreation, {
 } from './components/EntityCreation';
 import FiltersPanel from './components/FiltersPanel';
 import GraphPersistenceControls from './components/GraphPersistenceControls';
-import { GRAPH_SNAPSHOT_VERSION, type GraphSnapshotPayload, type GraphSyncStatus } from './types/graph';
+import {
+  GRAPH_SNAPSHOT_VERSION,
+  type GraphLayoutNodePosition,
+  type GraphSnapshotPayload,
+  type GraphSyncStatus
+} from './types/graph';
 import { fetchGraphSnapshot, persistGraphSnapshot } from './services/graphStorage';
 import GraphView, { type GraphNode } from './components/GraphView';
 import NodeDetails from './components/NodeDetails';
@@ -67,6 +72,7 @@ function App() {
   const [isSyncAvailable, setIsSyncAvailable] = useState(false);
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
+  const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
 
   const products = useMemo(() => buildProductList(moduleData), [moduleData]);
 
@@ -82,6 +88,7 @@ function App() {
       setSelectedDomains(
         new Set(flattenDomainTree(snapshot.domains).map((domain) => domain.id))
       );
+      setLayoutPositions(snapshot.layout?.nodes ?? {});
       hasLoadedSnapshotRef.current = true;
     },
     []
@@ -196,7 +203,8 @@ function App() {
         exportedAt: new Date().toISOString(),
         modules: moduleData,
         domains: domainData,
-        artifacts: artifactData
+        artifacts: artifactData,
+        layout: { nodes: layoutPositions }
       },
       controller.signal
     )
@@ -225,7 +233,7 @@ function App() {
       cancelled = true;
       controller.abort();
     };
-  }, [artifactData, domainData, moduleData, isSyncAvailable]);
+  }, [artifactData, domainData, moduleData, isSyncAvailable, layoutPositions]);
 
   const matchesModuleFilters = useCallback(
     (module: ModuleNode) => {
@@ -688,6 +696,13 @@ function App() {
     [artifactMap, domainMap, moduleById, moduleDependents]
   );
 
+  const handleLayoutChange = useCallback(
+    (positions: Record<string, GraphLayoutNodePosition>) => {
+      setLayoutPositions((prev) => (layoutsEqual(prev, positions) ? prev : positions));
+    },
+    []
+  );
+
   useEffect(() => {
     if (import.meta.env.DEV && typeof window !== 'undefined') {
       (window as typeof window & { __selectGraphNode?: (id: string) => void }).__selectGraphNode = (nodeId: string) => {
@@ -1037,6 +1052,8 @@ function App() {
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}
+                layoutPositions={layoutPositions}
+                onLayoutChange={handleLayoutChange}
               />
             </div>
             <div className={styles.analytics}>
@@ -1105,6 +1122,41 @@ function buildProductList(modules: ModuleNode[]): string[] {
     }
   });
   return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function layoutsEqual(
+  prev: Record<string, GraphLayoutNodePosition>,
+  next: Record<string, GraphLayoutNodePosition>
+): boolean {
+  const prevKeys = Object.keys(prev);
+  const nextKeys = Object.keys(next);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  return prevKeys.every((key) => {
+    const prevPosition = prev[key];
+    const nextPosition = next[key];
+
+    if (!nextPosition) {
+      return false;
+    }
+
+    if (prevPosition.x !== nextPosition.x || prevPosition.y !== nextPosition.y) {
+      return false;
+    }
+
+    const prevFx = prevPosition.fx ?? null;
+    const nextFx = nextPosition.fx ?? null;
+    if (prevFx !== nextFx) {
+      return false;
+    }
+
+    const prevFy = prevPosition.fy ?? null;
+    const nextFy = nextPosition.fy ?? null;
+    return prevFy === nextFy;
+  });
 }
 
 function deduplicateNonEmpty(values: (string | null | undefined)[]): string[] {
