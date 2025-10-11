@@ -1,11 +1,12 @@
 import cors from 'cors';
 import express from 'express';
 import type { Request, Response } from 'express';
-import Database from 'better-sqlite3';
+import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
@@ -24,12 +25,9 @@ const databasePath = path.join(dataDirectory, 'graph.db');
 
 fs.mkdirSync(dataDirectory, { recursive: true });
 
-const db = new Database(databasePath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-initializeSchema();
-seedInitialData();
+let db: SqlJsDatabase | null = null;
+const require = createRequire(import.meta.url);
+const sqlJsWasmDirectory = path.dirname(require.resolve('sql.js/dist/sql-wasm.wasm'));
 
 const app = express();
 app.use(cors());
@@ -66,10 +64,17 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
-const port = Number.parseInt(process.env.PORT ?? '4000', 10);
-app.listen(port, () => {
-  console.log(`Graph storage server listening on port ${port}`);
-});
+void initializeDatabase()
+  .then(() => {
+    const port = Number.parseInt(process.env.PORT ?? '4000', 10);
+    app.listen(port, () => {
+      console.log(`Graph storage server listening on port ${port}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to initialize database', error);
+    process.exit(1);
+  });
 
 type DomainRow = {
   id: string;
@@ -91,8 +96,32 @@ type ArtifactRow = {
   position: number;
 };
 
+async function initializeDatabase(): Promise<void> {
+  const SQL = await initSqlJs({
+    locateFile: (file) => path.join(sqlJsWasmDirectory, file)
+  });
+
+  const databaseExists = fs.existsSync(databasePath);
+  const initialData = databaseExists ? fs.readFileSync(databasePath) : null;
+
+  try {
+    db = initialData && initialData.length > 0 ? new SQL.Database(initialData) : new SQL.Database();
+  } catch (error) {
+    console.warn('Failed to load existing database, creating a new one.', error);
+    db = new SQL.Database();
+  }
+
+  initializeSchema();
+  const seeded = seedInitialData();
+
+  if (!seeded) {
+    persistDatabase();
+  }
+}
+
 function initializeSchema(): void {
-  db.exec(`
+  const database = assertDatabase();
+  database.run(`
     CREATE TABLE IF NOT EXISTS metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -120,13 +149,13 @@ function initializeSchema(): void {
   `);
 }
 
-function seedInitialData(): void {
+function seedInitialData(): boolean {
   const domainCount = countRows('domains');
   const moduleCount = countRows('modules');
   const artifactCount = countRows('artifacts');
 
   if (domainCount > 0 || moduleCount > 0 || artifactCount > 0) {
-    return;
+    return false;
   }
 
   const snapshot: GraphSnapshotPayload = {
@@ -138,24 +167,81 @@ function seedInitialData(): void {
   };
 
   persistSnapshot(snapshot);
+  return true;
 }
 
 function countRows(table: 'domains' | 'modules' | 'artifacts'): number {
-  const statement = db.prepare(`SELECT COUNT(*) as count FROM ${table}`);
-  const result = statement.get() as { count: number };
-  return result.count;
+  const database = assertDatabase();
+  const statement = database.prepare(`SELECT COUNT(*) as count FROM ${table}`);
+
+  try {
+    const hasRow = statement.step();
+    if (!hasRow) {
+      return 0;
+    }
+
+    const result = statement.getAsObject() as { count?: number };
+    return typeof result.count === 'number' ? result.count : 0;
+  } finally {
+    statement.free();
+  }
 }
 
 function loadSnapshot(): GraphSnapshotPayload {
-  const domainRows = db
-    .prepare<[], DomainRow>('SELECT * FROM domains ORDER BY parent_id IS NOT NULL, parent_id, position')
-    .all();
-  const moduleRows = db
-    .prepare<[], ModuleRow>('SELECT * FROM modules ORDER BY position')
-    .all();
-  const artifactRows = db
-    .prepare<[], ArtifactRow>('SELECT * FROM artifacts ORDER BY position')
-    .all();
+  const database = assertDatabase();
+
+  const domainRows: DomainRow[] = [];
+  const domainStatement = database.prepare(
+    'SELECT id, name, description, parent_id, position FROM domains ORDER BY parent_id IS NOT NULL, parent_id, position'
+  );
+  try {
+    while (domainStatement.step()) {
+      const row = domainStatement.getAsObject() as DomainRow;
+      domainRows.push({
+        id: String(row.id),
+        name: String(row.name),
+        description: row.description ?? null,
+        parent_id: row.parent_id ?? null,
+        position: Number(row.position)
+      });
+    }
+  } finally {
+    domainStatement.free();
+  }
+
+  const moduleRows: ModuleRow[] = [];
+  const moduleStatement = database.prepare(
+    'SELECT id, data, position FROM modules ORDER BY position'
+  );
+  try {
+    while (moduleStatement.step()) {
+      const row = moduleStatement.getAsObject() as ModuleRow;
+      moduleRows.push({
+        id: String(row.id),
+        data: String(row.data),
+        position: Number(row.position)
+      });
+    }
+  } finally {
+    moduleStatement.free();
+  }
+
+  const artifactRows: ArtifactRow[] = [];
+  const artifactStatement = database.prepare(
+    'SELECT id, data, position FROM artifacts ORDER BY position'
+  );
+  try {
+    while (artifactStatement.step()) {
+      const row = artifactStatement.getAsObject() as ArtifactRow;
+      artifactRows.push({
+        id: String(row.id),
+        data: String(row.data),
+        position: Number(row.position)
+      });
+    }
+  } finally {
+    artifactStatement.free();
+  }
 
   const version = readMetadata('snapshotVersion');
   const exportedAt = readMetadata('updatedAt');
@@ -170,38 +256,67 @@ function loadSnapshot(): GraphSnapshotPayload {
 }
 
 function persistSnapshot(snapshot: GraphSnapshotPayload): void {
-  const save = db.transaction((payload: GraphSnapshotPayload) => {
-    db.prepare('DELETE FROM domains').run();
-    db.prepare('DELETE FROM modules').run();
-    db.prepare('DELETE FROM artifacts').run();
+  const database = assertDatabase();
 
-    const domainRows = flattenDomains(payload.domains);
-    const insertDomain = db.prepare(
+  try {
+    database.run('BEGIN TRANSACTION');
+    database.run('DELETE FROM domains');
+    database.run('DELETE FROM modules');
+    database.run('DELETE FROM artifacts');
+
+    const domainRows = flattenDomains(snapshot.domains);
+    const insertDomain = database.prepare(
       'INSERT INTO domains (id, name, description, parent_id, position) VALUES (?, ?, ?, ?, ?)'
     );
-    domainRows.forEach((row) => {
-      insertDomain.run(row.id, row.name, row.description, row.parent_id, row.position);
-    });
+    try {
+      domainRows.forEach((row) => {
+        insertDomain.run([
+          row.id,
+          row.name,
+          row.description ?? null,
+          row.parent_id,
+          row.position
+        ]);
+      });
+    } finally {
+      insertDomain.free();
+    }
 
-    const insertModule = db.prepare(
-      'INSERT INTO modules (id, position, data) VALUES (?, ?, ?)' 
+    const insertModule = database.prepare(
+      'INSERT INTO modules (id, position, data) VALUES (?, ?, ?)'
     );
-    payload.modules.forEach((module, index) => {
-      insertModule.run(module.id, index, JSON.stringify(module));
-    });
+    try {
+      snapshot.modules.forEach((module, index) => {
+        insertModule.run([module.id, index, JSON.stringify(module)]);
+      });
+    } finally {
+      insertModule.free();
+    }
 
-    const insertArtifact = db.prepare(
-      'INSERT INTO artifacts (id, position, data) VALUES (?, ?, ?)' 
+    const insertArtifact = database.prepare(
+      'INSERT INTO artifacts (id, position, data) VALUES (?, ?, ?)'
     );
-    payload.artifacts.forEach((artifact, index) => {
-      insertArtifact.run(artifact.id, index, JSON.stringify(artifact));
-    });
+    try {
+      snapshot.artifacts.forEach((artifact, index) => {
+        insertArtifact.run([artifact.id, index, JSON.stringify(artifact)]);
+      });
+    } finally {
+      insertArtifact.free();
+    }
 
-    upsertMetadata('snapshotVersion', String(payload.version ?? GRAPH_SNAPSHOT_VERSION));
-    upsertMetadata('updatedAt', payload.exportedAt ?? new Date().toISOString());
-  });
+    upsertMetadata('snapshotVersion', String(snapshot.version ?? GRAPH_SNAPSHOT_VERSION));
+    upsertMetadata('updatedAt', snapshot.exportedAt ?? new Date().toISOString());
 
-  save(snapshot);
+    database.run('COMMIT');
+    persistDatabase();
+  } catch (error) {
+    try {
+      database.run('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
+    throw error;
+  }
 }
 
 function flattenDomains(domains: DomainNode[], parentId: string | null = null): DomainRow[] {
@@ -256,15 +371,47 @@ function buildDomainTree(rows: DomainRow[]): DomainNode[] {
 }
 
 function readMetadata(key: string): string | null {
-  const statement = db.prepare('SELECT value FROM metadata WHERE key = ?');
-  const result = statement.get(key) as { value?: string } | undefined;
-  return result?.value ?? null;
+  const database = assertDatabase();
+  const statement = database.prepare('SELECT value FROM metadata WHERE key = ?');
+
+  try {
+    statement.bind([key]);
+    if (!statement.step()) {
+      return null;
+    }
+
+    const result = statement.getAsObject() as { value?: string };
+    return result.value ?? null;
+  } finally {
+    statement.free();
+  }
 }
 
 function upsertMetadata(key: string, value: string): void {
-  db.prepare(
+  const database = assertDatabase();
+  const statement = database.prepare(
     'INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-  ).run(key, value);
+  );
+
+  try {
+    statement.run([key, value]);
+  } finally {
+    statement.free();
+  }
+}
+
+function persistDatabase(): void {
+  const database = assertDatabase();
+  const exported = database.export();
+  fs.writeFileSync(databasePath, exported);
+}
+
+function assertDatabase(): SqlJsDatabase {
+  if (!db) {
+    throw new Error('Database has not been initialized');
+  }
+
+  return db;
 }
 
 function isGraphSnapshotPayload(value: unknown): value is GraphSnapshotPayload {
