@@ -2,7 +2,12 @@ import { Button } from '@consta/uikit/Button';
 import { Text } from '@consta/uikit/Text';
 import React, { useMemo, useRef, useState } from 'react';
 import type { ArtifactNode, DomainNode, ModuleNode } from '../data';
-import { GRAPH_SNAPSHOT_VERSION, type GraphSnapshotPayload, type GraphSyncStatus } from '../types/graph';
+import {
+  GRAPH_SNAPSHOT_VERSION,
+  type GraphLayoutSnapshot,
+  type GraphSnapshotPayload,
+  type GraphSyncStatus
+} from '../types/graph';
 import styles from './GraphPersistenceControls.module.css';
 
 type StatusMessage =
@@ -15,6 +20,7 @@ type GraphPersistenceControlsProps = {
   artifacts: ArtifactNode[];
   onImport: (snapshot: GraphSnapshotPayload) => void;
   syncStatus?: GraphSyncStatus | null;
+  layout?: GraphLayoutSnapshot;
 };
 
 const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
@@ -22,7 +28,8 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   domains,
   artifacts,
   onImport,
-  syncStatus
+  syncStatus,
+  layout
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<StatusMessage | null>(null);
@@ -33,9 +40,10 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
       exportedAt: new Date().toISOString(),
       modules,
       domains,
-      artifacts
+      artifacts,
+      layout
     }),
-    [modules, domains, artifacts]
+    [modules, domains, artifacts, layout]
   );
 
   const handleExport = () => {

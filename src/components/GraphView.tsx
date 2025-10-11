@@ -200,7 +200,28 @@ const GraphView: React.FC<GraphViewProps> = ({
     onLayoutChange(Object.fromEntries(entries));
   }, [onLayoutChange]);
 
-  const handleNodeDragEnd = useCallback(() => {
+  const handleNodeDragEnd = useCallback((node: ForceNode) => {
+    if (node && typeof node.id === 'string') {
+      const nextX = typeof node.x === 'number' && Number.isFinite(node.x) ? roundCoordinate(node.x) : null;
+      const nextY = typeof node.y === 'number' && Number.isFinite(node.y) ? roundCoordinate(node.y) : null;
+
+      if (nextX !== null) {
+        node.x = nextX;
+        node.fx = nextX;
+      } else {
+        node.fx = undefined;
+      }
+
+      if (nextY !== null) {
+        node.y = nextY;
+        node.fy = nextY;
+      } else {
+        node.fy = undefined;
+      }
+
+      nodeCacheRef.current.set(node.id, node);
+    }
+
     emitLayoutUpdate();
   }, [emitLayoutUpdate]);
 

@@ -15,6 +15,7 @@ import GraphPersistenceControls from './components/GraphPersistenceControls';
 import {
   GRAPH_SNAPSHOT_VERSION,
   type GraphLayoutNodePosition,
+  type GraphLayoutSnapshot,
   type GraphSnapshotPayload,
   type GraphSyncStatus
 } from './types/graph';
@@ -73,6 +74,10 @@ function App() {
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
+  const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
+    () => ({ nodes: layoutPositions }),
+    [layoutPositions]
+  );
 
   const products = useMemo(() => buildProductList(moduleData), [moduleData]);
 
@@ -363,14 +368,35 @@ function App() {
   }, [selectedNode, moduleDependents, artifactMap, moduleData]);
 
   const graphModules = useMemo(() => {
-    if (contextModuleIds.size === 0) {
+    const extraModuleIds = new Set(contextModuleIds);
+
+    if (showAllConnections) {
+      filteredModules.forEach((module) => {
+        module.produces.forEach((artifactId) => {
+          const artifact = artifactMap.get(artifactId);
+          artifact?.consumerIds.forEach((consumerId) => extraModuleIds.add(consumerId));
+        });
+
+        module.dataIn.forEach((input) => {
+          if (!input.sourceId) {
+            return;
+          }
+          const artifact = artifactMap.get(input.sourceId);
+          if (artifact) {
+            extraModuleIds.add(artifact.producedBy);
+          }
+        });
+      });
+    }
+
+    if (extraModuleIds.size === 0) {
       return filteredModules;
     }
 
     const existing = new Set(filteredModules.map((module) => module.id));
     const extended = [...filteredModules];
 
-    contextModuleIds.forEach((moduleId) => {
+    extraModuleIds.forEach((moduleId) => {
       if (existing.has(moduleId)) {
         return;
       }
@@ -382,7 +408,7 @@ function App() {
     });
 
     return extended;
-  }, [filteredModules, contextModuleIds, moduleById]);
+  }, [filteredModules, contextModuleIds, moduleById, showAllConnections, artifactMap]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1100,6 +1126,7 @@ function App() {
           artifacts={artifactData}
           onImport={handleImportGraph}
           syncStatus={syncStatus}
+          layout={layoutSnapshot}
         />
         <EntityCreation
           modules={moduleData}
