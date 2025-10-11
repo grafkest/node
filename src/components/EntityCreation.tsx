@@ -13,10 +13,43 @@ import type {
 } from '../data';
 import styles from './EntityCreation.module.css';
 
+export type ModuleDraftPayload = {
+  name: string;
+  description: string;
+  productName: string;
+  team: string;
+  status: ModuleStatus;
+  domainIds: string[];
+  dependencyIds: string[];
+  producedArtifactIds: string[];
+  dataIn: ModuleInput[];
+  dataOut: ModuleOutput[];
+};
+
+export type DomainDraftPayload = {
+  name: string;
+  description: string;
+  parentId?: string;
+  moduleIds: string[];
+};
+
+export type ArtifactDraftPayload = {
+  name: string;
+  description: string;
+  domainId?: string;
+  producedBy?: string;
+  consumerIds: string[];
+  dataType: string;
+  sampleUrl: string;
+};
+
 type EntityCreationProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
+  onCreateModule: (draft: ModuleDraftPayload) => void;
+  onCreateDomain: (draft: DomainDraftPayload) => void;
+  onCreateArtifact: (draft: ArtifactDraftPayload) => void;
 };
 
 type CreationTab = 'module' | 'domain' | 'artifact';
@@ -35,7 +68,7 @@ type ModuleOutputDraft = {
 
 type SubmissionState = {
   mode: CreationTab;
-  payload: unknown;
+  payload: ModuleDraftPayload | DomainDraftPayload | ArtifactDraftPayload;
 };
 
 const creationTabs = [
@@ -50,7 +83,14 @@ const statusLabels: Record<ModuleStatus, string> = {
   deprecated: 'Устаревший'
 };
 
-const EntityCreation: React.FC<EntityCreationProps> = ({ modules, domains, artifacts }) => {
+const EntityCreation: React.FC<EntityCreationProps> = ({
+  modules,
+  domains,
+  artifacts,
+  onCreateModule,
+  onCreateDomain,
+  onCreateArtifact
+}) => {
   const [activeTab, setActiveTab] = useState<CreationTab>('module');
   const [submission, setSubmission] = useState<SubmissionState | null>(null);
 
@@ -110,6 +150,7 @@ const EntityCreation: React.FC<EntityCreationProps> = ({ modules, domains, artif
         {activeTab === 'module' && (
           <ModuleForm
             onSubmit={handleSubmit}
+            onCreate={onCreateModule}
             domainItems={domainItems}
             domainLabelMap={domainLabelMap}
             moduleItems={moduleItems}
@@ -122,6 +163,7 @@ const EntityCreation: React.FC<EntityCreationProps> = ({ modules, domains, artif
         {activeTab === 'domain' && (
           <DomainForm
             onSubmit={handleSubmit}
+            onCreate={onCreateDomain}
             domainItems={domainItems}
             domainLabelMap={domainLabelMap}
             moduleItems={moduleItems}
@@ -132,6 +174,7 @@ const EntityCreation: React.FC<EntityCreationProps> = ({ modules, domains, artif
         {activeTab === 'artifact' && (
           <ArtifactForm
             onSubmit={handleSubmit}
+            onCreate={onCreateArtifact}
             domainItems={domainItems}
             domainLabelMap={domainLabelMap}
             moduleItems={moduleItems}
@@ -171,7 +214,7 @@ const EntityCreation: React.FC<EntityCreationProps> = ({ modules, domains, artif
 };
 
 type CommonFormProps = {
-  onSubmit: (mode: CreationTab, payload: unknown) => void;
+  onSubmit: (mode: CreationTab, payload: SubmissionState['payload']) => void;
   domainItems: string[];
   domainLabelMap: Record<string, string>;
   moduleItems: string[];
@@ -181,10 +224,12 @@ type CommonFormProps = {
 type ModuleFormProps = CommonFormProps & {
   artifactItems: string[];
   artifactLabelMap: Record<string, string>;
+  onCreate: (draft: ModuleDraftPayload) => void;
 };
 
 const ModuleForm: React.FC<ModuleFormProps> = ({
   onSubmit,
+  onCreate,
   domainItems,
   domainLabelMap,
   moduleItems,
@@ -296,6 +341,13 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     }),
     [name, description, productName, team, status, domains, dependencies, produces, inputs, outputs]
   );
+
+  const handleAdd = () => {
+    onSubmit('module', payload);
+    onCreate(payload);
+  };
+
+  const canAdd = payload.name.length > 0;
 
   return (
     <section className={styles.form}>
@@ -502,18 +554,22 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
         <Button
           size="s"
           label="Сформировать карточку"
-          view="primary"
+          view="secondary"
           onClick={() => onSubmit('module', payload)}
         />
+        <Button size="s" label="Добавить на граф" view="primary" onClick={handleAdd} disabled={!canAdd} />
       </div>
     </section>
   );
 };
 
-type DomainFormProps = CommonFormProps;
+type DomainFormProps = CommonFormProps & {
+  onCreate: (draft: DomainDraftPayload) => void;
+};
 
 const DomainForm: React.FC<DomainFormProps> = ({
   onSubmit,
+  onCreate,
   domainItems,
   domainLabelMap,
   moduleItems,
@@ -543,6 +599,13 @@ const DomainForm: React.FC<DomainFormProps> = ({
     }),
     [name, description, parentId, relatedModules]
   );
+
+  const handleAdd = () => {
+    onSubmit('domain', payload);
+    onCreate(payload);
+  };
+
+  const canAdd = payload.name.length > 0;
 
   return (
     <section className={styles.form}>
@@ -615,18 +678,22 @@ const DomainForm: React.FC<DomainFormProps> = ({
         <Button
           size="s"
           label="Сформировать карточку"
-          view="primary"
+          view="secondary"
           onClick={() => onSubmit('domain', payload)}
         />
+        <Button size="s" label="Добавить на граф" view="primary" onClick={handleAdd} disabled={!canAdd} />
       </div>
     </section>
   );
 };
 
-type ArtifactFormProps = CommonFormProps;
+type ArtifactFormProps = CommonFormProps & {
+  onCreate: (draft: ArtifactDraftPayload) => void;
+};
 
 const ArtifactForm: React.FC<ArtifactFormProps> = ({
   onSubmit,
+  onCreate,
   domainItems,
   domainLabelMap,
   moduleItems,
@@ -665,6 +732,13 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
     }),
     [name, description, domainId, producerId, consumerIds, dataType, sampleUrl]
   );
+
+  const handleAdd = () => {
+    onSubmit('artifact', payload);
+    onCreate(payload);
+  };
+
+  const canAdd = payload.name.length > 0 && Boolean(payload.domainId) && Boolean(payload.producedBy);
 
   return (
     <section className={styles.form}>
@@ -779,8 +853,15 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
         <Button
           size="s"
           label="Сформировать карточку"
-          view="primary"
+          view="secondary"
           onClick={() => onSubmit('artifact', payload)}
+        />
+        <Button
+          size="s"
+          label="Добавить на граф"
+          view="primary"
+          onClick={handleAdd}
+          disabled={!canAdd}
         />
       </div>
     </section>

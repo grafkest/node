@@ -5,14 +5,7 @@ import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
 import React, { useEffect, useState } from 'react';
-import {
-  artifactNameById,
-  domainNameById,
-  moduleNameById,
-  type ModuleInput,
-  type ModuleOutput,
-  type TeamMember
-} from '../data';
+import { type ModuleInput, type ModuleOutput, type TeamMember } from '../data';
 import type { GraphNode } from './GraphView';
 import styles from './NodeDetails.module.css';
 
@@ -20,6 +13,9 @@ type NodeDetailsProps = {
   node: GraphNode | null;
   onClose: () => void;
   onNavigate: (nodeId: string) => void;
+  moduleNameMap: Record<string, string>;
+  artifactNameMap: Record<string, string>;
+  domainNameMap: Record<string, string>;
 };
 
 const statusBadgeView: Record<string, 'success' | 'warning' | 'alert' | 'normal'> = {
@@ -52,11 +48,21 @@ const deploymentToolLabels: Record<'docker' | 'kubernetes', string> = {
   kubernetes: 'Kubernetes'
 };
 
-const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) => {
+const NodeDetails: React.FC<NodeDetailsProps> = ({
+  node,
+  onClose,
+  onNavigate,
+  moduleNameMap,
+  artifactNameMap,
+  domainNameMap
+}) => {
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>(
     () => ({ ...defaultSectionState })
   );
   const [isTeamExpanded, setIsTeamExpanded] = useState(false);
+
+  const resolveEntityName = (id: string) =>
+    moduleNameMap[id] ?? artifactNameMap[id] ?? domainNameMap[id] ?? id;
 
   useEffect(() => {
     if (node?.type !== 'module') {
@@ -98,10 +104,10 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
   }
 
   if (node.type === 'artifact') {
-    const producerLabel = moduleNameById[node.producedBy] ?? node.producedBy;
+    const producerLabel = moduleNameMap[node.producedBy] ?? node.producedBy;
     const consumerLabels = node.consumerIds.map((consumerId) => ({
       id: consumerId,
-      label: moduleNameById[consumerId] ?? consumerId
+      label: moduleNameMap[consumerId] ?? consumerId
     }));
 
     return (
@@ -127,7 +133,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
             Доменная область
           </Text>
           <div className={styles.tagList}>
-            <Tag label={domainNameById[node.domainId] ?? node.domainId} size="xs" />
+            <Tag label={domainNameMap[node.domainId] ?? node.domainId} size="xs" />
           </div>
         </div>
 
@@ -207,7 +213,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
           <InfoRow label="Доменные области">
             <div className={styles.tagList}>
               {node.domains.map((domain) => (
-                <Tag key={domain} label={domainNameById[domain] ?? domain} size="xs" />
+                <Tag key={domain} label={domainNameMap[domain] ?? domain} size="xs" />
               ))}
             </div>
           </InfoRow>
@@ -255,8 +261,17 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node, onClose, onNavigate }) 
       title: 'Расчётный узел',
       content: (
         <>
-          <ModuleIoSection title="Данные In" items={node.dataIn} onNavigate={onNavigate} />
-          <ModuleOutputSection items={node.dataOut} onNavigate={onNavigate} />
+          <ModuleIoSection
+            title="Данные In"
+            items={node.dataIn}
+            onNavigate={onNavigate}
+            resolveName={resolveEntityName}
+          />
+          <ModuleOutputSection
+            items={node.dataOut}
+            onNavigate={onNavigate}
+            resolveName={resolveEntityName}
+          />
           <InfoRow label="Формула расчёта">
             <Text size="s" className={styles.code}>
               {node.formula}
@@ -447,10 +462,6 @@ function statusLabel(status: GraphNode & { type: 'module' }['status']) {
   }
 }
 
-function resolveEntityName(id: string): string {
-  return moduleNameById[id] ?? artifactNameById[id] ?? domainNameById[id] ?? id;
-}
-
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ru-RU').format(value);
 }
@@ -488,9 +499,15 @@ type ModuleIoSectionProps = {
   title: string;
   items: ModuleInput[];
   onNavigate: (nodeId: string) => void;
+  resolveName: (id: string) => string;
 };
 
-const ModuleIoSection: React.FC<ModuleIoSectionProps> = ({ title, items, onNavigate }) => {
+const ModuleIoSection: React.FC<ModuleIoSectionProps> = ({
+  title,
+  items,
+  onNavigate,
+  resolveName
+}) => {
   if (!items.length) {
     return null;
   }
@@ -503,7 +520,7 @@ const ModuleIoSection: React.FC<ModuleIoSectionProps> = ({ title, items, onNavig
       <ul className={styles.ioList}>
         {items.map((item) => {
           const hasSource = Boolean(item.sourceId);
-          const sourceLabel = item.sourceId ? resolveEntityName(item.sourceId) : null;
+          const sourceLabel = item.sourceId ? resolveName(item.sourceId) : null;
 
           return (
             <li key={item.id} className={styles.ioItem}>
@@ -539,11 +556,13 @@ const ModuleIoSection: React.FC<ModuleIoSectionProps> = ({ title, items, onNavig
 type ModuleOutputSectionProps = {
   items: ModuleOutput[];
   onNavigate: (nodeId: string) => void;
+  resolveName: (id: string) => string;
 };
 
 const ModuleOutputSection: React.FC<ModuleOutputSectionProps> = ({
   items,
-  onNavigate
+  onNavigate,
+  resolveName
 }) => {
   if (!items.length) {
     return null;
@@ -558,7 +577,7 @@ const ModuleOutputSection: React.FC<ModuleOutputSectionProps> = ({
         {items.map((item) => {
           const consumerOptions: ConsumerOption[] = (item.consumerIds ?? []).map((consumerId) => ({
             id: consumerId,
-            label: resolveEntityName(consumerId)
+            label: resolveName(consumerId)
           }));
 
           return (
