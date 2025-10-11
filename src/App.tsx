@@ -11,6 +11,9 @@ import EntityCreation, {
   type ModuleDraftPayload
 } from './components/EntityCreation';
 import FiltersPanel from './components/FiltersPanel';
+import GraphPersistenceControls, {
+  type GraphSnapshotPayload
+} from './components/GraphPersistenceControls';
 import GraphView, { type GraphNode } from './components/GraphView';
 import NodeDetails from './components/NodeDetails';
 import {
@@ -769,6 +772,19 @@ function App() {
     [artifactData, firstDomainId, moduleById]
   );
 
+  const handleImportGraph = useCallback((snapshot: GraphSnapshotPayload) => {
+    setDomainData(snapshot.domains);
+    setModuleData(snapshot.modules);
+    setArtifactData(snapshot.artifacts);
+    setSelectedNode(null);
+    setSearch('');
+    setStatusFilters(new Set(allStatuses));
+    setProductFilter(buildProductList(snapshot.modules));
+    setSelectedDomains(
+      new Set(flattenDomainTree(snapshot.domains).map((domain) => domain.id))
+    );
+  }, []);
+
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
   const isStatsActive = viewMode === 'stats';
@@ -916,6 +932,12 @@ function App() {
         aria-hidden={!isCreateActive}
         style={{ display: isCreateActive ? undefined : 'none' }}
       >
+        <GraphPersistenceControls
+          modules={moduleData}
+          domains={domainData}
+          artifacts={artifactData}
+          onImport={handleImportGraph}
+        />
         <EntityCreation
           modules={moduleData}
           domains={domainData}
