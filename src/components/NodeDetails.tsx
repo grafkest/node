@@ -104,11 +104,15 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
   }
 
   if (node.type === 'artifact') {
-    const producerLabel = moduleNameMap[node.producedBy] ?? node.producedBy;
+    const producerLabel = node.producedBy
+      ? moduleNameMap[node.producedBy] ?? node.producedBy
+      : 'Не назначен';
     const consumerLabels = node.consumerIds.map((consumerId) => ({
       id: consumerId,
       label: moduleNameMap[consumerId] ?? consumerId
     }));
+
+    const canNavigateToProducer = Boolean(node.producedBy);
 
     return (
       <div className={styles.container}>
@@ -141,16 +145,24 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
           <Text size="s" weight="semibold">
             Модуль-источник
           </Text>
-          <a
-            href="#"
-            className={styles.link}
-            onClick={(event) => {
-              event.preventDefault();
-              onNavigate(node.producedBy);
-            }}
-          >
-            {producerLabel}
-          </a>
+          {canNavigateToProducer ? (
+            <a
+              href="#"
+              className={styles.link}
+              onClick={(event) => {
+                event.preventDefault();
+                if (node.producedBy) {
+                  onNavigate(node.producedBy);
+                }
+              }}
+            >
+              {producerLabel}
+            </a>
+          ) : (
+            <Text size="s" view="secondary">
+              {producerLabel}
+            </Text>
+          )}
         </div>
 
         <div className={styles.section}>

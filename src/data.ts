@@ -939,7 +939,7 @@ export type ArtifactNode = {
   name: string;
   description: string;
   domainId: string;
-  producedBy: string;
+  producedBy?: string;
   consumerIds: string[];
   dataType: string;
   sampleUrl: string;
