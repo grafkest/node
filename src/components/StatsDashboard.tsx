@@ -132,7 +132,9 @@ const StatsDashboard = ({
   }, [reuseHistory]);
 
   const domainWithoutModules = useMemo(() => {
-    const flatDomains = flattenDomains(domains);
+    const flatDomains = flattenDomains(domains).filter(
+      (domain) => !domain.children || domain.children.length === 0
+    );
     const usage = new Map<string, number>();
 
     modules.forEach((module) => {
@@ -457,7 +459,13 @@ const StatsDashboard = ({
 };
 
 function flattenDomains(nodes: DomainNode[]): DomainNode[] {
-  return nodes.flatMap((node) => [node, ...(node.children ? flattenDomains(node.children) : [])]);
+  return nodes.flatMap((node) => {
+    const children = node.children ? flattenDomains(node.children) : [];
+    if (node.isCatalogRoot) {
+      return children;
+    }
+    return [node, ...children];
+  });
 }
 
 function resolveArtifactType(artifact: ArtifactNode): string {

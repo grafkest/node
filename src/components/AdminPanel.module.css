@@ -1,0 +1,201 @@
+.container {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 16px;
+  background-color: var(--color-bg-default);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.selectorTitle {
+  margin: 0;
+}
+
+.selectorHint {
+  margin: 0;
+}
+
+.selectorActions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.formWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.formHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.formTitle {
+  margin: 0;
+}
+
+.formSubtitle {
+  margin: 0;
+}
+
+.formBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.collapseLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.sectionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 12px;
+}
+
+.fieldGroup {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metricDisplay {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metricHint {
+  margin: 0;
+}
+
+.label {
+  margin: 0;
+}
+
+.input,
+.textarea,
+.numberInput {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-bg-border);
+  background-color: var(--color-bg-ghost);
+  font: inherit;
+  resize: vertical;
+}
+
+.textarea {
+  min-height: 96px;
+}
+
+.actionsRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listItem {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background-color: var(--color-bg-system);
+}
+
+.chipButton {
+  border: none;
+  background: none;
+  color: var(--color-typo-secondary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.stepActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.submitRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.submitButtons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hint {
+  margin: 0;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-typo-alert);
+}
+
+@media (max-width: 1200px) {
+  .container {
+    grid-template-columns: 1fr;
+  }
+
+  .selector {
+    order: 2;
+  }
+
+  .formWrapper {
+    order: 1;
+  }
+}

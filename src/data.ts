@@ -3,6 +3,10 @@ export type DomainNode = {
   name: string;
   description?: string;
   children?: DomainNode[];
+  /**
+   * Корневые домены используются как группирующие папки и не попадают в граф или статистику.
+   */
+  isCatalogRoot?: boolean;
 };
 
 export type ModuleStatus = 'in-dev' | 'production' | 'deprecated';
@@ -939,7 +943,7 @@ export type ArtifactNode = {
   name: string;
   description: string;
   domainId: string;
-  producedBy: string;
+  producedBy?: string;
   consumerIds: string[];
   dataType: string;
   sampleUrl: string;
