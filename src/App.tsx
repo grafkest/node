@@ -366,6 +366,87 @@ function App() {
     return dependents;
   }, [moduleData, artifactData]);
 
+  const domainNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    flattenDomainTree(domainData).forEach((domain) => {
+      map[domain.id] = domain.name;
+    });
+    return map;
+  }, [domainData]);
+
+  const moduleNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    moduleData.forEach((module) => {
+      map[module.id] = module.name;
+    });
+    return map;
+  }, [moduleData]);
+
+  const artifactNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    artifactData.forEach((artifact) => {
+      map[artifact.id] = artifact.name;
+    });
+    return map;
+  }, [artifactData]);
+
+  const moduleSearchIndex = useMemo(() => {
+    const index: Record<string, string> = {};
+
+    moduleData.forEach((module) => {
+      const collected: string[] = [];
+      collectSearchableValues(module, collected);
+
+      module.domains.forEach((domainId) => {
+        const domainName = domainNameMap[domainId];
+        if (domainName) {
+          collected.push(domainName);
+        }
+      });
+
+      module.dependencies.forEach((dependencyId) => {
+        const dependencyName = moduleNameMap[dependencyId];
+        if (dependencyName) {
+          collected.push(dependencyName);
+        }
+      });
+
+      module.produces.forEach((artifactId) => {
+        const artifactName = artifactNameMap[artifactId];
+        if (artifactName) {
+          collected.push(artifactName);
+        }
+      });
+
+      module.dataIn.forEach((input) => {
+        if (!input.sourceId) {
+          return;
+        }
+        const sourceArtifactName = artifactNameMap[input.sourceId];
+        if (sourceArtifactName) {
+          collected.push(sourceArtifactName);
+        }
+      });
+
+      module.dataOut.forEach((output) => {
+        output.consumerIds?.forEach((consumerId) => {
+          const consumerName = moduleNameMap[consumerId];
+          if (consumerName) {
+            collected.push(consumerName);
+          }
+        });
+      });
+
+      const normalized = collected
+        .map((value) => value.trim().toLowerCase())
+        .filter((value) => value.length > 0);
+
+      index[module.id] = normalized.join(' ');
+    });
+
+    return index;
+  }, [moduleData, domainNameMap, moduleNameMap, artifactNameMap]);
+
   useEffect(() => {
     if (!isSyncAvailable || !hasLoadedSnapshotRef.current || !activeGraphId) {
       return;
@@ -447,21 +528,9 @@ function App() {
       const matchesDomain =
         selectedDomains.size > 0 && module.domains.some((domain) => selectedDomains.has(domain));
       const normalizedSearch = search.trim().toLowerCase();
+      const searchableText = moduleSearchIndex[module.id] ?? '';
       const matchesSearch =
-        normalizedSearch.length === 0 ||
-        module.name.toLowerCase().includes(normalizedSearch) ||
-        module.productName.toLowerCase().includes(normalizedSearch) ||
-        module.team.toLowerCase().includes(normalizedSearch) ||
-        module.ridOwner.company.toLowerCase().includes(normalizedSearch) ||
-        module.ridOwner.division.toLowerCase().includes(normalizedSearch) ||
-        module.projectTeam.some(
-          (member) =>
-            member.fullName.toLowerCase().includes(normalizedSearch) ||
-            member.role.toLowerCase().includes(normalizedSearch)
-        ) ||
-        module.userStats.companies.some((company) =>
-          company.name.toLowerCase().includes(normalizedSearch)
-        );
+        normalizedSearch.length === 0 || searchableText.includes(normalizedSearch);
       const matchesStatus = statusFilters.has(module.status);
       const matchesProduct =
         productFilter.length === 0
@@ -474,7 +543,14 @@ function App() {
         matchesDomain && matchesSearch && matchesStatus && matchesProduct && matchesCompany
       );
     },
-    [search, selectedDomains, statusFilters, productFilter, companyFilter]
+    [
+      search,
+      selectedDomains,
+      statusFilters,
+      productFilter,
+      companyFilter,
+      moduleSearchIndex
+    ]
   );
 
   const filteredModules = useMemo(
@@ -498,22 +574,6 @@ function App() {
     });
     return map;
   }, [moduleData]);
-
-  const moduleNameMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    moduleData.forEach((module) => {
-      map[module.id] = module.name;
-    });
-    return map;
-  }, [moduleData]);
-
-  const artifactNameMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    artifactData.forEach((artifact) => {
-      map[artifact.id] = artifact.name;
-    });
-    return map;
-  }, [artifactData]);
 
   const graphSelectOptions = useMemo(
     () =>
@@ -569,14 +629,6 @@ function App() {
     () => graphs.find((graph) => graph.id === graphSourceIdDraft) ?? null,
     [graphs, graphSourceIdDraft]
   );
-
-  const domainNameMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    flattenDomainTree(domainData).forEach((domain) => {
-      map[domain.id] = domain.name;
-    });
-    return map;
-  }, [domainData]);
 
   const defaultDomainId = useMemo(() => {
     const flattened = flattenDomainTree(domainData);
@@ -2566,6 +2618,33 @@ function getAxisCoordinate(
 
 function roundCoordinate(value: number): number {
   return Number(value.toFixed(2));
+}
+
+function collectSearchableValues(value: unknown, target: string[]): void {
+  if (value === null || value === undefined) {
+    return;
+  }
+
+  if (typeof value === 'string') {
+    target.push(value);
+    return;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    target.push(String(value));
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSearchableValues(item, target));
+    return;
+  }
+
+  if (typeof value === 'object') {
+    Object.values(value as Record<string, unknown>).forEach((item) => {
+      collectSearchableValues(item, target);
+    });
+  }
 }
 
 function deduplicateNonEmpty(values: (string | null | undefined)[]): string[] {
