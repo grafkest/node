@@ -459,7 +459,13 @@ const StatsDashboard = ({
 };
 
 function flattenDomains(nodes: DomainNode[]): DomainNode[] {
-  return nodes.flatMap((node) => [node, ...(node.children ? flattenDomains(node.children) : [])]);
+  return nodes.flatMap((node) => {
+    const children = node.children ? flattenDomains(node.children) : [];
+    if (node.isCatalogRoot) {
+      return children;
+    }
+    return [node, ...children];
+  });
 }
 
 function resolveArtifactType(artifact: ArtifactNode): string {

@@ -382,6 +382,15 @@ function App() {
 
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domainData), [domainData]);
   const leafDomainIdSet = useMemo(() => new Set(leafDomainIds), [leafDomainIds]);
+  const displayableDomainIdSet = useMemo(
+    () =>
+      new Set(
+        flattenDomainTree(domainData)
+          .filter((domain) => !domain.isCatalogRoot)
+          .map((domain) => domain.id)
+      ),
+    [domainData]
+  );
 
   const contextModuleIds = useMemo(() => {
     const ids = new Set<string>();
@@ -556,8 +565,8 @@ function App() {
   }, [artifactData, graphModules, selectedNode]);
 
   const graphLinksAll = useMemo(
-    () => buildModuleLinks(moduleData, artifactData),
-    [moduleData, artifactData]
+    () => buildModuleLinks(moduleData, artifactData, displayableDomainIdSet),
+    [moduleData, artifactData, displayableDomainIdSet]
   );
 
   const filteredLinks = useMemo(() => {
@@ -1035,12 +1044,18 @@ function App() {
       const domainId = createEntityId('domain', draft.name, existingIds);
       const normalizedName = draft.name.trim() || `Новый домен ${existingIds.size + 1}`;
       const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
-      const newDomain: DomainNode = { id: domainId, name: normalizedName, description: normalizedDescription };
+      const parentId = draft.isCatalogRoot ? undefined : draft.parentId;
+      const newDomain: DomainNode = {
+        id: domainId,
+        name: normalizedName,
+        description: normalizedDescription,
+        isCatalogRoot: draft.isCatalogRoot
+      };
 
-      const updatedDomains = addDomainToTree(domainData, draft.parentId, newDomain);
+      const updatedDomains = addDomainToTree(domainData, parentId, newDomain);
       setDomainData(updatedDomains);
 
-      const moduleIds = draft.parentId ? draft.moduleIds : [];
+      const moduleIds = parentId ? draft.moduleIds : [];
       if (moduleIds.length > 0) {
         const moduleSet = new Set(moduleIds);
         setModuleData((prev) =>
@@ -1058,7 +1073,9 @@ function App() {
         return next;
       });
 
-      setSelectedNode({ ...newDomain, type: 'domain' });
+      if (!draft.isCatalogRoot) {
+        setSelectedNode({ ...newDomain, type: 'domain' });
+      }
       setViewMode('graph');
     },
     [domainData]
@@ -1078,11 +1095,12 @@ function App() {
       const updatedDomain: DomainNode = {
         ...extracted,
         name: sanitizedName,
-        description: sanitizedDescription
+        description: sanitizedDescription,
+        isCatalogRoot: draft.isCatalogRoot
       };
 
       const descendantIds = new Set(collectDomainIds(updatedDomain));
-      let targetParentId = draft.parentId ?? null;
+      let targetParentId = draft.isCatalogRoot ? null : draft.parentId ?? null;
       if (targetParentId && (targetParentId === domainId || descendantIds.has(targetParentId))) {
         targetParentId = previousParentId;
       }
@@ -1090,7 +1108,7 @@ function App() {
       const rebuiltTree = addDomainToTree(treeWithoutDomain, targetParentId ?? undefined, updatedDomain);
       setDomainData(rebuiltTree);
 
-      const moduleSet = draft.parentId ? new Set(draft.moduleIds) : new Set<string>();
+      const moduleSet = targetParentId ? new Set(draft.moduleIds) : new Set<string>();
       setModuleData((prev) =>
         prev.map((module) => {
           const hasDomain = module.domains.includes(domainId);
@@ -1104,7 +1122,11 @@ function App() {
       );
 
       setSelectedNode((prev) =>
-        prev && prev.id === domainId ? { ...updatedDomain, type: 'domain' } : prev
+        prev && prev.id === domainId
+          ? updatedDomain.isCatalogRoot
+            ? null
+            : { ...updatedDomain, type: 'domain' }
+          : prev
       );
     },
     [domainData]
@@ -1968,16 +1990,22 @@ function collectDomainIds(domain: DomainNode): string[] {
   return [domain.id, ...children.flatMap((child) => collectDomainIds(child))];
 }
 
-function buildModuleLinks(modules: ModuleNode[], artifacts: ArtifactNode[]): GraphLink[] {
+function buildModuleLinks(
+  modules: ModuleNode[],
+  artifacts: ArtifactNode[],
+  allowedDomainIds: Set<string>
+): GraphLink[] {
   const artifactMap = new Map<string, ArtifactNode>();
   artifacts.forEach((artifact) => artifactMap.set(artifact.id, artifact));
 
   return modules.flatMap((module) => {
-    const domainLinks: GraphLink[] = module.domains.map((domainId) => ({
-      source: module.id,
-      target: domainId,
-      type: 'domain'
-    }));
+    const domainLinks: GraphLink[] = module.domains
+      .filter((domainId) => allowedDomainIds.has(domainId))
+      .map((domainId) => ({
+        source: module.id,
+        target: domainId,
+        type: 'domain'
+      }));
 
     const dependencyLinks: GraphLink[] = module.dependencies.map((dependencyId) => ({
       source: module.id,
@@ -2009,7 +2037,7 @@ function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
 
 function collectLeafDomainIds(domains: DomainNode[]): string[] {
   return flattenDomainTree(domains)
-    .filter((domain) => !domain.children || domain.children.length === 0)
+    .filter((domain) => (!domain.children || domain.children.length === 0) && !domain.isCatalogRoot)
     .map((domain) => domain.id);
 }
 

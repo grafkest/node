@@ -363,7 +363,9 @@ function flattenDomains(domains: DomainNode[], visibleDomainIds?: Set<string>): 
   const collect = (node: DomainNode): DomainNode[] => {
     const childLists = node.children?.map(collect) ?? [];
     const hasVisibleChild = childLists.some((list) => list.length > 0);
-    const includeSelf = (!visible || visible.has(node.id) || hasVisibleChild) && (!node.children || node.children.length === 0);
+    const isLeaf = !node.children || node.children.length === 0;
+    const includeSelf =
+      !node.isCatalogRoot && (!visible || visible.has(node.id) || hasVisibleChild) && isLeaf;
 
     const collectedChildren = childLists.flat();
 

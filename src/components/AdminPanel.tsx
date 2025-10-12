@@ -60,6 +60,7 @@ export type DomainDraftPayload = {
   description: string;
   parentId?: string;
   moduleIds: string[];
+  isCatalogRoot: boolean;
 };
 
 export type ArtifactDraftPayload = {
@@ -1381,16 +1382,21 @@ const DomainForm: React.FC<DomainFormProps> = ({
   };
 
   const current = Math.min(Math.max(step, 0), domainSections.length - 1);
-  const parentValue = draft.parentId ?? ROOT_DOMAIN_OPTION;
-  const isRootDomain = !draft.parentId;
+  const parentValue = draft.isCatalogRoot ? ROOT_DOMAIN_OPTION : draft.parentId ?? null;
+  const isRootDomain = draft.isCatalogRoot;
 
   const handleParentChange = (value: string | null) => {
-    if (!value || value === ROOT_DOMAIN_OPTION) {
-      onChange({ ...draft, parentId: undefined, moduleIds: [] });
+    if (value === ROOT_DOMAIN_OPTION) {
+      onChange({ ...draft, parentId: undefined, moduleIds: [], isCatalogRoot: true });
       return;
     }
 
-    onChange({ ...draft, parentId: value });
+    if (!value) {
+      onChange({ ...draft, parentId: undefined, isCatalogRoot: false });
+      return;
+    }
+
+    onChange({ ...draft, parentId: value, isCatalogRoot: false });
   };
 
   return (
@@ -1741,7 +1747,8 @@ function createDefaultDomainDraft(): DomainDraftPayload {
     name: '',
     description: '',
     parentId: undefined,
-    moduleIds: []
+    moduleIds: [],
+    isCatalogRoot: false
   };
 }
 
@@ -1803,13 +1810,14 @@ function domainToDraft(
   const relatedModules = modules
     .filter((module) => module.domains.includes(domain.id))
     .map((module) => module.id);
-  const isLeaf = !domain.children || domain.children.length === 0;
+  const isLeaf = (!domain.children || domain.children.length === 0) && !domain.isCatalogRoot;
 
   return {
     name: domain.name,
     description: domain.description ?? '',
     parentId: parentId ?? undefined,
-    moduleIds: isLeaf ? relatedModules : []
+    moduleIds: isLeaf ? relatedModules : [],
+    isCatalogRoot: Boolean(domain.isCatalogRoot)
   };
 }
 
@@ -1844,7 +1852,7 @@ function buildDomainLabelMap(domains: DomainNode[]): Record<string, string> {
 
 function collectLeafDomainIds(domains: DomainNode[]): string[] {
   return flattenDomainTree(domains)
-    .filter((domain) => !domain.children || domain.children.length === 0)
+    .filter((domain) => (!domain.children || domain.children.length === 0) && !domain.isCatalogRoot)
     .map((domain) => domain.id);
 }
 
