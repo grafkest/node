@@ -722,11 +722,25 @@ function App() {
     [artifactMap, domainMap, moduleById, moduleDependents]
   );
 
+  const activeNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    moduleData.forEach((module) => ids.add(module.id));
+    artifactData.forEach((artifact) => ids.add(artifact.id));
+    flattenDomainTree(domainData).forEach((domain) => ids.add(domain.id));
+
+    return ids;
+  }, [artifactData, domainData, moduleData]);
+
   const handleLayoutChange = useCallback(
     (positions: Record<string, GraphLayoutNodePosition>) => {
-      setLayoutPositions((prev) => (layoutsEqual(prev, positions) ? prev : positions));
+      setLayoutPositions((prev) => {
+        const merged = mergeLayoutPositions(prev, positions);
+        const pruned = pruneLayoutPositions(merged, activeNodeIds);
+        return layoutsEqual(prev, pruned) ? prev : pruned;
+      });
     },
-    []
+    [activeNodeIds]
   );
 
   useEffect(() => {
@@ -823,6 +837,22 @@ function App() {
 
       setArtifactData(updatedArtifacts);
       setModuleData([...moduleData, newModule]);
+      setLayoutPositions((prev) => {
+        if (prev[moduleId]) {
+          return prev;
+        }
+
+        const anchorIds = [...uniqueDependencies, ...domainIds];
+        const initialPosition = resolveInitialModulePosition(prev, anchorIds);
+        if (!initialPosition) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [moduleId]: initialPosition
+        };
+      });
       setSelectedDomains((prev) => {
         const next = new Set(prev);
         domainIds.forEach((domainId) => {
@@ -1151,6 +1181,37 @@ function buildProductList(modules: ModuleNode[]): string[] {
   return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
 }
 
+function mergeLayoutPositions(
+  prev: Record<string, GraphLayoutNodePosition>,
+  next: Record<string, GraphLayoutNodePosition>
+): Record<string, GraphLayoutNodePosition> {
+  const merged: Record<string, GraphLayoutNodePosition> = { ...prev };
+
+  Object.entries(next).forEach(([id, position]) => {
+    const existing = merged[id];
+    if (!existing || !layoutPositionsEqual(existing, position)) {
+      merged[id] = position;
+    }
+  });
+
+  return merged;
+}
+
+function pruneLayoutPositions(
+  positions: Record<string, GraphLayoutNodePosition>,
+  activeIds: Set<string>
+): Record<string, GraphLayoutNodePosition> {
+  const result: Record<string, GraphLayoutNodePosition> = {};
+
+  Object.entries(positions).forEach(([id, position]) => {
+    if (activeIds.has(id)) {
+      result[id] = position;
+    }
+  });
+
+  return result;
+}
+
 function layoutsEqual(
   prev: Record<string, GraphLayoutNodePosition>,
   next: Record<string, GraphLayoutNodePosition>
@@ -1170,20 +1231,96 @@ function layoutsEqual(
       return false;
     }
 
-    if (prevPosition.x !== nextPosition.x || prevPosition.y !== nextPosition.y) {
-      return false;
-    }
-
-    const prevFx = prevPosition.fx ?? null;
-    const nextFx = nextPosition.fx ?? null;
-    if (prevFx !== nextFx) {
-      return false;
-    }
-
-    const prevFy = prevPosition.fy ?? null;
-    const nextFy = nextPosition.fy ?? null;
-    return prevFy === nextFy;
+    return layoutPositionsEqual(prevPosition, nextPosition);
   });
+}
+
+function layoutPositionsEqual(
+  prev: GraphLayoutNodePosition,
+  next: GraphLayoutNodePosition
+): boolean {
+  if (prev.x !== next.x || prev.y !== next.y) {
+    return false;
+  }
+
+  const prevFx = prev.fx ?? null;
+  const nextFx = next.fx ?? null;
+  if (prevFx !== nextFx) {
+    return false;
+  }
+
+  const prevFy = prev.fy ?? null;
+  const nextFy = next.fy ?? null;
+  return prevFy === nextFy;
+}
+
+function resolveInitialModulePosition(
+  positions: Record<string, GraphLayoutNodePosition>,
+  anchorIds: string[]
+): GraphLayoutNodePosition | null {
+  const anchors = anchorIds
+    .map((id) => positions[id])
+    .filter((position): position is GraphLayoutNodePosition => Boolean(position));
+  const fallbackEntries = Object.values(positions);
+
+  const anchorValues = extractAxisValues(anchors);
+  const fallbackValues = extractAxisValues(fallbackEntries);
+
+  const xValues = anchorValues.x.length > 0 ? anchorValues.x : fallbackValues.x;
+  const yValues = anchorValues.y.length > 0 ? anchorValues.y : fallbackValues.y;
+
+  if (xValues.length === 0 || yValues.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const anchorAverageX = anchorValues.x.length > 0
+    ? anchorValues.x.reduce((sum, value) => sum + value, 0) / anchorValues.x.length
+    : Math.max(...xValues);
+  const averageY = yValues.reduce((sum, value) => sum + value, 0) / yValues.length;
+
+  const horizontalOffset = anchorValues.x.length > 0 ? 80 : 140;
+  const jitterSeed = Object.keys(positions).length;
+  const verticalJitter = ((jitterSeed % 5) - 2) * 45;
+
+  return {
+    x: roundCoordinate(anchorAverageX + horizontalOffset),
+    y: roundCoordinate(averageY + verticalJitter)
+  };
+}
+
+function extractAxisValues(positions: GraphLayoutNodePosition[]): {
+  x: number[];
+  y: number[];
+} {
+  const x = positions
+    .map((position) => getAxisCoordinate(position, 'x'))
+    .filter((value): value is number => value !== null);
+  const y = positions
+    .map((position) => getAxisCoordinate(position, 'y'))
+    .filter((value): value is number => value !== null);
+
+  return { x, y };
+}
+
+function getAxisCoordinate(
+  position: GraphLayoutNodePosition,
+  axis: 'x' | 'y'
+): number | null {
+  const fixed = axis === 'x' ? position.fx : position.fy;
+  if (typeof fixed === 'number' && Number.isFinite(fixed)) {
+    return fixed;
+  }
+
+  const fallback = axis === 'x' ? position.x : position.y;
+  if (typeof fallback === 'number' && Number.isFinite(fallback)) {
+    return fallback;
+  }
+
+  return null;
+}
+
+function roundCoordinate(value: number): number {
+  return Number(value.toFixed(2));
 }
 
 function deduplicateNonEmpty(values: (string | null | undefined)[]): string[] {
