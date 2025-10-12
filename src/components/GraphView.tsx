@@ -139,6 +139,9 @@ const GraphView: React.FC<GraphViewProps> = ({
     [nodes, links]
   );
 
+  const nodeCount = nodes.length;
+  const linkCount = links.length;
+
   useEffect(() => {
     if (!highlightedNode || !graphRef.current) {
       return;
@@ -163,6 +166,20 @@ const GraphView: React.FC<GraphViewProps> = ({
       (window as typeof window & { __forceGraphRef?: ForceGraphMethods }).__forceGraphRef = graphRef.current;
     }
   }, [graphData]);
+
+  useEffect(() => {
+    if (!graphRef.current) {
+      return;
+    }
+
+    const reheat = (graphRef.current as ForceGraphMethods & {
+      d3ReheatSimulation?: () => void;
+    }).d3ReheatSimulation;
+
+    if (typeof reheat === 'function') {
+      reheat();
+    }
+  }, [nodeCount, linkCount]);
 
   const emitLayoutUpdate = useCallback(() => {
     if (!onLayoutChange) {
