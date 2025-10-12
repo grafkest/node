@@ -284,6 +284,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   }, [artifactOptions, artifacts, selectedArtifactId]);
 
   const handleModuleSubmit = () => {
+    if (selectedModuleId === '__new__' && moduleDraft.domainIds.length === 0) {
+      setModuleStep(0);
+      return;
+    }
+
     if (selectedModuleId === '__new__') {
       onCreateModule(moduleDraft);
       setModuleDraft(createDefaultModuleDraft());
@@ -498,6 +503,8 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   const [technologyInput, setTechnologyInput] = useState('');
   const [libraryNameInput, setLibraryNameInput] = useState('');
   const [libraryVersionInput, setLibraryVersionInput] = useState('');
+
+  const isDomainMissing = mode === 'create' && draft.domainIds.length === 0;
 
   useEffect(() => {
     setTechnologyInput('');
@@ -814,6 +821,11 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                 <Text size="2xs" view="secondary" className={styles.hint}>
                   Можно привязывать только конечные домены без дочерних областей.
                 </Text>
+                {isDomainMissing && (
+                  <Text size="2xs" view="alert" className={styles.error}>
+                    Выберите хотя бы одну доменную область, чтобы сохранить модуль.
+                  </Text>
+                )}
 
                 <div className={styles.fieldGroup}>
                   <label className={styles.field}>
@@ -1338,7 +1350,13 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                   onClick={() => goToStep(index + 1)}
                 />
               ) : (
-                <Button size="s" view="primary" label="Сохранить модуль" onClick={onSubmit} />
+                <Button
+                  size="s"
+                  view="primary"
+                  label="Сохранить модуль"
+                  onClick={onSubmit}
+                  disabled={isDomainMissing}
+                />
               )}
             </div>
           </div>
