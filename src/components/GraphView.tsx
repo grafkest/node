@@ -221,13 +221,25 @@ const GraphView: React.FC<GraphViewProps> = ({
     (node: ForceNode) => {
       if (node && typeof node.id === 'string') {
         const layout = layoutPositions[node.id];
+        const hasFixedX = typeof layout?.fx === 'number' && Number.isFinite(layout.fx);
+        const hasFixedY = typeof layout?.fy === 'number' && Number.isFinite(layout.fy);
 
-        const resolvedX = resolveCoordinate(node.x, node.fx, layout?.x ?? null, layout?.fx ?? null);
-        const resolvedY = resolveCoordinate(node.y, node.fy, layout?.y ?? null, layout?.fy ?? null);
+        const resolvedX = resolveCoordinate(
+          node.x,
+          node.fx,
+          layout?.x ?? null,
+          layout?.fx ?? null
+        );
+        const resolvedY = resolveCoordinate(
+          node.y,
+          node.fy,
+          layout?.y ?? null,
+          layout?.fy ?? null
+        );
 
         if (resolvedX !== null) {
           node.x = resolvedX;
-          node.fx = resolvedX;
+          node.fx = hasFixedX ? resolvedX : undefined;
         } else {
           node.fx = undefined;
           if (layout?.x !== undefined) {
@@ -237,7 +249,7 @@ const GraphView: React.FC<GraphViewProps> = ({
 
         if (resolvedY !== null) {
           node.y = resolvedY;
-          node.fy = resolvedY;
+          node.fy = hasFixedY ? resolvedY : undefined;
         } else {
           node.fy = undefined;
           if (layout?.y !== undefined) {
