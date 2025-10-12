@@ -76,6 +76,10 @@ function normalizeLayout(layout: GraphSnapshotPayload['layout']): GraphLayoutSna
     return acc;
   }, []);
 
+  if (normalizedEntries.length === 0) {
+    return undefined;
+  }
+
   return { nodes: Object.fromEntries(normalizedEntries) };
 }
 

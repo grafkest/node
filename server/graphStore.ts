@@ -200,9 +200,16 @@ export function persistSnapshot(snapshot: GraphSnapshotPayload): void {
       insertArtifact.free();
     }
 
+    const normalizedLayout = normalizeLayout(snapshot.layout);
+
     upsertMetadata('snapshotVersion', String(snapshot.version ?? GRAPH_SNAPSHOT_VERSION));
     upsertMetadata('updatedAt', snapshot.exportedAt ?? new Date().toISOString());
-    upsertMetadata('layout', JSON.stringify(normalizeLayout(snapshot.layout)));
+
+    if (normalizedLayout) {
+      upsertMetadata('layout', JSON.stringify(normalizedLayout));
+    } else {
+      deleteMetadata('layout');
+    }
 
     database.run('COMMIT');
     persistDatabase();
@@ -394,9 +401,11 @@ function safeParseLayout(raw: string): GraphLayoutSnapshot | undefined {
   }
 }
 
-function normalizeLayout(layout: GraphLayoutSnapshot | undefined | null): GraphLayoutSnapshot {
+function normalizeLayout(
+  layout: GraphLayoutSnapshot | undefined | null
+): GraphLayoutSnapshot | undefined {
   if (!layout || typeof layout !== 'object' || !layout.nodes) {
-    return { nodes: {} };
+    return undefined;
   }
 
   const entries = Object.entries(layout.nodes).reduce<
@@ -429,6 +438,10 @@ function normalizeLayout(layout: GraphLayoutSnapshot | undefined | null): GraphL
     return acc;
   }, []);
 
+  if (entries.length === 0) {
+    return undefined;
+  }
+
   return { nodes: Object.fromEntries(entries) };
 }
 
@@ -457,6 +470,17 @@ function upsertMetadata(key: string, value: string): void {
 
   try {
     statement.run([key, value]);
+  } finally {
+    statement.free();
+  }
+}
+
+function deleteMetadata(key: string): void {
+  const database = assertDatabase();
+  const statement = database.prepare('DELETE FROM metadata WHERE key = ?');
+
+  try {
+    statement.run([key]);
   } finally {
     statement.free();
   }

@@ -10,11 +10,17 @@ import {
   loadSnapshot,
   persistSnapshot
 } from './graphStore';
-import { GRAPH_SNAPSHOT_VERSION, type GraphSnapshotPayload } from '../src/types/graph';
+import {
+  GRAPH_SNAPSHOT_VERSION,
+  type GraphSnapshotPayload
+} from '../src/types/graph';
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
-  modules as initialModules
+  modules as initialModules,
+  type ArtifactNode,
+  type DomainNode,
+  type ModuleNode
 } from '../src/data';
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-store-tests-'));
@@ -214,4 +220,136 @@ test('normalizes invalid layout entries on persist', { concurrency: false }, asy
   assert.deepEqual(loaded.layout?.nodes.valid, { x: 1, y: 2, fy: 3 });
   assert.ok(!('invalidNumbers' in loaded.layout!.nodes));
   assert.deepEqual(loaded.layout?.nodes.withInfinity, { x: 3, y: 4, fx: 6 });
+});
+
+test('supports complex graph authoring flows', { concurrency: false }, async () => {
+  await initializeGraphStore({ databasePath, seedWithInitialData: true });
+
+  const snapshot = loadSnapshot();
+
+  const newDomain: DomainNode = {
+    id: 'domain-synthetic-ai',
+    name: 'Синтетический интеллект',
+    description: 'Экспериментальные сервисы для генеративного дизайна',
+    children: [
+      {
+        id: 'domain-generative-blueprints',
+        name: 'Генеративные схемы',
+        description: 'Автоматический подбор инфраструктурных сценариев'
+      }
+    ]
+  };
+
+  const newArtifact: ArtifactNode = {
+    id: 'artifact-ai-blueprint',
+    name: 'AI Blueprint',
+    description: 'Генеративная схема инфраструктуры',
+    domainId: newDomain.children![0].id,
+    producedBy: 'module-ai-orchestrator',
+    consumerIds: ['module-infraplan-layout'],
+    dataType: 'json',
+    sampleUrl: 'https://example.com/blueprint.json'
+  };
+
+  const newModule: ModuleNode = {
+    id: 'module-ai-orchestrator',
+    name: 'AI Orchestrator',
+    description: 'Генерирует инфраструктурные сценарии на основе ML',
+    domains: [newDomain.children![0].id],
+    team: 'AI Lab',
+    productName: 'Nedra.Production AI',
+    projectTeam: [],
+    technologyStack: ['PyTorch', 'FastAPI'],
+    localization: 'ru',
+    ridOwner: { company: 'АО «Nedra Digital»', division: 'AI Лаборатория' },
+    userStats: { companies: 2, licenses: 25 },
+    status: 'in-dev',
+    repository: 'https://git.nedra.digital/ai/orchestrator',
+    api: 'REST /api/v1/orchestrator',
+    specificationUrl: '#spec-ai',
+    apiContractsUrl: '#contracts-ai',
+    techDesignUrl: '#design-ai',
+    architectureDiagramUrl: '#arch-ai',
+    licenseServerIntegrated: false,
+    libraries: [],
+    clientType: 'web',
+    deploymentTool: 'kubernetes',
+    dependencies: ['module-infraplan-datahub'],
+    produces: [newArtifact.id],
+    reuseScore: 0.42,
+    metrics: { tests: 12, coverage: 68, automationRate: 45 },
+    dataIn: [
+      {
+        id: 'ai-input-1',
+        label: 'Нормализованные данные',
+        sourceId: 'artifact-infraplan-source-pack'
+      }
+    ],
+    dataOut: [
+      {
+        id: 'ai-output-1',
+        label: 'Генеративные схемы',
+        consumerIds: ['module-infraplan-layout']
+      }
+    ],
+    formula: 'scenario = orchestrate(data)',
+    nonFunctional: {
+      responseTimeMs: 250,
+      throughputRps: 25,
+      resourceConsumption: '8 vCPU / 32 GB RAM',
+      baselineUsers: 10
+    }
+  };
+
+  const updatedSnapshot: GraphSnapshotPayload = {
+    version: snapshot.version,
+    exportedAt: new Date().toISOString(),
+    domains: [...snapshot.domains, newDomain],
+    modules: [...snapshot.modules, newModule],
+    artifacts: [...snapshot.artifacts, newArtifact],
+    layout: {
+      nodes: {
+        ...snapshot.layout?.nodes,
+        [newModule.id]: { x: 420, y: 120 },
+        [newArtifact.id]: { x: 520, y: 170 }
+      }
+    }
+  };
+
+  persistSnapshot(updatedSnapshot);
+
+  const reloaded = loadSnapshot();
+
+  assert.ok(reloaded.domains.some((domain) => domain.id === newDomain.id));
+  const childDomain = reloaded.domains
+    .flatMap((domain) => domain.children ?? [])
+    .find((domain) => domain?.id === newDomain.children![0].id);
+  assert.ok(childDomain);
+
+  const persistedModule = reloaded.modules.find((module) => module.id === newModule.id);
+  assert.deepEqual(persistedModule, newModule);
+
+  const persistedArtifact = reloaded.artifacts.find((artifact) => artifact.id === newArtifact.id);
+  assert.deepEqual(persistedArtifact, newArtifact);
+
+  assert.deepEqual(reloaded.layout?.nodes[newModule.id], { x: 420, y: 120 });
+  assert.deepEqual(reloaded.layout?.nodes[newArtifact.id], { x: 520, y: 170 });
+});
+
+test('removes persisted layout metadata when positions are absent', { concurrency: false }, async () => {
+  await initializeGraphStore({ databasePath, seedWithInitialData: false });
+
+  const snapshot: GraphSnapshotPayload = {
+    version: GRAPH_SNAPSHOT_VERSION,
+    exportedAt: new Date().toISOString(),
+    domains: [],
+    modules: [],
+    artifacts: [],
+    layout: { nodes: {} }
+  };
+
+  persistSnapshot(snapshot);
+  const loaded = loadSnapshot();
+
+  assert.equal(loaded.layout, undefined);
 });
