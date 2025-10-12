@@ -1964,7 +1964,7 @@ function App() {
                   placeholder="Например, Экспериментальный"
                   value={graphNameDraft}
                   disabled={isGraphActionInProgress}
-                  onChange={({ value }) => setGraphNameDraft(value ?? '')}
+                  onChange={(value) => setGraphNameDraft(value ?? '')}
                 />
                 <Select<{ label: string; value: string }>
                   size="s"
