@@ -224,8 +224,18 @@ const GraphView: React.FC<GraphViewProps> = ({
         const hasFixedX = typeof layout?.fx === 'number' && Number.isFinite(layout.fx);
         const hasFixedY = typeof layout?.fy === 'number' && Number.isFinite(layout.fy);
 
-        const resolvedX = resolveCoordinate(node.x, layout?.x ?? null, layout?.fx ?? null);
-        const resolvedY = resolveCoordinate(node.y, layout?.y ?? null, layout?.fy ?? null);
+        const resolvedX = resolveCoordinate(
+          node.x,
+          node.fx,
+          layout?.x ?? null,
+          layout?.fx ?? null
+        );
+        const resolvedY = resolveCoordinate(
+          node.y,
+          node.fy,
+          layout?.y ?? null,
+          layout?.fy ?? null
+        );
 
         if (resolvedX !== null) {
           node.x = resolvedX;
@@ -324,11 +334,16 @@ function roundCoordinate(value: number): number {
 
 function resolveCoordinate(
   primary: unknown,
+  fallback: unknown,
   stored: number | null,
   storedFixed: number | null
 ): number | null {
   if (typeof primary === 'number' && Number.isFinite(primary)) {
     return roundCoordinate(primary);
+  }
+
+  if (typeof fallback === 'number' && Number.isFinite(fallback)) {
+    return roundCoordinate(fallback);
   }
 
   if (typeof storedFixed === 'number' && Number.isFinite(storedFixed)) {
