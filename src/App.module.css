@@ -42,7 +42,8 @@
 }
 
 .noticeError {
-  background: var(--color-bg-alert);
+  background: #ffecec;
+  border-bottom-color: rgba(191, 18, 52, 0.35);
 }
 
 .header {
