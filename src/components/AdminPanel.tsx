@@ -118,6 +118,8 @@ const adminTabs = [
   { label: 'Артефакты', value: 'artifact' }
 ] as const satisfies readonly { label: string; value: AdminTab }[];
 
+const ROOT_DOMAIN_OPTION = '__root__';
+
 const statusLabels: Record<ModuleStatus, string> = {
   'in-dev': 'В разработке',
   production: 'В эксплуатации',
@@ -190,6 +192,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       .map<SelectItem<string>>((artifact) => ({ label: artifact.name, value: artifact.id }));
     return [{ label: 'Создать новый артефакт', value: '__new__' }, ...base];
   }, [artifacts]);
+
+  const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
+  const domainParentItems = useMemo(
+    () => [ROOT_DOMAIN_OPTION, ...domainOptions.slice(1).map((item) => item.value)],
+    [domainOptions]
+  );
+  const domainParentLabelMap = useMemo(
+    () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой домен', ...domainLabelMap }),
+    [domainLabelMap]
+  );
 
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
   const [selectedDomainId, setSelectedDomainId] = useState<string>('__new__');
@@ -356,7 +368,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               value={moduleSelectValue}
               getItemLabel={(item) => item.label}
               getItemKey={(item) => item.value}
-              onChange={({ value }) => {
+              onChange={(value) => {
                 if (value) {
                   setSelectedModuleId(value.value);
                 }
@@ -370,7 +382,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               value={domainSelectValue}
               getItemLabel={(item) => item.label}
               getItemKey={(item) => item.value}
-              onChange={({ value }) => {
+              onChange={(value) => {
                 if (value) {
                   setSelectedDomainId(value.value);
                 }
@@ -384,7 +396,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               value={artifactSelectValue}
               getItemLabel={(item) => item.label}
               getItemKey={(item) => item.value}
-              onChange={({ value }) => {
+              onChange={(value) => {
                 if (value) {
                   setSelectedArtifactId(value.value);
                 }
@@ -400,7 +412,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedModuleId === '__new__' ? 'create' : 'edit'}
             draft={moduleDraft}
             step={moduleStep}
-            domainItems={Object.keys(domainLabelMap)}
+            domainItems={leafDomainIds}
             domainLabelMap={domainLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
@@ -418,8 +430,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedDomainId === '__new__' ? 'create' : 'edit'}
             draft={domainDraft}
             step={domainStep}
-            domainItems={domainOptions.slice(1).map((item) => item.value)}
-            domainLabelMap={domainLabelMap}
+            parentItems={domainParentItems}
+            parentLabelMap={domainParentLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
             onChange={setDomainDraft}
@@ -434,7 +446,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedArtifactId === '__new__' ? 'create' : 'edit'}
             draft={artifactDraft}
             step={artifactStep}
-            domainItems={Object.keys(domainLabelMap)}
+            domainItems={leafDomainIds}
             domainLabelMap={domainLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
@@ -798,6 +810,9 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                     onChange={(value) => handleFieldChange('domainIds', value ?? [])}
                   />
                 </label>
+                <Text size="2xs" view="secondary" className={styles.hint}>
+                  Можно привязывать только конечные домены без дочерних областей.
+                </Text>
 
                 <div className={styles.fieldGroup}>
                   <label className={styles.field}>
@@ -1336,8 +1351,8 @@ type DomainFormProps = {
   mode: 'create' | 'edit';
   draft: DomainDraftPayload;
   step: number;
-  domainItems: string[];
-  domainLabelMap: Record<string, string>;
+  parentItems: string[];
+  parentLabelMap: Record<string, string>;
   moduleItems: string[];
   moduleLabelMap: Record<string, string>;
   onChange: (draft: DomainDraftPayload) => void;
@@ -1352,8 +1367,8 @@ const DomainForm: React.FC<DomainFormProps> = ({
   mode,
   draft,
   step,
-  domainItems,
-  domainLabelMap,
+  parentItems,
+  parentLabelMap,
   moduleItems,
   moduleLabelMap,
   onChange,
@@ -1366,6 +1381,17 @@ const DomainForm: React.FC<DomainFormProps> = ({
   };
 
   const current = Math.min(Math.max(step, 0), domainSections.length - 1);
+  const parentValue = draft.parentId ?? ROOT_DOMAIN_OPTION;
+  const isRootDomain = !draft.parentId;
+
+  const handleParentChange = (value: string | null) => {
+    if (!value || value === ROOT_DOMAIN_OPTION) {
+      onChange({ ...draft, parentId: undefined, moduleIds: [] });
+      return;
+    }
+
+    onChange({ ...draft, parentId: value });
+  };
 
   return (
     <div className={styles.formBody}>
@@ -1431,12 +1457,11 @@ const DomainForm: React.FC<DomainFormProps> = ({
                   </Text>
                   <Combobox<string>
                     size="s"
-                    items={domainItems}
-                    value={draft.parentId}
+                    items={parentItems}
+                    value={parentValue}
                     getItemKey={(item) => item}
-                    getItemLabel={(item) => domainLabelMap[item] ?? item}
-                    onChange={(value) => onChange({ ...draft, parentId: value ?? undefined })}
-                    placeholder="Корневой уровень"
+                    getItemLabel={(item) => parentLabelMap[item] ?? item}
+                    onChange={handleParentChange}
                   />
                 </label>
                 <label className={styles.field}>
@@ -1448,11 +1473,17 @@ const DomainForm: React.FC<DomainFormProps> = ({
                     items={moduleItems}
                     value={draft.moduleIds}
                     multiple
+                    disabled={isRootDomain}
                     getItemKey={(item) => item}
                     getItemLabel={(item) => moduleLabelMap[item] ?? item}
                     onChange={(value) => onChange({ ...draft, moduleIds: value ?? [] })}
                   />
                 </label>
+                {isRootDomain && (
+                  <Text size="2xs" view="secondary" className={styles.hint}>
+                    Корневые домены используются для группировки и не привязываются к модулям.
+                  </Text>
+                )}
               </>
             )}
 
@@ -1772,12 +1803,13 @@ function domainToDraft(
   const relatedModules = modules
     .filter((module) => module.domains.includes(domain.id))
     .map((module) => module.id);
+  const isLeaf = !domain.children || domain.children.length === 0;
 
   return {
     name: domain.name,
     description: domain.description ?? '',
     parentId: parentId ?? undefined,
-    moduleIds: relatedModules
+    moduleIds: isLeaf ? relatedModules : []
   };
 }
 
@@ -1795,11 +1827,25 @@ function artifactToDraft(artifact: ArtifactNode): ArtifactDraftPayload {
 
 function buildDomainLabelMap(domains: DomainNode[]): Record<string, string> {
   const map: Record<string, string> = {};
-  const flattened = flattenDomainTree(domains);
-  flattened.forEach((domain) => {
-    map[domain.id] = domain.name;
-  });
+
+  const visit = (nodes: DomainNode[], depth: number) => {
+    nodes.forEach((node) => {
+      const prefix = depth > 0 ? `${'— '.repeat(depth)}` : '';
+      map[node.id] = `${prefix}${node.name}`.trim();
+      if (node.children) {
+        visit(node.children, depth + 1);
+      }
+    });
+  };
+
+  visit(domains, 0);
   return map;
+}
+
+function collectLeafDomainIds(domains: DomainNode[]): string[] {
+  return flattenDomainTree(domains)
+    .filter((domain) => !domain.children || domain.children.length === 0)
+    .map((domain) => domain.id);
 }
 
 function buildModuleLabelMap(modules: ModuleNode[]): Record<string, string> {

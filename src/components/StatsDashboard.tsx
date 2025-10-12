@@ -132,7 +132,9 @@ const StatsDashboard = ({
   }, [reuseHistory]);
 
   const domainWithoutModules = useMemo(() => {
-    const flatDomains = flattenDomains(domains);
+    const flatDomains = flattenDomains(domains).filter(
+      (domain) => !domain.children || domain.children.length === 0
+    );
     const usage = new Map<string, number>();
 
     modules.forEach((module) => {
