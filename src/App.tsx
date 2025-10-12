@@ -1,8 +1,12 @@
+import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
+import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Layout } from '@consta/uikit/Layout';
 import { Loader } from '@consta/uikit/Loader';
+import { Select } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
+import { TextField } from '@consta/uikit/TextField';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
@@ -18,9 +22,17 @@ import {
   type GraphLayoutNodePosition,
   type GraphLayoutSnapshot,
   type GraphSnapshotPayload,
+  type GraphSummary,
   type GraphSyncStatus
 } from './types/graph';
-import { fetchGraphSnapshot, persistGraphSnapshot } from './services/graphStorage';
+import {
+  createGraph as createGraphRequest,
+  deleteGraph as deleteGraphRequest,
+  fetchGraphSnapshot,
+  fetchGraphSummaries,
+  importGraphFromSource,
+  persistGraphSnapshot
+} from './services/graphStorage';
 import GraphView, { type GraphNode } from './components/GraphView';
 import NodeDetails from './components/NodeDetails';
 import {
@@ -31,10 +43,10 @@ import {
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
-  type ModuleInput,
+  type ModuleMetrics,
   type ModuleNode,
-  type ModuleOutput,
-  type ModuleStatus
+  type ModuleStatus,
+  type NonFunctionalRequirements
 } from './data';
 import styles from './App.module.css';
 
@@ -60,6 +72,10 @@ type AdminNotice = {
 };
 
 function App() {
+  const [graphs, setGraphs] = useState<GraphSummary[]>([]);
+  const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
+  const [isGraphsLoading, setIsGraphsLoading] = useState(true);
+  const [graphListError, setGraphListError] = useState<string | null>(null);
   const [domainData, setDomainData] = useState<DomainNode[]>(initialDomainTree);
   const [moduleData, setModuleDataState] = useState<ModuleNode[]>(() =>
     recalculateReuseScores(initialModules)
@@ -87,12 +103,72 @@ function App() {
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
+  const activeGraphIdRef = useRef<string | null>(null);
+  const loadedGraphsRef = useRef(new Set<string>());
   const adminNoticeIdRef = useRef(0);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
   );
+  const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
+  const [graphNameDraft, setGraphNameDraft] = useState('');
+  const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
+  const [graphCopyOptions, setGraphCopyOptions] = useState<
+    Set<'domains' | 'modules' | 'artifacts'>
+  >(() => new Set(['domains', 'modules', 'artifacts']));
+  const [isGraphActionInProgress, setIsGraphActionInProgress] = useState(false);
+  const [graphActionStatus, setGraphActionStatus] = useState<
+    { type: 'success' | 'error'; message: string } | null
+  >(null);
+  const refreshGraphs = useCallback(
+    async (
+      preferredGraphId?: string | null,
+      options: { preserveSelection?: boolean } = {}
+    ) => {
+      const { preserveSelection = true } = options;
+      setIsGraphsLoading(true);
+      try {
+        const list = await fetchGraphSummaries();
+        setGraphs(list);
+        setGraphListError(null);
+        loadedGraphsRef.current = new Set(
+          [...loadedGraphsRef.current].filter((id) => list.some((graph) => graph.id === id))
+        );
+        setActiveGraphId((prev) => {
+          if (preferredGraphId && list.some((graph) => graph.id === preferredGraphId)) {
+            return preferredGraphId;
+          }
+          if (preserveSelection && prev && list.some((graph) => graph.id === prev)) {
+            return prev;
+          }
+          const fallback = list.find((graph) => graph.isDefault) ?? list[0] ?? null;
+          return fallback ? fallback.id : null;
+        });
+      } catch (error) {
+        console.error('Не удалось обновить список графов', error);
+        setGraphListError(
+          error instanceof Error ? error.message : 'Не удалось загрузить список графов.'
+        );
+        setGraphs([]);
+        setActiveGraphId(null);
+        setIsSnapshotLoading(false);
+        setIsReloadingSnapshot(false);
+        hasLoadedSnapshotRef.current = false;
+      } finally {
+        setIsGraphsLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    void refreshGraphs(null, { preserveSelection: false });
+  }, [refreshGraphs]);
+
+  useEffect(() => {
+    activeGraphIdRef.current = activeGraphId;
+  }, [activeGraphId]);
 
   const showAdminNotice = useCallback(
     (type: AdminNotice['type'], message: string) => {
@@ -135,7 +211,7 @@ function App() {
   );
 
   const loadSnapshot = useCallback(
-    async ({ withOverlay }: { withOverlay?: boolean } = {}) => {
+    async (graphId: string, { withOverlay }: { withOverlay?: boolean } = {}) => {
       activeSnapshotControllerRef.current?.abort();
 
       const controller = new AbortController();
@@ -148,8 +224,12 @@ function App() {
       }
 
       try {
-        const snapshot = await fetchGraphSnapshot(controller.signal);
+        const snapshot = await fetchGraphSnapshot(graphId, controller.signal);
+        if (controller.signal.aborted || activeGraphIdRef.current !== graphId) {
+          return;
+        }
         applySnapshot(snapshot);
+        loadedGraphsRef.current.add(graphId);
         skipNextSyncRef.current = true;
         setSnapshotError(null);
         setSnapshotRetryAttempt(0);
@@ -159,16 +239,16 @@ function App() {
           message: 'Данные синхронизированы с сервером.'
         });
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (controller.signal.aborted || activeGraphIdRef.current !== graphId) {
           return;
         }
 
-        console.error('Не удалось загрузить граф из хранилища', error);
+        console.error(`Не удалось загрузить граф ${graphId}`, error);
         const detail = error instanceof Error ? error.message : null;
         setSnapshotError(
           detail
-            ? `Не удалось загрузить данные из хранилища (${detail}). Используются локальные данные.`
-            : 'Не удалось загрузить данные из хранилища. Используются локальные данные.'
+            ? `Не удалось загрузить данные графа (${detail}). Используются локальные данные.`
+            : 'Не удалось загрузить данные графа. Используются локальные данные.'
         );
         setSnapshotRetryAttempt((attempt) => attempt + 1);
         setIsSyncAvailable(false);
@@ -182,16 +262,16 @@ function App() {
       } finally {
         const isCurrentRequest = activeSnapshotControllerRef.current === controller;
 
-        if (withOverlay) {
-          if (isCurrentRequest) {
-            setIsSnapshotLoading(false);
-          }
-        } else if (isCurrentRequest) {
-          setIsReloadingSnapshot(false);
-        }
-
         if (isCurrentRequest) {
           activeSnapshotControllerRef.current = null;
+        }
+
+        if (withOverlay) {
+          if (isCurrentRequest && activeGraphIdRef.current === graphId) {
+            setIsSnapshotLoading(false);
+          }
+        } else if (isCurrentRequest && activeGraphIdRef.current === graphId) {
+          setIsReloadingSnapshot(false);
         }
       }
     },
@@ -199,15 +279,27 @@ function App() {
   );
 
   useEffect(() => {
-    void loadSnapshot({ withOverlay: true });
+    if (!activeGraphId) {
+      return;
+    }
+    hasLoadedSnapshotRef.current = false;
+    setIsSyncAvailable(false);
+    setSyncStatus(null);
+    setSnapshotError(null);
+    setSnapshotRetryAttempt(0);
+    setIsReloadingSnapshot(false);
+    setIsSnapshotLoading(true);
+    void loadSnapshot(activeGraphId, { withOverlay: true });
+  }, [activeGraphId, loadSnapshot]);
 
+  useEffect(() => {
     return () => {
       if (activeSnapshotControllerRef.current) {
         activeSnapshotControllerRef.current.abort();
         activeSnapshotControllerRef.current = null;
       }
     };
-  }, [loadSnapshot]);
+  }, []);
 
   useEffect(() => {
     if (!snapshotError || snapshotRetryAttempt === 0 || typeof window === 'undefined') {
@@ -220,7 +312,9 @@ function App() {
 
     const backoffDelay = Math.min(30000, 2000 * 2 ** (snapshotRetryAttempt - 1));
     const timer = window.setTimeout(() => {
-      void loadSnapshot({ withOverlay: false });
+      if (activeGraphIdRef.current) {
+        void loadSnapshot(activeGraphIdRef.current, { withOverlay: false });
+      }
     }, backoffDelay);
 
     return () => {
@@ -273,7 +367,7 @@ function App() {
   }, [moduleData, artifactData]);
 
   useEffect(() => {
-    if (!isSyncAvailable || !hasLoadedSnapshotRef.current) {
+    if (!isSyncAvailable || !hasLoadedSnapshotRef.current || !activeGraphId) {
       return;
     }
 
@@ -294,10 +388,14 @@ function App() {
       return { state: 'saving', message: 'Сохраняем изменения в хранилище...' };
     });
 
+    const graphId = activeGraphId;
+    const exportTimestamp = new Date().toISOString();
+
     persistGraphSnapshot(
+      graphId,
       {
         version: GRAPH_SNAPSHOT_VERSION,
-        exportedAt: new Date().toISOString(),
+        exportedAt: exportTimestamp,
         modules: moduleData,
         domains: domainData,
         artifacts: artifactData,
@@ -313,6 +411,11 @@ function App() {
           state: 'idle',
           message: `Сохранено ${new Date().toLocaleTimeString()}`
         });
+        setGraphs((prev) =>
+          prev.map((graph) =>
+            graph.id === graphId ? { ...graph, updatedAt: exportTimestamp } : graph
+          )
+        );
       })
       .catch((error) => {
         if (cancelled || controller.signal.aborted) {
@@ -330,7 +433,14 @@ function App() {
       cancelled = true;
       controller.abort();
     };
-  }, [artifactData, domainData, moduleData, isSyncAvailable, layoutPositions]);
+  }, [
+    artifactData,
+    domainData,
+    moduleData,
+    isSyncAvailable,
+    layoutPositions,
+    activeGraphId
+  ]);
 
   const matchesModuleFilters = useCallback(
     (module: ModuleNode) => {
@@ -404,6 +514,61 @@ function App() {
     });
     return map;
   }, [artifactData]);
+
+  const graphSelectOptions = useMemo(
+    () =>
+      graphs.map((graph) => ({
+        label: graph.isDefault ? `${graph.name} • основной` : graph.name,
+        value: graph.id
+      })),
+    [graphs]
+  );
+
+  const graphSelectValue = useMemo(
+    () => graphSelectOptions.find((option) => option.value === activeGraphId) ?? null,
+    [graphSelectOptions, activeGraphId]
+  );
+
+  const graphSourceSelectValue = useMemo(
+    () => graphSelectOptions.find((option) => option.value === graphSourceIdDraft) ?? null,
+    [graphSelectOptions, graphSourceIdDraft]
+  );
+
+  const graphCopyOptionItems = useMemo(
+    () =>
+      [
+        { id: 'domains' as const, label: 'Домены' },
+        { id: 'modules' as const, label: 'Модули' },
+        { id: 'artifacts' as const, label: 'Артефакты' }
+      ],
+    []
+  );
+
+  const selectedGraphCopyOptionItems = useMemo(
+    () => graphCopyOptionItems.filter((item) => graphCopyOptions.has(item.id)),
+    [graphCopyOptionItems, graphCopyOptions]
+  );
+
+  const activeGraph = useMemo(
+    () => graphs.find((graph) => graph.id === activeGraphId) ?? null,
+    [graphs, activeGraphId]
+  );
+
+  const activeGraphBadge = useMemo(() => {
+    if (!activeGraph) {
+      return null;
+    }
+
+    return {
+      label: activeGraph.isDefault ? 'Основной граф' : 'Дополнительный граф',
+      status: activeGraph.isDefault ? ('success' as const) : ('system' as const)
+    };
+  }, [activeGraph]);
+
+  const sourceGraphDraft = useMemo(
+    () => graphs.find((graph) => graph.id === graphSourceIdDraft) ?? null,
+    [graphs, graphSourceIdDraft]
+  );
 
   const domainNameMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1468,7 +1633,7 @@ function App() {
       );
       showAdminNotice('success', `Артефакт «${normalizedName}» обновлён.`);
     },
-    [artifactData, showAdminNotice]
+    [artifactData, leafDomainIdSet, showAdminNotice]
   );
 
   const handleDeleteArtifact = useCallback(
@@ -1506,17 +1671,154 @@ function App() {
   const handleImportGraph = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
+      skipNextSyncRef.current = true;
     },
     [applySnapshot]
   );
 
-  if (isSnapshotLoading) {
+  const handleImportFromExistingGraph = useCallback(
+    async (request: {
+      graphId: string;
+      includeDomains: boolean;
+      includeModules: boolean;
+      includeArtifacts: boolean;
+    }) => {
+      try {
+        const snapshot = await importGraphFromSource(request);
+        applySnapshot(snapshot);
+        skipNextSyncRef.current = true;
+        setIsSyncAvailable(true);
+        return {
+          domains: snapshot.domains.length,
+          modules: snapshot.modules.length,
+          artifacts: snapshot.artifacts.length
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Не удалось импортировать данные графа.';
+        showAdminNotice('error', message);
+        throw error instanceof Error ? error : new Error(message);
+      }
+    },
+    [applySnapshot, showAdminNotice]
+  );
+
+  const handleSelectGraph = useCallback((graphId: string) => {
+    setGraphActionStatus(null);
+    setIsCreatePanelOpen(false);
+    setActiveGraphId(graphId);
+  }, []);
+
+  const handleSubmitCreateGraph = useCallback(async () => {
+    if (isGraphActionInProgress) {
+      return;
+    }
+
+    const trimmedName = graphNameDraft.trim();
+    if (!trimmedName) {
+      setGraphActionStatus({ type: 'error', message: 'Введите название графа.' });
+      return;
+    }
+
+    const includeDomains = graphCopyOptions.has('domains');
+    const includeModules = graphCopyOptions.has('modules');
+    const includeArtifacts = graphCopyOptions.has('artifacts');
+
+    if (graphSourceIdDraft && !includeDomains && !includeModules && !includeArtifacts) {
+      setGraphActionStatus({
+        type: 'error',
+        message: 'Выберите хотя бы один тип данных для копирования из выбранного графа.'
+      });
+      return;
+    }
+
+    setIsGraphActionInProgress(true);
+    try {
+      const created = await createGraphRequest({
+        name: trimmedName,
+        sourceGraphId: graphSourceIdDraft ?? undefined,
+        includeDomains,
+        includeModules,
+        includeArtifacts
+      });
+      setGraphActionStatus({
+        type: 'success',
+        message: `Граф «${created.name}» создан.`
+      });
+      setGraphNameDraft('');
+      setGraphSourceIdDraft(null);
+      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts']));
+      setIsCreatePanelOpen(false);
+      await refreshGraphs(created.id, { preserveSelection: false });
+      showAdminNotice('success', `Граф «${created.name}» создан.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось создать граф.';
+      setGraphActionStatus({ type: 'error', message });
+    } finally {
+      setIsGraphActionInProgress(false);
+    }
+  }, [
+    graphNameDraft,
+    graphSourceIdDraft,
+    graphCopyOptions,
+    isGraphActionInProgress,
+    refreshGraphs,
+    showAdminNotice
+  ]);
+
+  const handleDeleteGraph = useCallback(
+    async (graphId: string) => {
+      if (isGraphActionInProgress) {
+        return;
+      }
+
+      const target = graphs.find((graph) => graph.id === graphId);
+      if (!target) {
+        return;
+      }
+
+      if (target.isDefault) {
+        setGraphActionStatus({ type: 'error', message: 'Основной граф нельзя удалить.' });
+        return;
+      }
+
+      const confirmed =
+        typeof window !== 'undefined'
+          ? window.confirm(`Удалить граф «${target.name}» без возможности восстановления?`)
+          : true;
+
+      if (!confirmed) {
+        return;
+      }
+
+      setIsGraphActionInProgress(true);
+      setGraphActionStatus(null);
+      try {
+        await deleteGraphRequest(graphId);
+        await refreshGraphs(null, { preserveSelection: true });
+        setGraphActionStatus({ type: 'success', message: `Граф «${target.name}» удалён.` });
+        showAdminNotice('success', `Граф «${target.name}» удалён.`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Не удалось удалить граф.';
+        setGraphActionStatus({ type: 'error', message });
+      } finally {
+        setIsGraphActionInProgress(false);
+      }
+    },
+    [graphs, isGraphActionInProgress, refreshGraphs, showAdminNotice]
+  );
+
+  const shouldShowInitialLoader =
+    (isGraphsLoading && graphs.length === 0) ||
+    (isSnapshotLoading && !hasLoadedSnapshotRef.current);
+
+  if (shouldShowInitialLoader) {
     return (
       <Layout className={styles.app} direction="column">
         <div className={styles.loadingState}>
           <Loader size="m" />
           <Text size="s" view="secondary">
-            Загружаем актуальное состояние графа...
+            Загружаем доступные графы и их содержимое...
           </Text>
         </div>
       </Layout>
@@ -1548,6 +1850,11 @@ function App() {
     return 'Управляйте данными графа: обновляйте карточки модулей, доменов и артефактов, а также удаляйте устаревшие связи.';
   })();
 
+  const deleteGraphDisabled =
+    !activeGraph || activeGraph.isDefault || isGraphActionInProgress || isGraphsLoading;
+
+  const createButtonLabel = isCreatePanelOpen ? 'Отменить создание' : 'Создать граф';
+
   return (
     <Layout className={styles.app} direction="column">
       {snapshotError && (
@@ -1577,6 +1884,165 @@ function App() {
           <Text size="s" view="secondary">
             {headerDescription}
           </Text>
+          <div className={styles.graphSelector}>
+            <div className={styles.graphSelectorHeading}>
+              <Text size="xs" weight="semibold">
+                Текущий граф
+              </Text>
+              {activeGraph?.updatedAt && (
+                <Text size="xs" view="secondary">
+                  Обновлено: {new Date(activeGraph.updatedAt).toLocaleString()}
+                </Text>
+              )}
+            </div>
+            <div className={styles.graphSelectorControls}>
+              <Select<{ label: string; value: string }>
+                size="s"
+                items={graphSelectOptions}
+                value={graphSelectValue}
+                placeholder={isGraphsLoading ? 'Загрузка графов...' : 'Выберите граф'}
+                disabled={graphSelectOptions.length === 0 || isGraphsLoading}
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.value}
+                onChange={(option) => {
+                  if (option) {
+                    handleSelectGraph(option.value);
+                  }
+                }}
+              />
+              {activeGraphBadge && (
+                <Badge
+                  className={styles.graphBadge}
+                  size="s"
+                  view="filled"
+                  status={activeGraphBadge.status}
+                  label={activeGraphBadge.label}
+                />
+              )}
+              <Button
+                size="s"
+                view="secondary"
+                label={createButtonLabel}
+                onClick={() => {
+                  setIsCreatePanelOpen((prev) => !prev);
+                  setGraphActionStatus(null);
+                }}
+                disabled={isGraphsLoading}
+              />
+              <Button
+                size="s"
+                view="ghost"
+                label="Удалить граф"
+                onClick={() => {
+                  if (activeGraphId) {
+                    void handleDeleteGraph(activeGraphId);
+                  }
+                }}
+                disabled={deleteGraphDisabled}
+              />
+            </div>
+            {graphListError && (
+              <Text size="xs" view="alert">
+                {graphListError}
+              </Text>
+            )}
+            {!isCreatePanelOpen && graphActionStatus && (
+              <Text
+                size="xs"
+                view={graphActionStatus.type === 'error' ? 'alert' : 'success'}
+              >
+                {graphActionStatus.message}
+              </Text>
+            )}
+          </div>
+          {isCreatePanelOpen && (
+            <div className={styles.graphCreatePanel}>
+              <div className={styles.graphCreateRow}>
+                <TextField
+                  size="s"
+                  label="Название графа"
+                  placeholder="Например, Экспериментальный"
+                  value={graphNameDraft}
+                  disabled={isGraphActionInProgress}
+                  onChange={({ value }) => setGraphNameDraft(value ?? '')}
+                />
+                <Select<{ label: string; value: string }>
+                  size="s"
+                  items={graphSelectOptions}
+                  value={graphSourceSelectValue}
+                  getItemLabel={(item) => item.label}
+                  getItemKey={(item) => item.value}
+                  placeholder="Без копирования"
+                  disabled={isGraphActionInProgress || graphSelectOptions.length <= 1}
+                  onChange={(option) => {
+                    setGraphSourceIdDraft(option?.value ?? null);
+                  }}
+                  style={{ minWidth: 220 }}
+                />
+              </div>
+              <div className={styles.graphCopyOptions}>
+                <CheckboxGroup
+                  size="s"
+                  direction="row"
+                  items={graphCopyOptionItems}
+                  value={selectedGraphCopyOptionItems}
+                  getItemKey={(item) => item.id}
+                  getItemLabel={(item) => item.label}
+                  onChange={(items) => {
+                    setGraphCopyOptions(new Set((items ?? []).map((item) => item.id)));
+                  }}
+                  disabled={!graphSourceIdDraft || isGraphActionInProgress}
+                />
+                {graphSourceIdDraft && sourceGraphDraft && (
+                  <Badge
+                    className={styles.graphSourceBadge}
+                    size="xs"
+                    view="filled"
+                    status={sourceGraphDraft.isDefault ? 'success' : 'system'}
+                    label={
+                      sourceGraphDraft.isDefault
+                        ? `Источник: ${sourceGraphDraft.name} • основной`
+                        : `Источник: ${sourceGraphDraft.name}`
+                    }
+                  />
+                )}
+                <Text size="xs" view="secondary">
+                  {graphSourceIdDraft
+                    ? 'Выберите, какие данные скопировать из выбранного графа.'
+                    : 'Если источник не выбран, граф создаётся пустым.'}
+                </Text>
+              </div>
+              <div className={styles.graphCreateActions}>
+                <Button
+                  size="s"
+                  label="Создать граф"
+                  onClick={() => {
+                    void handleSubmitCreateGraph();
+                  }}
+                  loading={isGraphActionInProgress}
+                  disabled={isGraphActionInProgress}
+                />
+                <Button
+                  size="s"
+                  view="ghost"
+                  label="Отмена"
+                  onClick={() => {
+                    setIsCreatePanelOpen(false);
+                    setGraphActionStatus(null);
+                  }}
+                  disabled={isGraphActionInProgress}
+                />
+              </div>
+              {graphActionStatus && (
+                <Text
+                  size="xs"
+                  view={graphActionStatus.type === 'error' ? 'alert' : 'success'}
+                >
+                  {graphActionStatus.message}
+                </Text>
+              )}
+            </div>
+          )}
         </div>
         <Tabs
           size="s"
@@ -1717,6 +2183,10 @@ function App() {
           domains={domainData}
           artifacts={artifactData}
           onImport={handleImportGraph}
+          onImportFromGraph={handleImportFromExistingGraph}
+          graphs={graphs}
+          activeGraphId={activeGraphId}
+          isGraphListLoading={isGraphsLoading}
           syncStatus={syncStatus}
           layout={layoutSnapshot}
         />

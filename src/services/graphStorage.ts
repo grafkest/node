@@ -1,14 +1,77 @@
 import {
   GRAPH_SNAPSHOT_VERSION,
+  type GraphCopyRequest,
   type GraphLayoutSnapshot,
-  type GraphSnapshotPayload
+  type GraphSnapshotPayload,
+  type GraphSummary
 } from '../types/graph';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
-const GRAPH_ENDPOINT = '/api/graph';
+const GRAPHS_ENDPOINT = '/api/graphs';
 
-export async function fetchGraphSnapshot(signal?: AbortSignal): Promise<GraphSnapshotPayload> {
-  const response = await fetch(`${API_BASE}${GRAPH_ENDPOINT}`, { signal });
+export async function fetchGraphSummaries(signal?: AbortSignal): Promise<GraphSummary[]> {
+  const response = await fetch(`${API_BASE}${GRAPHS_ENDPOINT}`, { signal });
+
+  if (!response.ok) {
+    throw new Error(`Не удалось загрузить список графов. Код ответа: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as GraphSummary[];
+  return payload.map((graph) => ({
+    ...graph,
+    createdAt: graph.createdAt,
+    updatedAt: graph.updatedAt ?? undefined,
+    isDefault: Boolean(graph.isDefault)
+  }));
+}
+
+export async function createGraph(
+  payload: {
+    name: string;
+    sourceGraphId?: string | null;
+    includeDomains: boolean;
+    includeModules: boolean;
+    includeArtifacts: boolean;
+  },
+  signal?: AbortSignal
+): Promise<GraphSummary> {
+  const response = await fetch(`${API_BASE}${GRAPHS_ENDPOINT}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(
+      message ?? `Не удалось создать граф. Код ответа: ${response.status}`
+    );
+  }
+
+  const graph = (await response.json()) as GraphSummary;
+  return { ...graph, isDefault: Boolean(graph.isDefault), updatedAt: graph.updatedAt ?? undefined };
+}
+
+export async function deleteGraph(graphId: string, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(`${API_BASE}${GRAPHS_ENDPOINT}/${encodeURIComponent(graphId)}`, {
+    method: 'DELETE',
+    signal
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message ?? `Не удалось удалить граф. Код ответа: ${response.status}`);
+  }
+}
+
+export async function fetchGraphSnapshot(
+  graphId: string,
+  signal?: AbortSignal
+): Promise<GraphSnapshotPayload> {
+  const response = await fetch(`${API_BASE}${GRAPHS_ENDPOINT}/${encodeURIComponent(graphId)}`, {
+    signal
+  });
 
   if (!response.ok) {
     throw new Error(`Не удалось загрузить граф. Код ответа: ${response.status}`);
@@ -26,10 +89,11 @@ export async function fetchGraphSnapshot(signal?: AbortSignal): Promise<GraphSna
 }
 
 export async function persistGraphSnapshot(
+  graphId: string,
   snapshot: GraphSnapshotPayload,
   signal?: AbortSignal
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}${GRAPH_ENDPOINT}`, {
+  const response = await fetch(`${API_BASE}${GRAPHS_ENDPOINT}/${encodeURIComponent(graphId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(snapshot),
@@ -83,6 +147,24 @@ export function normalizeLayoutSnapshot(
   }
 
   return { nodes: Object.fromEntries(normalizedEntries) };
+}
+
+export async function importGraphFromSource(
+  request: GraphCopyRequest,
+  signal?: AbortSignal
+): Promise<GraphSnapshotPayload> {
+  const snapshot = await fetchGraphSnapshot(request.graphId, signal);
+  return {
+    version: snapshot.version,
+    exportedAt: snapshot.exportedAt,
+    domains: request.includeDomains ? snapshot.domains : [],
+    modules: request.includeModules ? snapshot.modules : [],
+    artifacts: request.includeArtifacts ? snapshot.artifacts : [],
+    layout:
+      request.includeModules && snapshot.layout
+        ? normalizeLayoutSnapshot(snapshot.layout) ?? undefined
+        : undefined
+  };
 }
 
 async function readErrorMessage(response: Response): Promise<string | null> {
