@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm exec vite",
     "server": "npm exec tsx server/index.ts",
+    "test:server": "npm exec tsx --test server/graphStore.test.ts",
     "build": "npm exec vite build",
     "preview": "npm exec vite preview",
     "lint": "eslint ."
