@@ -107,6 +107,10 @@
   resize: vertical;
 }
 
+.select {
+  width: 100%;
+}
+
 .textarea {
   min-height: 96px;
 }
@@ -131,6 +135,19 @@
   gap: 12px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.companyInlineForm {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.companyInlineButtons {
+  display: flex;
+  gap: 8px;
 }
 
 .chipList {

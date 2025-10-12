@@ -211,6 +211,10 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
     );
   }
 
+  const companyUsage = node.userStats.companies;
+  const totalCompanies = companyUsage.length;
+  const totalLicenses = companyUsage.reduce((sum, company) => sum + company.licenses, 0);
+
   const sections: { id: SectionId; title: string; content: React.ReactNode }[] = [
     {
       id: 'general',
@@ -246,10 +250,30 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
           <InfoRow label="Локализация функции">
             <Text size="s">{node.localization}</Text>
           </InfoRow>
-          <InfoRow label="Количество пользователей">
-            <Text size="s">
-              {node.userStats.companies} компаний, {node.userStats.licenses} лицензий
-            </Text>
+          <InfoRow label="Использование компаниями">
+            {companyUsage.length === 0 ? (
+              <Text size="s" view="secondary">
+                Нет данных о компаниях
+              </Text>
+            ) : (
+              <>
+                <Text size="s">
+                  {formatCompanyCount(totalCompanies)}, всего {formatNumber(totalLicenses)} {formatLicenseCount(totalLicenses)}
+                </Text>
+                <ul className={styles.companyList}>
+                  {companyUsage.map((company) => (
+                    <li key={company.name} className={styles.companyListItem}>
+                      <Text size="s" weight="semibold">
+                        {company.name}
+                      </Text>
+                      <Text size="s" view="secondary">
+                        {formatNumber(company.licenses)} {formatLicenseCount(company.licenses)}
+                      </Text>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </InfoRow>
           <InfoRow label="Стек технологий">
             <div className={styles.tagList}>
@@ -476,6 +500,36 @@ function statusLabel(status: GraphNode & { type: 'module' }['status']) {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ru-RU').format(value);
+}
+
+const companyPluralRules = new Intl.PluralRules('ru');
+
+function formatCompanyCount(count: number): string {
+  const category = companyPluralRules.select(count);
+
+  switch (category) {
+    case 'one':
+      return `${count} компания`;
+    case 'few':
+      return `${count} компании`;
+    default:
+      return `${count} компаний`;
+  }
+}
+
+const licensePluralRules = new Intl.PluralRules('ru');
+
+function formatLicenseCount(count: number): string {
+  const category = licensePluralRules.select(count);
+
+  switch (category) {
+    case 'one':
+      return 'лицензия';
+    case 'few':
+      return 'лицензии';
+    default:
+      return 'лицензий';
+  }
 }
 
 const teamCountPluralRules = new Intl.PluralRules('ru');

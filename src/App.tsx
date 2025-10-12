@@ -71,6 +71,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<ModuleStatus>>(new Set(allStatuses));
   const [productFilter, setProductFilter] = useState<string[]>(initialProducts);
+  const [companyFilter, setCompanyFilter] = useState<string | null>(null);
   const [showAllConnections, setShowAllConnections] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
@@ -106,6 +107,13 @@ function App() {
   }, []);
 
   const products = useMemo(() => buildProductList(moduleData), [moduleData]);
+  const companies = useMemo(() => buildCompanyList(moduleData), [moduleData]);
+
+  useEffect(() => {
+    if (companyFilter && !companies.includes(companyFilter)) {
+      setCompanyFilter(null);
+    }
+  }, [companyFilter, companies]);
 
   const applySnapshot = useCallback(
     (snapshot: GraphSnapshotPayload) => {
@@ -116,6 +124,7 @@ function App() {
       setSearch('');
       setStatusFilters(new Set(allStatuses));
       setProductFilter(buildProductList(snapshot.modules));
+      setCompanyFilter(null);
       setSelectedDomains(
         new Set(flattenDomainTree(snapshot.domains).map((domain) => domain.id))
       );
@@ -339,15 +348,23 @@ function App() {
           (member) =>
             member.fullName.toLowerCase().includes(normalizedSearch) ||
             member.role.toLowerCase().includes(normalizedSearch)
+        ) ||
+        module.userStats.companies.some((company) =>
+          company.name.toLowerCase().includes(normalizedSearch)
         );
       const matchesStatus = statusFilters.has(module.status);
       const matchesProduct =
         productFilter.length === 0
           ? false
           : productFilter.includes(module.productName);
-      return matchesDomain && matchesSearch && matchesStatus && matchesProduct;
+      const matchesCompany =
+        !companyFilter ||
+        module.userStats.companies.some((company) => company.name === companyFilter);
+      return (
+        matchesDomain && matchesSearch && matchesStatus && matchesProduct && matchesCompany
+      );
     },
-    [search, selectedDomains, statusFilters, productFilter]
+    [search, selectedDomains, statusFilters, productFilter, companyFilter]
   );
 
   const filteredModules = useMemo(
@@ -508,10 +525,17 @@ function App() {
         return;
       }
       const module = moduleById[moduleId];
-      if (module) {
-        extended.push(module);
-        existing.add(moduleId);
+      if (!module) {
+        return;
       }
+      if (
+        companyFilter &&
+        !module.userStats.companies.some((company) => company.name === companyFilter)
+      ) {
+        return;
+      }
+      extended.push(module);
+      existing.add(moduleId);
     });
 
     return extended;
@@ -521,7 +545,8 @@ function App() {
     moduleById,
     showAllConnections,
     artifactMap,
-    moduleDependents
+    moduleDependents,
+    companyFilter
   ]);
 
   const relevantDomainIds = useMemo(() => {
@@ -1625,6 +1650,12 @@ function App() {
                 setSelectedNode(null);
                 setProductFilter(nextProducts);
               }}
+              companies={companies}
+              companyFilter={companyFilter}
+              onCompanyChange={(nextCompany) => {
+                setSelectedNode(null);
+                setCompanyFilter(nextCompany);
+              }}
               showAllConnections={showAllConnections}
               onToggleConnections={(value) => setShowAllConnections(value)}
             />
@@ -1769,9 +1800,29 @@ function buildModuleFromDraft(
 
   const localization = draft.localization.trim() || 'ru';
 
+  const normalizedCompanies = draft.userStats.companies
+    .map((company) => {
+      const name = company.name?.trim() ?? '';
+      const licenses = Math.max(
+        0,
+        Math.trunc(typeof company.licenses === 'number' ? company.licenses : 0)
+      );
+      if (!name) {
+        return null;
+      }
+      return { name, licenses };
+    })
+    .filter((company): company is { name: string; licenses: number } => company !== null);
+
+  const mergedCompanies = new Map<string, number>();
+  normalizedCompanies.forEach((company) => {
+    mergedCompanies.set(company.name, (mergedCompanies.get(company.name) ?? 0) + company.licenses);
+  });
+
   const userStats = {
-    companies: Math.max(0, Number.isFinite(draft.userStats.companies) ? draft.userStats.companies : 0),
-    licenses: Math.max(0, Number.isFinite(draft.userStats.licenses) ? draft.userStats.licenses : 0)
+    companies: Array.from(mergedCompanies.entries())
+      .map(([name, licenses]) => ({ name, licenses }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
   };
 
   const reuseScore = clampNumber(draft.reuseScore ?? 0, 0, 100);
@@ -1878,6 +1929,21 @@ function clampNumber(value: number, min: number, max: number): number {
     return max;
   }
   return normalized;
+}
+
+function buildCompanyList(modules: ModuleNode[]): string[] {
+  const names = new Set<string>();
+
+  modules.forEach((module) => {
+    module.userStats.companies.forEach((company) => {
+      const normalized = company.name.trim();
+      if (normalized) {
+        names.add(normalized);
+      }
+    });
+  });
+
+  return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
 }
 
 function buildProductList(modules: ModuleNode[]): string[] {

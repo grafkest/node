@@ -19,6 +19,9 @@ type FiltersPanelProps = {
   products: string[];
   productFilter: string[];
   onProductChange: (products: string[]) => void;
+  companies: string[];
+  companyFilter: string | null;
+  onCompanyChange: (company: string | null) => void;
   showAllConnections: boolean;
   onToggleConnections: (value: boolean) => void;
 };
@@ -43,6 +46,9 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
   products,
   productFilter,
   onProductChange,
+  companies,
+  companyFilter,
+  onCompanyChange,
   showAllConnections,
   onToggleConnections
 }) => {
@@ -146,6 +152,23 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
         />
       </div>
 
+      <div className={styles.field}>
+        <Text size="s" weight="semibold">
+          Компания
+        </Text>
+        <Combobox
+          placeholder="Все компании"
+          size="s"
+          items={companies}
+          value={companyFilter}
+          getItemKey={(item) => item}
+          getItemLabel={(item) => item}
+          onChange={(value) => onCompanyChange(value ?? null)}
+          form="default"
+          className={styles.combobox}
+        />
+      </div>
+
       <div className={styles.switchRow}>
         <Switch
           checked={showAllConnections}
@@ -160,6 +183,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           onClick={() => {
             onSearchChange('');
             onProductChange(products);
+            onCompanyChange(null);
             statuses.forEach((status) => {
               if (!activeStatuses.has(status)) {
                 onToggleStatus(status);

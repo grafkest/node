@@ -48,9 +48,13 @@ export type LibraryDependency = {
   version: string;
 };
 
-export type UserStats = {
-  companies: number;
+export type CompanyUsage = {
+  name: string;
   licenses: number;
+};
+
+export type UserStats = {
+  companies: CompanyUsage[];
 };
 
 export type ModuleMetrics = {
@@ -212,7 +216,15 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Дирекция концептуального проектирования'
     },
-    userStats: { companies: 14, licenses: 620 },
+    userStats: {
+      companies: [
+        { name: 'АО «Западнефть Разработка»', licenses: 180 },
+        { name: 'ООО «Цифровая Добыча»', licenses: 140 },
+        { name: 'АО «Восток Инжиниринг»', licenses: 120 },
+        { name: 'АО «УралТех Сервис»', licenses: 100 },
+        { name: 'ООО «Арктик Ойл»', licenses: 80 }
+      ]
+    },
     status: 'production',
     repository: 'https://git.nedra.digital/infraplan/data-hub',
     api: 'REST /api/v2/infraplan/source-packs',
@@ -288,7 +300,14 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Дирекция концептуального проектирования'
     },
-    userStats: { companies: 9, licenses: 380 },
+    userStats: {
+      companies: [
+        { name: 'АО «Западнефть Разработка»', licenses: 120 },
+        { name: 'ПАО «СибНефть Добыча»', licenses: 100 },
+        { name: 'АО «Восток Инжиниринг»', licenses: 90 },
+        { name: 'ООО «Каспий ГеоСервис»', licenses: 70 }
+      ]
+    },
     status: 'production',
     repository: 'https://git.nedra.digital/infraplan/layout-engine',
     api: 'REST /api/v1/infraplan/layouts',
@@ -361,7 +380,15 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Дирекция концептуального проектирования'
     },
-    userStats: { companies: 11, licenses: 450 },
+    userStats: {
+      companies: [
+        { name: 'АО «Западнефть Разработка»', licenses: 120 },
+        { name: 'ООО «Цифровая Добыча»', licenses: 100 },
+        { name: 'ПАО «СибНефть Добыча»', licenses: 90 },
+        { name: 'АО «Байкал Нефтехим»', licenses: 80 },
+        { name: 'АО «Волжская Эксплуатация»', licenses: 60 }
+      ]
+    },
     status: 'production',
     repository: 'https://git.nedra.digital/infraplan/economics',
     api: 'REST /api/v1/infraplan/economics',
@@ -435,7 +462,16 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Операционный центр цифровых двойников'
     },
-    userStats: { companies: 12, licenses: 2100 },
+    userStats: {
+      companies: [
+        { name: 'ПАО «СибНефть Добыча»', licenses: 480 },
+        { name: 'АО «СеверЭнерго Бурение»', licenses: 420 },
+        { name: 'ООО «Каспий ГеоСервис»', licenses: 360 },
+        { name: 'АО «Байкал Нефтехим»', licenses: 340 },
+        { name: 'ООО «Нордик Потенциал»', licenses: 300 },
+        { name: 'АО «Волжская Эксплуатация»', licenses: 200 }
+      ]
+    },
     status: 'production',
     repository: 'https://git.nedra.digital/dtwin/monitoring',
     api: 'gRPC dtwin.Telemetry/Stream',
@@ -511,7 +547,15 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Операционный центр цифровых двойников'
     },
-    userStats: { companies: 10, licenses: 1500 },
+    userStats: {
+      companies: [
+        { name: 'ПАО «СибНефть Добыча»', licenses: 400 },
+        { name: 'АО «СеверЭнерго Бурение»', licenses: 350 },
+        { name: 'ООО «Цифровая Добыча»', licenses: 300 },
+        { name: 'АО «Восток Инжиниринг»', licenses: 250 },
+        { name: 'АО «Прикамский Промысел»', licenses: 200 }
+      ]
+    },
     status: 'production',
     repository: 'https://git.nedra.digital/dtwin/optimizer',
     api: 'REST /api/v1/dtwin/optimization-orders',
@@ -589,7 +633,14 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Операционный центр цифровых двойников'
     },
-    userStats: { companies: 5, licenses: 420 },
+    userStats: {
+      companies: [
+        { name: 'АО «СеверЭнерго Бурение»', licenses: 140 },
+        { name: 'ООО «Арктик Ойл»', licenses: 110 },
+        { name: 'АО «УралТех Сервис»', licenses: 90 },
+        { name: 'ООО «Тюменский Ресурс»', licenses: 80 }
+      ]
+    },
     status: 'in-dev',
     repository: 'https://git.nedra.digital/dtwin/remote-ops',
     api: 'gRPC dtwin.RemoteControl/Dispatch',
@@ -662,7 +713,15 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Центр внутрискважинных операций'
     },
-    userStats: { companies: 8, licenses: 730 },
+    userStats: {
+      companies: [
+        { name: 'АО «Западнефть Разработка»', licenses: 180 },
+        { name: 'АО «УралТех Сервис»', licenses: 160 },
+        { name: 'АО «Прикамский Промысел»', licenses: 150 },
+        { name: 'ООО «Енисей ТехИнтеграция»', licenses: 130 },
+        { name: 'АО «Полярное Бурение»', licenses: 110 }
+      ]
+    },
     status: 'production',
     repository: 'https://git.nedra.digital/wwo/planner',
     api: 'REST /api/v1/wwo/plans',
@@ -735,7 +794,14 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Центр внутрискважинных операций'
     },
-    userStats: { companies: 6, licenses: 1250 },
+    userStats: {
+      companies: [
+        { name: 'АО «Прикамский Промысел»', licenses: 360 },
+        { name: 'ООО «Енисей ТехИнтеграция»', licenses: 320 },
+        { name: 'АО «Полярное Бурение»', licenses: 300 },
+        { name: 'ООО «Тюменский Ресурс»', licenses: 270 }
+      ]
+    },
     status: 'production',
     repository: 'https://git.nedra.digital/wwo/execution',
     api: 'REST /api/v1/wwo/operations-log',
@@ -808,7 +874,14 @@ export const modules: ModuleNode[] = [
       company: 'АО «Nedra Digital»',
       division: 'Центр внутрискважинных операций'
     },
-    userStats: { companies: 7, licenses: 980 },
+    userStats: {
+      companies: [
+        { name: 'АО «УралТех Сервис»', licenses: 260 },
+        { name: 'ООО «Енисей ТехИнтеграция»', licenses: 240 },
+        { name: 'АО «Полярное Бурение»', licenses: 240 },
+        { name: 'АО «Волжская Эксплуатация»', licenses: 240 }
+      ]
+    },
     status: 'in-dev',
     repository: 'https://git.nedra.digital/wwo/analytics',
     api: 'GraphQL /wwo/analytics',
@@ -879,7 +952,13 @@ export const modules: ModuleNode[] = [
     technologyStack: ['TypeScript', 'FastAPI', 'Apache Kafka', 'ClickHouse'],
     localization: 'ru',
     ridOwner: { company: 'АО «Nedra Digital»', division: 'Дирекция цифровых операций' },
-    userStats: { companies: 3, licenses: 140 },
+    userStats: {
+      companies: [
+        { name: 'ООО «Нордик Потенциал»', licenses: 60 },
+        { name: 'ООО «Каспий ГеоСервис»', licenses: 50 },
+        { name: 'АО «Полярное Бурение»', licenses: 30 }
+      ]
+    },
     status: 'in-dev',
     repository: 'https://git.nedra.digital/labs/digital-experiments',
     api: 'gRPC telemetry.TelemetryService',

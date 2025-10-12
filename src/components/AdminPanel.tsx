@@ -119,6 +119,7 @@ const adminTabs = [
 ] as const satisfies readonly { label: string; value: AdminTab }[];
 
 const ROOT_DOMAIN_OPTION = '__root__';
+const CREATE_COMPANY_OPTION = '__create__';
 
 const statusLabels: Record<ModuleStatus, string> = {
   'in-dev': 'В разработке',
@@ -192,6 +193,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       .map<SelectItem<string>>((artifact) => ({ label: artifact.name, value: artifact.id }));
     return [{ label: 'Создать новый артефакт', value: '__new__' }, ...base];
   }, [artifacts]);
+
+  const knownCompanyNames = useMemo(() => {
+    const names = new Set<string>();
+    modules.forEach((module) => {
+      module.userStats.companies.forEach((company) => {
+        const trimmed = company.name.trim();
+        if (trimmed) {
+          names.add(trimmed);
+        }
+      });
+      const ridCompany = module.ridOwner.company?.trim();
+      if (ridCompany) {
+        names.add(ridCompany);
+      }
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [modules]);
+
+  const [companyNames, setCompanyNames] = useState<string[]>(knownCompanyNames);
+
+  useEffect(() => {
+    setCompanyNames((prev) => {
+      const merged = new Set(prev);
+      knownCompanyNames.forEach((name) => merged.add(name));
+      return Array.from(merged).sort((a, b) => a.localeCompare(b, 'ru'));
+    });
+  }, [knownCompanyNames]);
 
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
   const domainParentItems = useMemo(
@@ -341,6 +369,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setSelectedArtifactId('__new__');
   };
 
+  const registerCompanyName = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    setCompanyNames((prev) => {
+      if (prev.some((item) => item === trimmed)) {
+        return prev;
+      }
+      return [...prev, trimmed].sort((a, b) => a.localeCompare(b, 'ru'));
+    });
+  };
+
   const moduleSelectValue = moduleOptions.find((item) => item.value === selectedModuleId) ?? moduleOptions[0];
   const domainSelectValue = domainOptions.find((item) => item.value === selectedDomainId) ?? domainOptions[0];
   const artifactSelectValue =
@@ -414,6 +455,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className={styles.formWrapper}>
         {activeTab === 'module' && (
           <ModuleForm
+            moduleKey={selectedModuleId}
             mode={selectedModuleId === '__new__' ? 'create' : 'edit'}
             draft={moduleDraft}
             step={moduleStep}
@@ -423,6 +465,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             moduleLabelMap={moduleLabelMap}
             artifactItems={artifacts.map((artifact) => artifact.id)}
             artifactLabelMap={artifactLabelMap}
+            companyNames={companyNames}
+            onRegisterCompany={registerCompanyName}
             onChange={setModuleDraft}
             onStepChange={setModuleStep}
             onSubmit={handleModuleSubmit}
@@ -469,6 +513,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 };
 
 type ModuleFormProps = {
+  moduleKey: string;
   mode: 'create' | 'edit';
   draft: ModuleDraftPayload;
   step: number;
@@ -478,6 +523,8 @@ type ModuleFormProps = {
   moduleLabelMap: Record<string, string>;
   artifactItems: string[];
   artifactLabelMap: Record<string, string>;
+  companyNames: string[];
+  onRegisterCompany: (name: string) => void;
   onChange: (draft: ModuleDraftPayload) => void;
   onStepChange: (step: number) => void;
   onSubmit: () => void;
@@ -485,6 +532,7 @@ type ModuleFormProps = {
 };
 
 const ModuleForm: React.FC<ModuleFormProps> = ({
+  moduleKey,
   mode,
   draft,
   step,
@@ -494,6 +542,8 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   moduleLabelMap,
   artifactItems,
   artifactLabelMap,
+  companyNames,
+  onRegisterCompany,
   onChange,
   onStepChange,
   onSubmit,
@@ -502,6 +552,9 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   const [technologyInput, setTechnologyInput] = useState('');
   const [libraryNameInput, setLibraryNameInput] = useState('');
   const [libraryVersionInput, setLibraryVersionInput] = useState('');
+  const [companyCreationInputs, setCompanyCreationInputs] = useState<
+    Record<number, { value: string; previous: string }>
+  >({});
 
   const isDomainMissing = mode === 'create' && draft.domainIds.length === 0;
 
@@ -510,6 +563,28 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     setLibraryNameInput('');
     setLibraryVersionInput('');
   }, [draft]);
+
+  useEffect(() => {
+    setCompanyCreationInputs({});
+  }, [moduleKey]);
+
+  type CompanySelectItem = SelectItem<string>;
+
+  const companySelectItems = useMemo<CompanySelectItem[]>(() => {
+    const names = new Set(companyNames);
+    draft.userStats.companies.forEach((company) => {
+      const trimmed = company.name.trim();
+      if (trimmed) {
+        names.add(trimmed);
+      }
+    });
+    return [
+      ...Array.from(names)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<CompanySelectItem>((name) => ({ label: name, value: name })),
+      { label: 'Добавить новую компанию', value: CREATE_COMPANY_OPTION }
+    ];
+  }, [companyNames, draft.userStats.companies]);
 
   const goToStep = (nextStep: number) => {
     const normalized = Math.min(Math.max(nextStep, 0), moduleSections.length - 1);
@@ -527,8 +602,104 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     handleFieldChange('ridOwner', { ...draft.ridOwner, ...patch });
   };
 
-  const updateUserStats = (patch: Partial<UserStats>) => {
-    handleFieldChange('userStats', { ...draft.userStats, ...patch });
+  const startCompanyCreation = (index: number) => {
+    setCompanyCreationInputs((prev) => ({
+      ...prev,
+      [index]: { value: '', previous: draft.userStats.companies[index]?.name ?? '' }
+    }));
+    const next = draft.userStats.companies.map((company, idx) =>
+      idx === index ? { ...company, name: '' } : company
+    );
+    handleFieldChange('userStats', { ...draft.userStats, companies: next });
+  };
+
+  const updateCompanyCreationValue = (index: number, value: string) => {
+    setCompanyCreationInputs((prev) => {
+      const previous = prev[index]?.previous ?? draft.userStats.companies[index]?.name ?? '';
+      return { ...prev, [index]: { value, previous } };
+    });
+  };
+
+  const clearCompanyCreation = (index: number) => {
+    setCompanyCreationInputs((prev) => {
+      if (!(index in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+  };
+
+  const confirmCompanyCreation = (index: number) => {
+    const current = companyCreationInputs[index];
+    if (!current) {
+      return;
+    }
+    const trimmed = current.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterCompany(trimmed);
+    clearCompanyCreation(index);
+    const next = draft.userStats.companies.map((company, idx) =>
+      idx === index ? { ...company, name: trimmed } : company
+    );
+    handleFieldChange('userStats', { ...draft.userStats, companies: next });
+  };
+
+  const cancelCompanyCreation = (index: number) => {
+    const current = companyCreationInputs[index];
+    if (!current) {
+      return;
+    }
+    clearCompanyCreation(index);
+    const next = draft.userStats.companies.map((company, idx) =>
+      idx === index ? { ...company, name: current.previous } : company
+    );
+    handleFieldChange('userStats', { ...draft.userStats, companies: next });
+  };
+
+  const updateCompanyStat = (
+    index: number,
+    patch: Partial<UserStats['companies'][number]>
+  ) => {
+    if ('name' in patch) {
+      clearCompanyCreation(index);
+    }
+    const next = draft.userStats.companies.map((company, idx) =>
+      idx === index ? { ...company, ...patch } : company
+    );
+    handleFieldChange('userStats', { ...draft.userStats, companies: next });
+  };
+
+  const addCompanyStat = () => {
+    handleFieldChange('userStats', {
+      ...draft.userStats,
+      companies: [...draft.userStats.companies, { name: '', licenses: 0 }]
+    });
+  };
+
+  const removeCompanyStat = (index: number) => {
+    clearCompanyCreation(index);
+    setCompanyCreationInputs((prev) => {
+      if (!Object.keys(prev).length) {
+        return prev;
+      }
+      const next: Record<number, { value: string; previous: string }> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const idx = Number(key);
+        if (idx === index) {
+          return;
+        }
+        next[idx > index ? idx - 1 : idx] = value;
+      });
+      return next;
+    });
+    handleFieldChange('userStats', {
+      ...draft.userStats,
+      companies: draft.userStats.companies.filter((_, idx) => idx !== index)
+    });
   };
 
   const updateMetrics = (patch: Partial<ModuleMetrics>) => {
@@ -745,34 +916,6 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                       placeholder="ru"
                     />
                   </label>
-                  <label className={styles.field}>
-                    <Text size="xs" weight="semibold" className={styles.label}>
-                      Количество компаний
-                    </Text>
-                    <input
-                      className={styles.numberInput}
-                      type="number"
-                      value={draft.userStats.companies}
-                      min={0}
-                      onChange={(event) =>
-                        updateUserStats({ companies: Number(event.target.value) || 0 })
-                      }
-                    />
-                  </label>
-                  <label className={styles.field}>
-                    <Text size="xs" weight="semibold" className={styles.label}>
-                      Количество лицензий
-                    </Text>
-                    <input
-                      className={styles.numberInput}
-                      type="number"
-                      value={draft.userStats.licenses}
-                      min={0}
-                      onChange={(event) =>
-                        updateUserStats({ licenses: Number(event.target.value) || 0 })
-                      }
-                    />
-                  </label>
                 <div className={styles.field}>
                   <Text size="xs" weight="semibold" className={styles.label}>
                     Оценка переиспользования
@@ -786,6 +929,109 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                     </Text>
                   </div>
                 </div>
+                </div>
+
+                <div>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Компании и лицензии
+                  </Text>
+                  {draft.userStats.companies.length === 0 ? (
+                    <Text size="xs" view="secondary">
+                      Добавьте хотя бы одну компанию
+                    </Text>
+                  ) : (
+                    <ul className={styles.list}>
+                  {draft.userStats.companies.map((company, index) => (
+                    <li key={`company-${index}`} className={styles.listItem}>
+                      {companyCreationInputs[index] ? (
+                        <div className={styles.companyInlineForm}>
+                          <input
+                            className={styles.input}
+                            value={companyCreationInputs[index]?.value ?? ''}
+                            onChange={(event) =>
+                              updateCompanyCreationValue(index, event.target.value)
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                confirmCompanyCreation(index);
+                              }
+                            }}
+                            placeholder="Название компании"
+                          />
+                          <div className={styles.companyInlineButtons}>
+                            <Button
+                              size="xs"
+                              view="primary"
+                              label="Сохранить"
+                              onClick={() => confirmCompanyCreation(index)}
+                            />
+                            <Button
+                              size="xs"
+                              view="ghost"
+                              label="Отмена"
+                              onClick={() => cancelCompanyCreation(index)}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <Select<CompanySelectItem>
+                          size="s"
+                          className={styles.select}
+                          items={companySelectItems}
+                          value={
+                            company.name
+                              ? companySelectItems.find((item) => item.value === company.name) ?? {
+                                  label: company.name,
+                                  value: company.name
+                                }
+                              : null
+                          }
+                          placeholder="Выберите компанию"
+                          getItemLabel={(item) => item.label}
+                          getItemKey={(item) => item.value}
+                          onChange={(value) => {
+                            if (!value) {
+                              updateCompanyStat(index, { name: '' });
+                              return;
+                            }
+                            if (value.value === CREATE_COMPANY_OPTION) {
+                              startCompanyCreation(index);
+                              return;
+                            }
+                            updateCompanyStat(index, { name: value.value });
+                          }}
+                        />
+                      )}
+                      <input
+                        className={styles.numberInput}
+                        type="number"
+                        min={0}
+                        value={Number.isFinite(company.licenses) ? company.licenses : 0}
+                            onChange={(event) => {
+                              const parsed = Number.parseInt(event.target.value, 10);
+                              updateCompanyStat(index, {
+                                licenses: Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
+                              });
+                            }}
+                            placeholder="Лицензий"
+                          />
+                          <Button
+                            size="xs"
+                            view="ghost"
+                            label="Удалить"
+                            onClick={() => removeCompanyStat(index)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <Button
+                    size="xs"
+                    view="secondary"
+                    label="Добавить компанию"
+                    onClick={addCompanyStat}
+                  />
                 </div>
 
                 <label className={styles.field}>
@@ -1725,7 +1971,7 @@ function createDefaultModuleDraft(): ModuleDraftPayload {
     dataOut: [{ id: 'output-1', label: '', consumerIds: [] }],
     ridOwner: { company: '', division: '' },
     localization: 'ru',
-    userStats: { companies: 0, licenses: 0 },
+    userStats: { companies: [{ name: '', licenses: 0 }] },
     technologyStack: [],
     projectTeam: [{ id: 'member-1', fullName: '', role: 'Аналитик' }],
     repository: '',
@@ -1788,7 +2034,9 @@ function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
     })),
     ridOwner: { ...module.ridOwner },
     localization: module.localization,
-    userStats: { ...module.userStats },
+    userStats: {
+      companies: module.userStats.companies.map((company) => ({ ...company }))
+    },
     technologyStack: [...module.technologyStack],
     projectTeam: module.projectTeam.map((member) => ({ ...member })),
     repository: module.repository ?? '',
