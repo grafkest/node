@@ -1571,7 +1571,13 @@ function App() {
           role={adminNotice.type === 'error' ? 'alert' : 'status'}
           aria-live={adminNotice.type === 'error' ? 'assertive' : 'polite'}
         >
-          <Text size="s" view={adminNotice.type === 'error' ? 'alert' : 'success'}>
+          <Text
+            size="s"
+            view={adminNotice.type === 'error' ? 'alert' : 'success'}
+            className={
+              adminNotice.type === 'success' ? styles.noticeSuccessMessage : undefined
+            }
+          >
             {adminNotice.message}
           </Text>
           <Button size="xs" view="ghost" label="Скрыть" onClick={dismissAdminNotice} />

@@ -41,6 +41,10 @@
   background: var(--color-bg-success);
 }
 
+.noticeSuccessMessage {
+  color: #0b5e2d;
+}
+
 .noticeError {
   background: #ffecec;
   border-bottom-color: rgba(191, 18, 52, 0.35);
