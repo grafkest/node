@@ -26,3 +26,18 @@ export type GraphSyncStatus =
   | { state: 'idle'; message?: string }
   | { state: 'saving'; message?: string }
   | { state: 'error'; message: string };
+
+export type GraphSummary = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type GraphCopyRequest = {
+  graphId: string;
+  includeDomains: boolean;
+  includeModules: boolean;
+  includeArtifacts: boolean;
+};

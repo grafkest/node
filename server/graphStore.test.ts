@@ -6,7 +6,10 @@ import path from 'node:path';
 import { after, afterEach, beforeEach, test } from 'node:test';
 import {
   closeGraphStore,
+  createGraph,
+  deleteGraph,
   initializeGraphStore,
+  listGraphs,
   loadSnapshot,
   persistSnapshot
 } from './graphStore';
@@ -25,6 +28,7 @@ import {
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-store-tests-'));
 let databasePath: string;
+const DEFAULT_GRAPH_ID = 'main';
 
 beforeEach(() => {
   databasePath = path.join(tempRoot, `${crypto.randomUUID()}.db`);
@@ -43,7 +47,10 @@ after(() => {
 
 test('seeds initial data when database is empty by default', { concurrency: false }, async () => {
   await initializeGraphStore({ databasePath });
-  const snapshot = loadSnapshot();
+  const graphs = listGraphs();
+  assert.equal(graphs.length >= 1, true);
+
+  const snapshot = loadSnapshot(DEFAULT_GRAPH_ID);
 
   assert.equal(snapshot.modules.length, initialModules.length);
   assert.equal(snapshot.domains.length, initialDomainTree.length);
@@ -175,9 +182,9 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
     }
   };
 
-  persistSnapshot(customSnapshot);
+  persistSnapshot(DEFAULT_GRAPH_ID, customSnapshot);
   const storedSnapshot = JSON.parse(JSON.stringify(customSnapshot)) as GraphSnapshotPayload;
-  const loaded = loadSnapshot();
+  const loaded = loadSnapshot(DEFAULT_GRAPH_ID);
 
   assert.deepEqual(loaded.modules, storedSnapshot.modules);
   assert.deepEqual(loaded.domains, storedSnapshot.domains);
@@ -187,12 +194,42 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
   closeGraphStore();
 
   await initializeGraphStore({ databasePath, seedWithInitialData: false });
-  const reloaded = loadSnapshot();
+  const reloaded = loadSnapshot(DEFAULT_GRAPH_ID);
 
   assert.deepEqual(reloaded.modules, storedSnapshot.modules);
   assert.deepEqual(reloaded.domains, storedSnapshot.domains);
   assert.deepEqual(reloaded.artifacts, storedSnapshot.artifacts);
   assert.deepEqual(reloaded.layout, storedSnapshot.layout);
+});
+
+test('creates and deletes graphs with optional data copy', { concurrency: false }, async () => {
+  await initializeGraphStore({ databasePath });
+
+  const initialGraphs = listGraphs();
+  const sourceGraph = initialGraphs[0];
+  assert.ok(sourceGraph);
+
+  const clone = createGraph({
+    name: 'Клон графа',
+    sourceGraphId: sourceGraph.id,
+    includeDomains: true,
+    includeModules: false,
+    includeArtifacts: true
+  });
+
+  const graphsAfterCreate = listGraphs();
+  assert.equal(graphsAfterCreate.some((graph) => graph.id === clone.id), true);
+
+  const clonedSnapshot = loadSnapshot(clone.id);
+  const sourceSnapshot = loadSnapshot(sourceGraph.id);
+
+  assert.equal(clonedSnapshot.domains.length > 0, true);
+  assert.equal(clonedSnapshot.modules.length, 0);
+  assert.equal(clonedSnapshot.artifacts.length, sourceSnapshot.artifacts.length);
+
+  deleteGraph(clone.id);
+  const graphsAfterDelete = listGraphs();
+  assert.equal(graphsAfterDelete.some((graph) => graph.id === clone.id), false);
 });
 
 test('normalizes invalid layout entries on persist', { concurrency: false }, async () => {
@@ -213,8 +250,8 @@ test('normalizes invalid layout entries on persist', { concurrency: false }, asy
     }
   };
 
-  persistSnapshot(snapshot);
-  const loaded = loadSnapshot();
+  persistSnapshot(DEFAULT_GRAPH_ID, snapshot);
+  const loaded = loadSnapshot(DEFAULT_GRAPH_ID);
 
   assert.ok(loaded.layout);
   assert.deepEqual(loaded.layout?.nodes.valid, { x: 1, y: 2, fy: 3 });
@@ -225,7 +262,7 @@ test('normalizes invalid layout entries on persist', { concurrency: false }, asy
 test('supports complex graph authoring flows', { concurrency: false }, async () => {
   await initializeGraphStore({ databasePath, seedWithInitialData: true });
 
-  const snapshot = loadSnapshot();
+  const snapshot = loadSnapshot(DEFAULT_GRAPH_ID);
 
   const newDomain: DomainNode = {
     id: 'domain-synthetic-ai',
@@ -321,9 +358,9 @@ test('supports complex graph authoring flows', { concurrency: false }, async () 
     }
   };
 
-  persistSnapshot(updatedSnapshot);
+  persistSnapshot(DEFAULT_GRAPH_ID, updatedSnapshot);
 
-  const reloaded = loadSnapshot();
+  const reloaded = loadSnapshot(DEFAULT_GRAPH_ID);
 
   assert.ok(reloaded.domains.some((domain) => domain.id === newDomain.id));
   const childDomain = reloaded.domains
@@ -353,8 +390,8 @@ test('removes persisted layout metadata when positions are absent', { concurrenc
     layout: { nodes: {} }
   };
 
-  persistSnapshot(snapshot);
-  const loaded = loadSnapshot();
+  persistSnapshot(DEFAULT_GRAPH_ID, snapshot);
+  const loaded = loadSnapshot(DEFAULT_GRAPH_ID);
 
   assert.equal(loaded.layout, undefined);
 });

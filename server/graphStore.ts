@@ -1,4 +1,5 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -12,7 +13,8 @@ import {
 import {
   GRAPH_SNAPSHOT_VERSION,
   type GraphLayoutSnapshot,
-  type GraphSnapshotPayload
+  type GraphSnapshotPayload,
+  type GraphSummary
 } from '../src/types/graph';
 
 type GraphStoreOptions = {
@@ -20,7 +22,24 @@ type GraphStoreOptions = {
   seedWithInitialData?: boolean;
 };
 
+type GraphRow = {
+  id: string;
+  name: string;
+  is_default: number;
+  created_at: string;
+  updated_at: string | null;
+};
+
 type DomainRow = {
+  graph_id: string;
+  id: string;
+  name: string;
+  description: string | null;
+  parent_id: string | null;
+  position: number;
+};
+
+type FlatDomainRow = {
   id: string;
   name: string;
   description: string | null;
@@ -29,12 +48,14 @@ type DomainRow = {
 };
 
 type ModuleRow = {
+  graph_id: string;
   id: string;
   data: string;
   position: number;
 };
 
 type ArtifactRow = {
+  graph_id: string;
   id: string;
   data: string;
   position: number;
@@ -51,6 +72,9 @@ const defaultDatabasePath = path.join(defaultDataDirectory, 'graph.db');
 let sqlModulePromise: Promise<typeof import('sql.js')> | null = null;
 let db: SqlJsDatabase | null = null;
 let activeDatabasePath: string | null = null;
+
+const DEFAULT_GRAPH_ID = 'main';
+const DEFAULT_GRAPH_NAME = 'Основной';
 
 export async function initializeGraphStore(options?: GraphStoreOptions): Promise<void> {
   const SQL = await loadSqlModule();
@@ -72,6 +96,8 @@ export async function initializeGraphStore(options?: GraphStoreOptions): Promise
   activeDatabasePath = databasePath;
 
   initializeSchema();
+  migrateLegacySchema();
+  ensureDefaultGraph();
 
   const shouldSeed = options?.seedWithInitialData ?? true;
   if (shouldSeed) {
@@ -86,17 +112,103 @@ export function closeGraphStore(): void {
   activeDatabasePath = null;
 }
 
-export function loadSnapshot(): GraphSnapshotPayload {
+export function listGraphs(): GraphSummary[] {
+  return listGraphRows().map(mapGraphRowToSummary);
+}
+
+export function createGraph(options: {
+  name: string;
+  sourceGraphId?: string | null;
+  includeDomains: boolean;
+  includeModules: boolean;
+  includeArtifacts: boolean;
+}): GraphSummary {
   const database = assertDatabase();
+  const now = new Date().toISOString();
+  const sanitizedName = options.name.trim() || `Граф ${now.slice(0, 10)}`;
+  const graphId = crypto.randomUUID();
+
+  database.run('BEGIN TRANSACTION');
+
+  try {
+    database.run('INSERT INTO graphs (id, name, is_default, created_at, updated_at) VALUES (?, ?, 0, ?, NULL)', [graphId, sanitizedName, now]);
+
+    if (options.sourceGraphId) {
+      const sourceSnapshot = loadSnapshot(options.sourceGraphId);
+      const snapshot: GraphSnapshotPayload = {
+        version: sourceSnapshot.version ?? GRAPH_SNAPSHOT_VERSION,
+        exportedAt: now,
+        domains: options.includeDomains ? sourceSnapshot.domains : [],
+        modules: options.includeModules ? sourceSnapshot.modules : [],
+        artifacts: options.includeArtifacts ? sourceSnapshot.artifacts : [],
+        layout:
+          options.includeModules && sourceSnapshot.layout
+            ? normalizeLayout(sourceSnapshot.layout)
+            : undefined
+      };
+      writeSnapshot(database, graphId, snapshot);
+      updateGraphTimestamp(graphId, snapshot.exportedAt ?? now, database);
+    } else {
+      updateGraphTimestamp(graphId, now, database);
+    }
+
+    database.run('COMMIT');
+    persistDatabase();
+  } catch (error) {
+    try {
+      database.run('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
+    throw error;
+  }
+
+  return mapGraphRowToSummary(assertGraphRow(graphId));
+}
+
+export function deleteGraph(graphId: string): void {
+  if (graphId === DEFAULT_GRAPH_ID) {
+    throw new Error('Нельзя удалить основной граф.');
+  }
+
+  const database = assertDatabase();
+  const graph = getGraphRow(graphId);
+
+  if (!graph) {
+    throw new Error(`Граф с идентификатором ${graphId} не найден.`);
+  }
+
+  database.run('BEGIN TRANSACTION');
+
+  try {
+    database.run('DELETE FROM graphs WHERE id = ?', [graphId]);
+    database.run('COMMIT');
+    persistDatabase();
+  } catch (error) {
+    try {
+      database.run('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
+    throw error;
+  }
+}
+
+export function loadSnapshot(graphId: string): GraphSnapshotPayload {
+  const database = assertDatabase();
+  assertGraphRow(graphId);
 
   const domainStatement = database.prepare(
-    'SELECT id, name, description, parent_id, position FROM domains ORDER BY parent_id IS NOT NULL, parent_id, position'
+    'SELECT graph_id, id, name, description, parent_id, position FROM domains WHERE graph_id = ? ORDER BY parent_id IS NOT NULL, parent_id, position'
   );
   const domainRows: DomainRow[] = [];
+
   try {
+    domainStatement.bind([graphId]);
     while (domainStatement.step()) {
       const row = domainStatement.getAsObject() as DomainRow;
       domainRows.push({
+        graph_id: String(row.graph_id),
         id: String(row.id),
         name: String(row.name),
         description: row.description ?? null,
@@ -108,12 +220,17 @@ export function loadSnapshot(): GraphSnapshotPayload {
     domainStatement.free();
   }
 
-  const moduleStatement = database.prepare('SELECT id, data, position FROM modules ORDER BY position');
+  const moduleStatement = database.prepare(
+    'SELECT graph_id, id, data, position FROM modules WHERE graph_id = ? ORDER BY position'
+  );
   const moduleRows: ModuleRow[] = [];
+
   try {
+    moduleStatement.bind([graphId]);
     while (moduleStatement.step()) {
       const row = moduleStatement.getAsObject() as ModuleRow;
       moduleRows.push({
+        graph_id: String(row.graph_id),
         id: String(row.id),
         data: String(row.data),
         position: Number(row.position)
@@ -123,12 +240,17 @@ export function loadSnapshot(): GraphSnapshotPayload {
     moduleStatement.free();
   }
 
-  const artifactStatement = database.prepare('SELECT id, data, position FROM artifacts ORDER BY position');
+  const artifactStatement = database.prepare(
+    'SELECT graph_id, id, data, position FROM artifacts WHERE graph_id = ? ORDER BY position'
+  );
   const artifactRows: ArtifactRow[] = [];
+
   try {
+    artifactStatement.bind([graphId]);
     while (artifactStatement.step()) {
       const row = artifactStatement.getAsObject() as ArtifactRow;
       artifactRows.push({
+        graph_id: String(row.graph_id),
         id: String(row.id),
         data: String(row.data),
         position: Number(row.position)
@@ -138,9 +260,9 @@ export function loadSnapshot(): GraphSnapshotPayload {
     artifactStatement.free();
   }
 
-  const version = readMetadata('snapshotVersion');
-  const exportedAt = readMetadata('updatedAt');
-  const layoutRaw = readMetadata('layout');
+  const version = readMetadata(graphId, 'snapshotVersion');
+  const exportedAt = readMetadata(graphId, 'updatedAt');
+  const layoutRaw = readMetadata(graphId, 'layout');
   const layout = layoutRaw ? safeParseLayout(layoutRaw) : undefined;
 
   return {
@@ -153,63 +275,15 @@ export function loadSnapshot(): GraphSnapshotPayload {
   };
 }
 
-export function persistSnapshot(snapshot: GraphSnapshotPayload): void {
+export function persistSnapshot(graphId: string, snapshot: GraphSnapshotPayload): void {
   const database = assertDatabase();
+  assertGraphRow(graphId);
+
+  database.run('BEGIN TRANSACTION');
 
   try {
-    database.run('BEGIN TRANSACTION');
-    database.run('DELETE FROM domains');
-    database.run('DELETE FROM modules');
-    database.run('DELETE FROM artifacts');
-
-    const domainRows = flattenDomains(snapshot.domains);
-    const insertDomain = database.prepare(
-      'INSERT INTO domains (id, name, description, parent_id, position) VALUES (?, ?, ?, ?, ?)'
-    );
-    try {
-      domainRows.forEach((row) => {
-        insertDomain.run([
-          row.id,
-          row.name,
-          row.description ?? null,
-          row.parent_id,
-          row.position
-        ]);
-      });
-    } finally {
-      insertDomain.free();
-    }
-
-    const insertModule = database.prepare('INSERT INTO modules (id, position, data) VALUES (?, ?, ?)');
-    try {
-      snapshot.modules.forEach((module, index) => {
-        insertModule.run([module.id, index, JSON.stringify(module)]);
-      });
-    } finally {
-      insertModule.free();
-    }
-
-    const insertArtifact = database.prepare(
-      'INSERT INTO artifacts (id, position, data) VALUES (?, ?, ?)'
-    );
-    try {
-      snapshot.artifacts.forEach((artifact, index) => {
-        insertArtifact.run([artifact.id, index, JSON.stringify(artifact)]);
-      });
-    } finally {
-      insertArtifact.free();
-    }
-
-    const normalizedLayout = normalizeLayout(snapshot.layout);
-
-    upsertMetadata('snapshotVersion', String(snapshot.version ?? GRAPH_SNAPSHOT_VERSION));
-    upsertMetadata('updatedAt', snapshot.exportedAt ?? new Date().toISOString());
-
-    if (normalizedLayout) {
-      upsertMetadata('layout', JSON.stringify(normalizedLayout));
-    } else {
-      deleteMetadata('layout');
-    }
+    writeSnapshot(database, graphId, snapshot);
+    updateGraphTimestamp(graphId, snapshot.exportedAt ?? new Date().toISOString(), database);
 
     database.run('COMMIT');
     persistDatabase();
@@ -271,37 +345,143 @@ function disposeDatabase(): void {
 function initializeSchema(): void {
   const database = assertDatabase();
   database.run(`
-    CREATE TABLE IF NOT EXISTS metadata (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
+    CREATE TABLE IF NOT EXISTS graphs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_metadata (
+      graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      PRIMARY KEY (graph_id, key)
     );
 
     CREATE TABLE IF NOT EXISTS domains (
-      id TEXT PRIMARY KEY,
+      graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+      id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
-      parent_id TEXT REFERENCES domains(id) ON DELETE CASCADE,
-      position INTEGER NOT NULL
+      parent_id TEXT,
+      position INTEGER NOT NULL,
+      PRIMARY KEY (graph_id, id),
+      FOREIGN KEY (graph_id, parent_id) REFERENCES domains(graph_id, id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS modules (
-      id TEXT PRIMARY KEY,
+      graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+      id TEXT NOT NULL,
       position INTEGER NOT NULL,
-      data TEXT NOT NULL
+      data TEXT NOT NULL,
+      PRIMARY KEY (graph_id, id)
     );
 
     CREATE TABLE IF NOT EXISTS artifacts (
-      id TEXT PRIMARY KEY,
+      graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+      id TEXT NOT NULL,
       position INTEGER NOT NULL,
-      data TEXT NOT NULL
+      data TEXT NOT NULL,
+      PRIMARY KEY (graph_id, id)
     );
   `);
 }
 
+function migrateLegacySchema(): void {
+  const database = assertDatabase();
+
+  if (!hasColumn('domains', 'graph_id')) {
+    database.run('ALTER TABLE domains RENAME TO legacy_domains');
+    database.run(`
+      CREATE TABLE domains (
+        graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        parent_id TEXT,
+        position INTEGER NOT NULL,
+        PRIMARY KEY (graph_id, id),
+        FOREIGN KEY (graph_id, parent_id) REFERENCES domains(graph_id, id) ON DELETE CASCADE
+      );
+    `);
+    database.run(
+      `INSERT INTO domains (graph_id, id, name, description, parent_id, position)
+       SELECT ?, id, name, description, parent_id, position FROM legacy_domains`,
+      [DEFAULT_GRAPH_ID]
+    );
+    database.run('DROP TABLE legacy_domains');
+  }
+
+  if (!hasColumn('modules', 'graph_id')) {
+    database.run('ALTER TABLE modules RENAME TO legacy_modules');
+    database.run(`
+      CREATE TABLE modules (
+        graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (graph_id, id)
+      );
+    `);
+    database.run(
+      `INSERT INTO modules (graph_id, id, position, data)
+       SELECT ?, id, position, data FROM legacy_modules`,
+      [DEFAULT_GRAPH_ID]
+    );
+    database.run('DROP TABLE legacy_modules');
+  }
+
+  if (!hasColumn('artifacts', 'graph_id')) {
+    database.run('ALTER TABLE artifacts RENAME TO legacy_artifacts');
+    database.run(`
+      CREATE TABLE artifacts (
+        graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (graph_id, id)
+      );
+    `);
+    database.run(
+      `INSERT INTO artifacts (graph_id, id, position, data)
+       SELECT ?, id, position, data FROM legacy_artifacts`,
+      [DEFAULT_GRAPH_ID]
+    );
+    database.run('DROP TABLE legacy_artifacts');
+  }
+
+  if (hasTable('metadata')) {
+    database.run('ALTER TABLE metadata RENAME TO legacy_metadata');
+    database.run(
+      `INSERT INTO graph_metadata (graph_id, key, value)
+       SELECT ?, key, value FROM legacy_metadata`,
+      [DEFAULT_GRAPH_ID]
+    );
+    database.run('DROP TABLE legacy_metadata');
+  }
+}
+
+function ensureDefaultGraph(): void {
+  const database = assertDatabase();
+  const existing = getGraphRow(DEFAULT_GRAPH_ID);
+  const now = new Date().toISOString();
+
+  if (!existing) {
+    database.run(
+      'INSERT INTO graphs (id, name, is_default, created_at, updated_at) VALUES (?, ?, 1, ?, ?)',
+      [DEFAULT_GRAPH_ID, DEFAULT_GRAPH_NAME, now, now]
+    );
+  } else if (existing.is_default !== 1) {
+    database.run('UPDATE graphs SET is_default = 1 WHERE id = ?', [DEFAULT_GRAPH_ID]);
+  }
+}
+
 function seedInitialData(): boolean {
-  const domainCount = countRows('domains');
-  const moduleCount = countRows('modules');
-  const artifactCount = countRows('artifacts');
+  const domainCount = countRows(DEFAULT_GRAPH_ID, 'domains');
+  const moduleCount = countRows(DEFAULT_GRAPH_ID, 'modules');
+  const artifactCount = countRows(DEFAULT_GRAPH_ID, 'artifacts');
 
   if (domainCount > 0 || moduleCount > 0 || artifactCount > 0) {
     return false;
@@ -315,15 +495,16 @@ function seedInitialData(): boolean {
     artifacts: initialArtifacts
   };
 
-  persistSnapshot(snapshot);
+  persistSnapshot(DEFAULT_GRAPH_ID, snapshot);
   return true;
 }
 
-function countRows(table: 'domains' | 'modules' | 'artifacts'): number {
+function countRows(graphId: string, table: 'domains' | 'modules' | 'artifacts'): number {
   const database = assertDatabase();
-  const statement = database.prepare(`SELECT COUNT(*) as count FROM ${table}`);
+  const statement = database.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE graph_id = ?`);
 
   try {
+    statement.bind([graphId]);
     const hasRow = statement.step();
     if (!hasRow) {
       return 0;
@@ -336,9 +517,12 @@ function countRows(table: 'domains' | 'modules' | 'artifacts'): number {
   }
 }
 
-function flattenDomains(domains: DomainNode[], parentId: string | null = null): DomainRow[] {
+function flattenDomains(
+  domains: DomainNode[],
+  parentId: string | null = null
+): FlatDomainRow[] {
   return domains.flatMap((domain, index) => {
-    const row: DomainRow = {
+    const row: FlatDomainRow = {
       id: domain.id,
       name: domain.name,
       description: domain.description ?? null,
@@ -445,12 +629,14 @@ function normalizeLayout(
   return { nodes: Object.fromEntries(entries) };
 }
 
-function readMetadata(key: string): string | null {
+function readMetadata(graphId: string, key: string): string | null {
   const database = assertDatabase();
-  const statement = database.prepare('SELECT value FROM metadata WHERE key = ?');
+  const statement = database.prepare(
+    'SELECT value FROM graph_metadata WHERE graph_id = ? AND key = ?'
+  );
 
   try {
-    statement.bind([key]);
+    statement.bind([graphId, key]);
     if (!statement.step()) {
       return null;
     }
@@ -462,27 +648,95 @@ function readMetadata(key: string): string | null {
   }
 }
 
-function upsertMetadata(key: string, value: string): void {
-  const database = assertDatabase();
+function upsertMetadata(graphId: string, key: string, value: string, database: SqlJsDatabase): void {
   const statement = database.prepare(
-    'INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    'INSERT INTO graph_metadata (graph_id, key, value) VALUES (?, ?, ?) ON CONFLICT(graph_id, key) DO UPDATE SET value = excluded.value'
   );
 
   try {
-    statement.run([key, value]);
+    statement.run([graphId, key, value]);
   } finally {
     statement.free();
   }
 }
 
-function deleteMetadata(key: string): void {
-  const database = assertDatabase();
-  const statement = database.prepare('DELETE FROM metadata WHERE key = ?');
+function deleteMetadata(graphId: string, key: string, database: SqlJsDatabase): void {
+  const statement = database.prepare(
+    'DELETE FROM graph_metadata WHERE graph_id = ? AND key = ?'
+  );
 
   try {
-    statement.run([key]);
+    statement.run([graphId, key]);
   } finally {
     statement.free();
+  }
+}
+
+function updateGraphTimestamp(graphId: string, timestamp: string, database: SqlJsDatabase): void {
+  database.run('UPDATE graphs SET updated_at = ? WHERE id = ?', [timestamp, graphId]);
+  upsertMetadata(graphId, 'updatedAt', timestamp, database);
+}
+
+function writeSnapshot(database: SqlJsDatabase, graphId: string, snapshot: GraphSnapshotPayload): void {
+  database.run('DELETE FROM domains WHERE graph_id = ?', [graphId]);
+  database.run('DELETE FROM modules WHERE graph_id = ?', [graphId]);
+  database.run('DELETE FROM artifacts WHERE graph_id = ?', [graphId]);
+
+  const domainRows = flattenDomains(snapshot.domains);
+  const insertDomain = database.prepare(
+    'INSERT INTO domains (graph_id, id, name, description, parent_id, position) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+
+  try {
+    domainRows.forEach((row) => {
+      insertDomain.run([
+        graphId,
+        row.id,
+        row.name,
+        row.description ?? null,
+        row.parent_id,
+        row.position
+      ]);
+    });
+  } finally {
+    insertDomain.free();
+  }
+
+  const insertModule = database.prepare(
+    'INSERT INTO modules (graph_id, id, position, data) VALUES (?, ?, ?, ?)'
+  );
+
+  try {
+    snapshot.modules.forEach((module, index) => {
+      insertModule.run([graphId, module.id, index, JSON.stringify(module)]);
+    });
+  } finally {
+    insertModule.free();
+  }
+
+  const insertArtifact = database.prepare(
+    'INSERT INTO artifacts (graph_id, id, position, data) VALUES (?, ?, ?, ?)'
+  );
+
+  try {
+    snapshot.artifacts.forEach((artifact, index) => {
+      insertArtifact.run([graphId, artifact.id, index, JSON.stringify(artifact)]);
+    });
+  } finally {
+    insertArtifact.free();
+  }
+
+  upsertMetadata(graphId, 'snapshotVersion', String(snapshot.version ?? GRAPH_SNAPSHOT_VERSION), database);
+
+  if (snapshot.layout) {
+    const normalizedLayout = normalizeLayout(snapshot.layout);
+    if (normalizedLayout) {
+      upsertMetadata(graphId, 'layout', JSON.stringify(normalizedLayout), database);
+    } else {
+      deleteMetadata(graphId, 'layout', database);
+    }
+  } else {
+    deleteMetadata(graphId, 'layout', database);
   }
 }
 
@@ -502,6 +756,108 @@ function assertDatabase(): SqlJsDatabase {
   }
 
   return db;
+}
+
+function hasColumn(table: string, column: string): boolean {
+  const database = assertDatabase();
+  const statement = database.prepare(`PRAGMA table_info(${table})`);
+
+  try {
+    while (statement.step()) {
+      const row = statement.getAsObject() as { name?: string };
+      if (row.name === column) {
+        return true;
+      }
+    }
+  } finally {
+    statement.free();
+  }
+
+  return false;
+}
+
+function hasTable(table: string): boolean {
+  const database = assertDatabase();
+  const statement = database.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name = ?"
+  );
+
+  try {
+    statement.bind([table]);
+    return statement.step();
+  } finally {
+    statement.free();
+  }
+}
+
+function listGraphRows(): GraphRow[] {
+  const database = assertDatabase();
+  const statement = database.prepare(
+    'SELECT id, name, is_default, created_at, updated_at FROM graphs ORDER BY is_default DESC, created_at'
+  );
+  const rows: GraphRow[] = [];
+
+  try {
+    while (statement.step()) {
+      const row = statement.getAsObject() as GraphRow;
+      const isDefaultValue = Number(row.is_default);
+      rows.push({
+        id: String(row.id),
+        name: String(row.name),
+        is_default: Number.isFinite(isDefaultValue) ? isDefaultValue : 0,
+        created_at: String(row.created_at),
+        updated_at: row.updated_at ? String(row.updated_at) : null
+      });
+    }
+  } finally {
+    statement.free();
+  }
+
+  return rows;
+}
+
+function getGraphRow(graphId: string): GraphRow | null {
+  const database = assertDatabase();
+  const statement = database.prepare(
+    'SELECT id, name, is_default, created_at, updated_at FROM graphs WHERE id = ?'
+  );
+
+  try {
+    statement.bind([graphId]);
+    if (!statement.step()) {
+      return null;
+    }
+
+    const row = statement.getAsObject() as GraphRow;
+    const isDefaultValue = Number(row.is_default);
+    return {
+      id: String(row.id),
+      name: String(row.name),
+      is_default: Number.isFinite(isDefaultValue) ? isDefaultValue : 0,
+      created_at: String(row.created_at),
+      updated_at: row.updated_at ? String(row.updated_at) : null
+    };
+  } finally {
+    statement.free();
+  }
+}
+
+function assertGraphRow(graphId: string): GraphRow {
+  const graph = getGraphRow(graphId);
+  if (!graph) {
+    throw new Error(`Граф с идентификатором ${graphId} не найден.`);
+  }
+  return graph;
+}
+
+function mapGraphRowToSummary(row: GraphRow): GraphSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    isDefault: row.is_default === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined
+  };
 }
 
 export type { GraphStoreOptions };
