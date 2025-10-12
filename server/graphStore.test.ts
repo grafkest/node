@@ -78,7 +78,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
         technologyStack: [],
         localization: 'ru',
         ridOwner: { company: 'Test Co', division: 'Digital' },
-        userStats: { companies: 1, licenses: 10 },
+        userStats: { companies: [{ name: 'Test Energy', licenses: 10 }] },
         status: 'production',
         repository: 'https://example.com/repo',
         api: 'https://example.com/api',
@@ -121,7 +121,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
         technologyStack: [],
         localization: 'ru',
         ridOwner: { company: 'Test Co', division: 'R&D' },
-        userStats: { companies: 1, licenses: 5 },
+        userStats: { companies: [{ name: 'Test Energy', licenses: 5 }] },
         status: 'in-dev',
         repository: undefined,
         api: undefined,
@@ -262,7 +262,12 @@ test('supports complex graph authoring flows', { concurrency: false }, async () 
     technologyStack: ['PyTorch', 'FastAPI'],
     localization: 'ru',
     ridOwner: { company: 'АО «Nedra Digital»', division: 'AI Лаборатория' },
-    userStats: { companies: 2, licenses: 25 },
+    userStats: {
+      companies: [
+        { name: 'Alpha Oil', licenses: 10 },
+        { name: 'Beta Industries', licenses: 15 }
+      ]
+    },
     status: 'in-dev',
     repository: 'https://git.nedra.digital/ai/orchestrator',
     api: 'REST /api/v1/orchestrator',

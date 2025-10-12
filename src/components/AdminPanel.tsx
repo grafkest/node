@@ -527,8 +527,28 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     handleFieldChange('ridOwner', { ...draft.ridOwner, ...patch });
   };
 
-  const updateUserStats = (patch: Partial<UserStats>) => {
-    handleFieldChange('userStats', { ...draft.userStats, ...patch });
+  const updateCompanyStat = (
+    index: number,
+    patch: Partial<UserStats['companies'][number]>
+  ) => {
+    const next = draft.userStats.companies.map((company, idx) =>
+      idx === index ? { ...company, ...patch } : company
+    );
+    handleFieldChange('userStats', { ...draft.userStats, companies: next });
+  };
+
+  const addCompanyStat = () => {
+    handleFieldChange('userStats', {
+      ...draft.userStats,
+      companies: [...draft.userStats.companies, { name: '', licenses: 0 }]
+    });
+  };
+
+  const removeCompanyStat = (index: number) => {
+    handleFieldChange('userStats', {
+      ...draft.userStats,
+      companies: draft.userStats.companies.filter((_, idx) => idx !== index)
+    });
   };
 
   const updateMetrics = (patch: Partial<ModuleMetrics>) => {
@@ -745,34 +765,6 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                       placeholder="ru"
                     />
                   </label>
-                  <label className={styles.field}>
-                    <Text size="xs" weight="semibold" className={styles.label}>
-                      Количество компаний
-                    </Text>
-                    <input
-                      className={styles.numberInput}
-                      type="number"
-                      value={draft.userStats.companies}
-                      min={0}
-                      onChange={(event) =>
-                        updateUserStats({ companies: Number(event.target.value) || 0 })
-                      }
-                    />
-                  </label>
-                  <label className={styles.field}>
-                    <Text size="xs" weight="semibold" className={styles.label}>
-                      Количество лицензий
-                    </Text>
-                    <input
-                      className={styles.numberInput}
-                      type="number"
-                      value={draft.userStats.licenses}
-                      min={0}
-                      onChange={(event) =>
-                        updateUserStats({ licenses: Number(event.target.value) || 0 })
-                      }
-                    />
-                  </label>
                 <div className={styles.field}>
                   <Text size="xs" weight="semibold" className={styles.label}>
                     Оценка переиспользования
@@ -786,6 +778,57 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                     </Text>
                   </div>
                 </div>
+                </div>
+
+                <div>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Компании и лицензии
+                  </Text>
+                  {draft.userStats.companies.length === 0 ? (
+                    <Text size="xs" view="secondary">
+                      Добавьте хотя бы одну компанию
+                    </Text>
+                  ) : (
+                    <ul className={styles.list}>
+                      {draft.userStats.companies.map((company, index) => (
+                        <li key={`company-${index}`} className={styles.listItem}>
+                          <input
+                            className={styles.input}
+                            value={company.name}
+                            onChange={(event) =>
+                              updateCompanyStat(index, { name: event.target.value })
+                            }
+                            placeholder="Название компании"
+                          />
+                          <input
+                            className={styles.numberInput}
+                            type="number"
+                            min={0}
+                            value={Number.isFinite(company.licenses) ? company.licenses : 0}
+                            onChange={(event) => {
+                              const parsed = Number.parseInt(event.target.value, 10);
+                              updateCompanyStat(index, {
+                                licenses: Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
+                              });
+                            }}
+                            placeholder="Лицензий"
+                          />
+                          <Button
+                            size="xs"
+                            view="ghost"
+                            label="Удалить"
+                            onClick={() => removeCompanyStat(index)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <Button
+                    size="xs"
+                    view="secondary"
+                    label="Добавить компанию"
+                    onClick={addCompanyStat}
+                  />
                 </div>
 
                 <label className={styles.field}>
@@ -1725,7 +1768,7 @@ function createDefaultModuleDraft(): ModuleDraftPayload {
     dataOut: [{ id: 'output-1', label: '', consumerIds: [] }],
     ridOwner: { company: '', division: '' },
     localization: 'ru',
-    userStats: { companies: 0, licenses: 0 },
+    userStats: { companies: [{ name: '', licenses: 0 }] },
     technologyStack: [],
     projectTeam: [{ id: 'member-1', fullName: '', role: 'Аналитик' }],
     repository: '',
@@ -1788,7 +1831,9 @@ function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
     })),
     ridOwner: { ...module.ridOwner },
     localization: module.localization,
-    userStats: { ...module.userStats },
+    userStats: {
+      companies: module.userStats.companies.map((company) => ({ ...company }))
+    },
     technologyStack: [...module.technologyStack],
     projectTeam: module.projectTeam.map((member) => ({ ...member })),
     repository: module.repository ?? '',
