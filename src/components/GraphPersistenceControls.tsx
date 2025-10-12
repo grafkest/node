@@ -1,7 +1,8 @@
 import { Button } from '@consta/uikit/Button';
 import { Text } from '@consta/uikit/Text';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import type { ArtifactNode, DomainNode, ModuleNode } from '../data';
+import { normalizeLayoutSnapshot } from '../services/graphStorage';
 import {
   GRAPH_SNAPSHOT_VERSION,
   type GraphLayoutSnapshot,
@@ -34,20 +35,21 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<StatusMessage | null>(null);
 
-  const snapshot = useMemo<GraphSnapshotPayload>(
-    () => ({
+  const buildSnapshot = useCallback((): GraphSnapshotPayload => {
+    const sanitizedLayout = normalizeLayoutSnapshot(layout) ?? undefined;
+    return {
       version: GRAPH_SNAPSHOT_VERSION,
       exportedAt: new Date().toISOString(),
       modules,
       domains,
       artifacts,
-      layout
-    }),
-    [modules, domains, artifacts, layout]
-  );
+      layout: sanitizedLayout
+    };
+  }, [artifacts, domains, layout, modules]);
 
   const handleExport = () => {
     try {
+      const snapshot = buildSnapshot();
       const data = JSON.stringify(snapshot, null, 2);
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -85,14 +87,16 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
         }
 
         const parsed = JSON.parse(text);
-        if (!isGraphSnapshotPayload(parsed)) {
+        if (!isGraphSnapshotLike(parsed)) {
           throw new Error('Файл не соответствует структуре графа');
         }
 
-        onImport(parsed);
-        const moduleCount = parsed.modules.length;
-        const domainCount = parsed.domains.length;
-        const artifactCount = parsed.artifacts.length;
+        const normalized = normalizeImportedSnapshot(parsed);
+
+        onImport(normalized);
+        const moduleCount = normalized.modules.length;
+        const domainCount = normalized.domains.length;
+        const artifactCount = normalized.artifacts.length;
         setStatus({
           type: 'success',
           message: `Импорт завершён. Модулей: ${moduleCount}, доменов: ${domainCount}, артефактов: ${artifactCount}.`
@@ -167,7 +171,16 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   );
 };
 
-function isGraphSnapshotPayload(value: unknown): value is GraphSnapshotPayload {
+type GraphSnapshotLike = {
+  version?: number;
+  exportedAt?: string;
+  modules: ModuleNode[];
+  domains: DomainNode[];
+  artifacts: ArtifactNode[];
+  layout?: GraphSnapshotPayload['layout'];
+};
+
+function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
   if (!value || typeof value !== 'object') {
     return false;
   }
@@ -182,6 +195,20 @@ function isGraphSnapshotPayload(value: unknown): value is GraphSnapshotPayload {
   }
 
   return true;
+}
+
+function normalizeImportedSnapshot(snapshot: GraphSnapshotLike): GraphSnapshotPayload {
+  return {
+    version:
+      typeof snapshot.version === 'number' && Number.isFinite(snapshot.version)
+        ? snapshot.version
+        : GRAPH_SNAPSHOT_VERSION,
+    exportedAt: typeof snapshot.exportedAt === 'string' ? snapshot.exportedAt : undefined,
+    modules: snapshot.modules,
+    domains: snapshot.domains,
+    artifacts: snapshot.artifacts,
+    layout: normalizeLayoutSnapshot(snapshot.layout) ?? undefined
+  };
 }
 
 export default GraphPersistenceControls;
