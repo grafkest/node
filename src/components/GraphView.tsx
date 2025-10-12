@@ -1,9 +1,10 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Loader } from '@consta/uikit/Loader';
 import { useTheme } from '@consta/uikit/Theme';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D, { LinkObject, NodeObject, ForceGraphMethods } from 'react-force-graph-2d';
 import type { DomainNode, ModuleNode, ArtifactNode, GraphLink } from '../data';
+import type { GraphLayoutNodePosition } from '../types/graph';
 import styles from './GraphView.module.css';
 
 type GraphNode =
@@ -19,6 +20,8 @@ type GraphViewProps = {
   onSelect: (node: GraphNode | null) => void;
   highlightedNode: string | null;
   visibleDomainIds: Set<string>;
+  layoutPositions: Record<string, GraphLayoutNodePosition>;
+  onLayoutChange?: (positions: Record<string, GraphLayoutNodePosition>) => void;
 };
 
 type ForceNode = NodeObject & GraphNode;
@@ -31,7 +34,9 @@ const GraphView: React.FC<GraphViewProps> = ({
   links,
   onSelect,
   highlightedNode,
-  visibleDomainIds
+  visibleDomainIds,
+  layoutPositions,
+  onLayoutChange
 }) => {
   const { theme } = useTheme();
   const themeClassName = theme?.className ?? 'default';
@@ -40,7 +45,12 @@ const GraphView: React.FC<GraphViewProps> = ({
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeCacheRef = useRef<Map<string, ForceNode>>(new Map());
+  const lastReportedLayoutRef = useRef<string>('');
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    lastReportedLayoutRef.current = JSON.stringify(layoutPositions ?? {});
+  }, [layoutPositions]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.ResizeObserver === 'undefined') {
@@ -103,11 +113,13 @@ const GraphView: React.FC<GraphViewProps> = ({
       const cached = nodeCacheRef.current.get(node.id);
       if (cached && cached.type === node.type) {
         Object.assign(cached, node);
+        applyLayoutPosition(cached, layoutPositions);
         nextNodes.push(cached);
         return;
       }
 
       const hydratedNode = { ...node } as ForceNode;
+      applyLayoutPosition(hydratedNode, layoutPositions);
       nodeCacheRef.current.set(node.id, hydratedNode);
       nextNodes.push(hydratedNode);
     };
@@ -117,7 +129,7 @@ const GraphView: React.FC<GraphViewProps> = ({
     moduleNodes.forEach(upsertNode);
 
     return nextNodes;
-  }, [domainNodes, artifactNodes, moduleNodes]);
+  }, [domainNodes, artifactNodes, moduleNodes, layoutPositions]);
 
   const graphData = useMemo(
     () => ({
@@ -152,6 +164,89 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
   }, [graphData]);
 
+  const emitLayoutUpdate = useCallback(() => {
+    if (!onLayoutChange) {
+      return;
+    }
+
+    const entries: Array<[string, GraphLayoutNodePosition]> = [];
+    nodeCacheRef.current.forEach((node, id) => {
+      if (typeof node.x !== 'number' || Number.isNaN(node.x) || typeof node.y !== 'number' || Number.isNaN(node.y)) {
+        return;
+      }
+
+      const payload: GraphLayoutNodePosition = {
+        x: roundCoordinate(node.x),
+        y: roundCoordinate(node.y)
+      };
+
+      if (typeof node.fx === 'number' && !Number.isNaN(node.fx)) {
+        payload.fx = roundCoordinate(node.fx);
+      }
+
+      if (typeof node.fy === 'number' && !Number.isNaN(node.fy)) {
+        payload.fy = roundCoordinate(node.fy);
+      }
+
+      entries.push([id, payload]);
+    });
+
+    const serialized = JSON.stringify(Object.fromEntries(entries));
+    if (serialized === lastReportedLayoutRef.current) {
+      return;
+    }
+
+    lastReportedLayoutRef.current = serialized;
+    onLayoutChange(Object.fromEntries(entries));
+  }, [onLayoutChange]);
+
+  const handleNodeDragEnd = useCallback(
+    (node: ForceNode) => {
+      if (node && typeof node.id === 'string') {
+        const layout = layoutPositions[node.id];
+
+        const resolvedX = resolveCoordinate(node.x, node.fx, layout?.x ?? null, layout?.fx ?? null);
+        const resolvedY = resolveCoordinate(node.y, node.fy, layout?.y ?? null, layout?.fy ?? null);
+
+        if (resolvedX !== null) {
+          node.x = resolvedX;
+          node.fx = resolvedX;
+        } else {
+          node.fx = undefined;
+          if (layout?.x !== undefined) {
+            node.x = layout.x;
+          }
+        }
+
+        if (resolvedY !== null) {
+          node.y = resolvedY;
+          node.fy = resolvedY;
+        } else {
+          node.fy = undefined;
+          if (layout?.y !== undefined) {
+            node.y = layout.y;
+          }
+        }
+
+        if (typeof node.vx === 'number') {
+          node.vx = 0;
+        }
+        if (typeof node.vy === 'number') {
+          node.vy = 0;
+        }
+
+        nodeCacheRef.current.set(node.id, node);
+      }
+
+      emitLayoutUpdate();
+    },
+    [emitLayoutUpdate, layoutPositions]
+  );
+
+  const handleEngineStop = useCallback(() => {
+    emitLayoutUpdate();
+  }, [emitLayoutUpdate]);
+
   return (
     <div ref={containerRef} className={styles.container}>
       <div className={styles.legend}>
@@ -174,11 +269,64 @@ const GraphView: React.FC<GraphViewProps> = ({
           onNodeClick={(node) => {
             onSelect(node as ForceNode);
           }}
+          onNodeDragEnd={handleNodeDragEnd}
+          onEngineStop={handleEngineStop}
         />
       </React.Suspense>
     </div>
   );
 };
+
+function applyLayoutPosition(node: ForceNode, layoutPositions: Record<string, GraphLayoutNodePosition>) {
+  const layout = layoutPositions[node.id];
+  if (!layout) {
+    return;
+  }
+
+  node.x = layout.x;
+  node.y = layout.y;
+
+  if (typeof layout.fx === 'number') {
+    node.fx = layout.fx;
+  } else if (node.fx !== undefined) {
+    node.fx = undefined;
+  }
+
+  if (typeof layout.fy === 'number') {
+    node.fy = layout.fy;
+  } else if (node.fy !== undefined) {
+    node.fy = undefined;
+  }
+}
+
+function roundCoordinate(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+function resolveCoordinate(
+  primary: unknown,
+  fallback: unknown,
+  stored: number | null,
+  storedFixed: number | null
+): number | null {
+  if (typeof primary === 'number' && Number.isFinite(primary)) {
+    return roundCoordinate(primary);
+  }
+
+  if (typeof fallback === 'number' && Number.isFinite(fallback)) {
+    return roundCoordinate(fallback);
+  }
+
+  if (typeof storedFixed === 'number' && Number.isFinite(storedFixed)) {
+    return roundCoordinate(storedFixed);
+  }
+
+  if (typeof stored === 'number' && Number.isFinite(stored)) {
+    return roundCoordinate(stored);
+  }
+
+  return null;
+}
 
 function flattenDomains(domains: DomainNode[], visibleDomainIds?: Set<string>): DomainNode[] {
   const visible = visibleDomainIds && visibleDomainIds.size > 0 ? visibleDomainIds : null;

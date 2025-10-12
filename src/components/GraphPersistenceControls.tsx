@@ -2,47 +2,48 @@ import { Button } from '@consta/uikit/Button';
 import { Text } from '@consta/uikit/Text';
 import React, { useMemo, useRef, useState } from 'react';
 import type { ArtifactNode, DomainNode, ModuleNode } from '../data';
+import {
+  GRAPH_SNAPSHOT_VERSION,
+  type GraphLayoutSnapshot,
+  type GraphSnapshotPayload,
+  type GraphSyncStatus
+} from '../types/graph';
 import styles from './GraphPersistenceControls.module.css';
 
 type StatusMessage =
   | { type: 'success'; message: string }
   | { type: 'error'; message: string };
 
-const SNAPSHOT_VERSION = 1;
-
-export type GraphSnapshotPayload = {
-  version: number;
-  exportedAt?: string;
-  modules: ModuleNode[];
-  domains: DomainNode[];
-  artifacts: ArtifactNode[];
-};
-
 type GraphPersistenceControlsProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
   onImport: (snapshot: GraphSnapshotPayload) => void;
+  syncStatus?: GraphSyncStatus | null;
+  layout?: GraphLayoutSnapshot;
 };
 
 const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   modules,
   domains,
   artifacts,
-  onImport
+  onImport,
+  syncStatus,
+  layout
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<StatusMessage | null>(null);
 
   const snapshot = useMemo<GraphSnapshotPayload>(
     () => ({
-      version: SNAPSHOT_VERSION,
+      version: GRAPH_SNAPSHOT_VERSION,
       exportedAt: new Date().toISOString(),
       modules,
       domains,
-      artifacts
+      artifacts,
+      layout
     }),
-    [modules, domains, artifacts]
+    [modules, domains, artifacts, layout]
   );
 
   const handleExport = () => {
@@ -59,7 +60,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
       link.remove();
       URL.revokeObjectURL(url);
       setStatus({ type: 'success', message: 'Экспорт выполнен. Файл сохранён.' });
-    } catch (error) {
+    } catch {
       setStatus({ type: 'error', message: 'Не удалось сформировать файл экспорта.' });
     }
   };
@@ -141,6 +142,25 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
           }`}
         >
           {status.message}
+        </Text>
+      )}
+      {syncStatus && (
+        <Text
+          size="xs"
+          className={`${styles.status} ${
+            syncStatus.state === 'error'
+              ? styles.statusError
+              : syncStatus.state === 'saving'
+                ? styles.statusInProgress
+                : styles.statusSecondary
+          }`}
+        >
+          {syncStatus.message ??
+            (syncStatus.state === 'saving'
+              ? 'Сохраняем изменения в хранилище...'
+              : syncStatus.state === 'error'
+                ? 'Не удалось синхронизировать данные.'
+                : 'Все изменения синхронизированы.')}
         </Text>
       )}
     </section>

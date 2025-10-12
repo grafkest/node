@@ -32,3 +32,11 @@
 .statusError {
   color: var(--color-typo-alert);
 }
+
+.statusSecondary {
+  color: var(--color-typo-secondary);
+}
+
+.statusInProgress {
+  color: var(--color-typo-ghost);
+}
