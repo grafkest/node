@@ -1,7 +1,8 @@
+import { Button } from '@consta/uikit/Button';
 import { Layout } from '@consta/uikit/Layout';
+import { Loader } from '@consta/uikit/Loader';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import { Loader } from '@consta/uikit/Loader';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
@@ -71,8 +72,11 @@ function App() {
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<GraphSyncStatus | null>(null);
   const [isSyncAvailable, setIsSyncAvailable] = useState(false);
+  const [isReloadingSnapshot, setIsReloadingSnapshot] = useState(false);
+  const [snapshotRetryAttempt, setSnapshotRetryAttempt] = useState(0);
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
+  const activeSnapshotControllerRef = useRef<AbortController | null>(null);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
@@ -99,15 +103,25 @@ function App() {
     []
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const loadSnapshot = useCallback(
+    async ({ withOverlay }: { withOverlay?: boolean } = {}) => {
+      activeSnapshotControllerRef.current?.abort();
 
-    const loadSnapshot = async () => {
+      const controller = new AbortController();
+      activeSnapshotControllerRef.current = controller;
+
+      if (withOverlay) {
+        setIsSnapshotLoading(true);
+      } else {
+        setIsReloadingSnapshot(true);
+      }
+
       try {
         const snapshot = await fetchGraphSnapshot(controller.signal);
         applySnapshot(snapshot);
         skipNextSyncRef.current = true;
         setSnapshotError(null);
+        setSnapshotRetryAttempt(0);
         setIsSyncAvailable(true);
         setSyncStatus({
           state: 'idle',
@@ -117,28 +131,71 @@ function App() {
         if (controller.signal.aborted) {
           return;
         }
+
         console.error('Не удалось загрузить граф из хранилища', error);
+        const detail = error instanceof Error ? error.message : null;
         setSnapshotError(
-          'Не удалось загрузить данные из хранилища. Используются локальные данные.'
+          detail
+            ? `Не удалось загрузить данные из хранилища (${detail}). Используются локальные данные.`
+            : 'Не удалось загрузить данные из хранилища. Используются локальные данные.'
         );
+        setSnapshotRetryAttempt((attempt) => attempt + 1);
         setIsSyncAvailable(false);
+        const syncErrorMessage = detail
+          ? `Нет связи с сервером (${detail}). Изменения не сохранятся.`
+          : 'Нет связи с сервером. Изменения не сохранятся.';
         setSyncStatus({
           state: 'error',
-          message: 'Нет связи с сервером. Изменения не сохранятся.'
+          message: syncErrorMessage
         });
       } finally {
-        if (!controller.signal.aborted) {
-          setIsSnapshotLoading(false);
+        const isCurrentRequest = activeSnapshotControllerRef.current === controller;
+
+        if (withOverlay) {
+          if (isCurrentRequest) {
+            setIsSnapshotLoading(false);
+          }
+        } else if (isCurrentRequest) {
+          setIsReloadingSnapshot(false);
+        }
+
+        if (isCurrentRequest) {
+          activeSnapshotControllerRef.current = null;
         }
       }
-    };
+    },
+    [applySnapshot]
+  );
 
-    loadSnapshot();
+  useEffect(() => {
+    void loadSnapshot({ withOverlay: true });
 
     return () => {
-      controller.abort();
+      if (activeSnapshotControllerRef.current) {
+        activeSnapshotControllerRef.current.abort();
+        activeSnapshotControllerRef.current = null;
+      }
     };
-  }, [applySnapshot]);
+  }, [loadSnapshot]);
+
+  useEffect(() => {
+    if (!snapshotError || snapshotRetryAttempt === 0 || typeof window === 'undefined') {
+      return;
+    }
+
+    if (isReloadingSnapshot) {
+      return;
+    }
+
+    const backoffDelay = Math.min(30000, 2000 * 2 ** (snapshotRetryAttempt - 1));
+    const timer = window.setTimeout(() => {
+      void loadSnapshot({ withOverlay: false });
+    }, backoffDelay);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [snapshotError, snapshotRetryAttempt, isReloadingSnapshot, loadSnapshot]);
 
   useEffect(() => {
     setProductFilter((prev) => {
@@ -1029,9 +1086,21 @@ function App() {
     <Layout className={styles.app} direction="column">
       {snapshotError && (
         <div className={styles.errorBanner} role="status" aria-live="polite">
-          <Text size="s" view="alert">
-            {snapshotError}
-          </Text>
+          <div className={styles.errorBannerContent}>
+            <Text size="s" view="alert">
+              {snapshotError}
+            </Text>
+            <Button
+              size="xs"
+              view="secondary"
+              label={isReloadingSnapshot ? 'Повторяем попытку...' : 'Повторить попытку'}
+              loading={isReloadingSnapshot}
+              disabled={isReloadingSnapshot}
+              onClick={() => {
+                void loadSnapshot({ withOverlay: false });
+              }}
+            />
+          </div>
         </div>
       )}
       <header className={styles.header}>
