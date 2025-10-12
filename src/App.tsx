@@ -370,9 +370,10 @@ function App() {
     return map;
   }, [domainData]);
 
-  const firstDomainId = useMemo(() => {
+  const defaultDomainId = useMemo(() => {
     const flattened = flattenDomainTree(domainData);
-    return flattened.length > 0 ? flattened[0].id : null;
+    const firstLeaf = flattened.find((domain) => !domain.children || domain.children.length === 0);
+    return firstLeaf ? firstLeaf.id : null;
   }, [domainData]);
 
   const contextModuleIds = useMemo(() => {
@@ -838,10 +839,13 @@ function App() {
       const fallbackDomain =
         selectedNode?.type === 'domain'
           ? [selectedNode.id]
-          : firstDomainId
-            ? [firstDomainId]
+          : defaultDomainId
+            ? [defaultDomainId]
             : [];
       const domainIds = (uniqueDomains.length > 0 ? uniqueDomains : fallbackDomain).filter(Boolean);
+      if (domainIds.length === 0) {
+        return;
+      }
       const uniqueDependencies = deduplicateNonEmpty(draft.dependencyIds).filter((id) => id !== moduleId);
       const uniqueProduces = deduplicateNonEmpty(draft.producedArtifactIds);
 
@@ -940,7 +944,7 @@ function App() {
       setSelectedNode({ ...newModule, type: 'module' });
       setViewMode('graph');
     },
-    [artifactData, firstDomainId, moduleData, selectedNode]
+    [artifactData, defaultDomainId, moduleData, selectedNode]
   );
 
   const handleCreateDomain = useCallback(
@@ -987,7 +991,7 @@ function App() {
       const normalizedDataType = draft.dataType.trim() || 'Не указан';
       const normalizedSampleUrl = draft.sampleUrl.trim() || '#';
       const producerId = draft.producedBy as string;
-      const domainId = draft.domainId ?? moduleById[producerId]?.domains[0] ?? firstDomainId;
+      const domainId = draft.domainId ?? moduleById[producerId]?.domains[0] ?? defaultDomainId;
       const consumers = deduplicateNonEmpty(draft.consumerIds);
 
       if (!domainId) {
@@ -1052,7 +1056,7 @@ function App() {
       });
       setViewMode('graph');
     },
-    [artifactData, firstDomainId, moduleById]
+    [artifactData, defaultDomainId, moduleById]
   );
 
   const handleImportGraph = useCallback(

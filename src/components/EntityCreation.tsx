@@ -289,7 +289,10 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
       productName: productName.trim() || '—',
       team: team.trim() || '—',
       status: statusLabels[status],
-      domains: domains.map((id) => domainLabelMap[id] ?? id),
+      domains:
+        domains.length > 0
+          ? domains.map((id) => domainLabelMap[id] ?? id)
+          : ['Не выбрано'],
       dependencies: dependencies.map((id) => moduleLabelMap[id] ?? id),
       produces: produces.map((id) => artifactLabelMap[id] ?? id),
       dataIn: inputs.map((input) => ({
@@ -342,12 +345,15 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     [name, description, productName, team, status, domains, dependencies, produces, inputs, outputs]
   );
 
+  const canAdd = payload.name.length > 0 && payload.domainIds.length > 0;
+
   const handleAdd = () => {
+    if (!canAdd) {
+      return;
+    }
     onSubmit('module', payload);
     onCreate(payload);
   };
-
-  const canAdd = payload.name.length > 0;
 
   return (
     <section className={styles.form}>
@@ -358,13 +364,14 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
       <div className={styles.fieldGroup}>
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
-            Название
+            Название <span className={styles.requiredMark} aria-hidden="true">*</span>
           </Text>
           <input
             className={styles.input}
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Например, Realtime Analytics Engine"
+            required
           />
         </label>
 
@@ -424,11 +431,11 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
 
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
-            Доменные области
+            Доменные области <span className={styles.requiredMark} aria-hidden="true">*</span>
           </Text>
           <Combobox<string>
             size="s"
-            placeholder="Добавьте домены"
+            placeholder="Добавьте домены (обязательно)"
             items={domainItems}
             value={domains}
             multiple
@@ -437,6 +444,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
             getItemLabel={(item) => domainLabelMap[item] ?? item}
             onChange={(next) => setDomains(next ?? [])}
             className={styles.combobox}
+            aria-required
           />
         </label>
 

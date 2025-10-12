@@ -49,6 +49,11 @@
   letter-spacing: 0.04em;
 }
 
+.requiredMark {
+  color: var(--color-typo-alert);
+  margin-left: 4px;
+}
+
 .input,
 .textarea {
   width: 100%;
