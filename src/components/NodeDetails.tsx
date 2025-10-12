@@ -687,7 +687,7 @@ const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, o
       value={value}
       getItemLabel={(option) => option.label}
       getItemKey={(option) => option.id}
-      onChange={({ value: nextValue }) => {
+      onChange={(nextValue) => {
         setValue(nextValue ?? null);
 
         if (!nextValue) {
