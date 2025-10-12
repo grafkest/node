@@ -31,7 +31,6 @@ export type ModuleDraftPayload = {
   status: ModuleStatus;
   domainIds: string[];
   dependencyIds: string[];
-  producedArtifactIds: string[];
   dataIn: ModuleInput[];
   dataOut: ModuleOutput[];
   ridOwner: RidOwner;
@@ -774,21 +773,19 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                       }
                     />
                   </label>
-                  <label className={styles.field}>
-                    <Text size="xs" weight="semibold" className={styles.label}>
-                      Оценка переиспользования
+                <div className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Оценка переиспользования
+                  </Text>
+                  <div className={styles.metricDisplay}>
+                    <Text size="2xl" weight="bold">
+                      {formatPercent(Math.max(0, Math.min(100, (draft.reuseScore ?? 0) * 100)))}%
                     </Text>
-                    <input
-                      className={styles.numberInput}
-                      type="number"
-                      value={draft.reuseScore}
-                      min={0}
-                      max={100}
-                      onChange={(event) =>
-                        handleFieldChange('reuseScore', Number(event.target.value) || 0)
-                      }
-                    />
-                  </label>
+                    <Text size="2xs" view="secondary" className={styles.metricHint}>
+                      Рассчитывается автоматически по интеграциям с другими модулями.
+                    </Text>
+                  </div>
+                </div>
                 </div>
 
                 <label className={styles.field}>
@@ -939,21 +936,6 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                     getItemKey={(item) => item}
                     getItemLabel={(item) => moduleLabelMap[item] ?? item}
                     onChange={(value) => handleFieldChange('dependencyIds', value ?? [])}
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <Text size="xs" weight="semibold" className={styles.label}>
-                    Производит артефакты
-                  </Text>
-                  <Combobox<string>
-                    size="s"
-                    items={artifactItems}
-                    value={draft.producedArtifactIds}
-                    multiple
-                    getItemKey={(item) => item}
-                    getItemLabel={(item) => artifactLabelMap[item] ?? item}
-                    onChange={(value) => handleFieldChange('producedArtifactIds', value ?? [])}
                   />
                 </label>
 
@@ -1127,8 +1109,8 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                     <Switch
                       size="s"
                       checked={draft.licenseServerIntegrated}
-                      onChange={({ checked }) =>
-                        handleFieldChange('licenseServerIntegrated', checked)
+                      onChange={(event) =>
+                        handleFieldChange('licenseServerIntegrated', event.target.checked)
                       }
                     />
                   </div>
@@ -1721,6 +1703,15 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
   );
 };
 
+function formatPercent(value: number): string {
+  const normalized = Number.isFinite(value) ? value : 0;
+  const formatter = new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: normalized % 1 === 0 ? 0 : 1,
+    maximumFractionDigits: 1
+  });
+  return formatter.format(normalized);
+}
+
 function createDefaultModuleDraft(): ModuleDraftPayload {
   return {
     name: '',
@@ -1730,7 +1721,6 @@ function createDefaultModuleDraft(): ModuleDraftPayload {
     status: 'in-dev',
     domainIds: [],
     dependencyIds: [],
-    producedArtifactIds: [],
     dataIn: [{ id: 'input-1', label: '', sourceId: undefined }],
     dataOut: [{ id: 'output-1', label: '', consumerIds: [] }],
     ridOwner: { company: '', division: '' },
@@ -1791,7 +1781,6 @@ function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
     status: module.status,
     domainIds: [...module.domains],
     dependencyIds: [...module.dependencies],
-    producedArtifactIds: [...module.produces],
     dataIn: module.dataIn.map((input) => ({ ...input })),
     dataOut: module.dataOut.map((output) => ({
       ...output,

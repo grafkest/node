@@ -53,9 +53,17 @@ const viewTabs = [
 
 type ViewMode = (typeof viewTabs)[number]['value'];
 
+type AdminNotice = {
+  id: number;
+  type: 'success' | 'error';
+  message: string;
+};
+
 function App() {
   const [domainData, setDomainData] = useState<DomainNode[]>(initialDomainTree);
-  const [moduleData, setModuleData] = useState<ModuleNode[]>(initialModules);
+  const [moduleData, setModuleDataState] = useState<ModuleNode[]>(() =>
+    recalculateReuseScores(initialModules)
+  );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -66,6 +74,7 @@ function App() {
   const [showAllConnections, setShowAllConnections] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
+  const [adminNotice, setAdminNotice] = useState<AdminNotice | null>(null);
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
   const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
@@ -77,18 +86,31 @@ function App() {
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
+  const adminNoticeIdRef = useRef(0);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
   );
 
+  const showAdminNotice = useCallback(
+    (type: AdminNotice['type'], message: string) => {
+      adminNoticeIdRef.current += 1;
+      setAdminNotice({ id: adminNoticeIdRef.current, type, message });
+    },
+    []
+  );
+
+  const dismissAdminNotice = useCallback(() => {
+    setAdminNotice(null);
+  }, []);
+
   const products = useMemo(() => buildProductList(moduleData), [moduleData]);
 
   const applySnapshot = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       setDomainData(snapshot.domains);
-      setModuleData(snapshot.modules);
+      setModuleDataState(recalculateReuseScores(snapshot.modules));
       setArtifactData(snapshot.artifacts);
       setSelectedNode(null);
       setSearch('');
@@ -866,13 +888,21 @@ function App() {
               : [];
 
       const result = buildModuleFromDraft(moduleId, draft, fallbackDomains, leafDomainIdSet, {
-        fallbackName: draft.name.trim() || `Новый модуль ${existingIds.size + 1}`
+        fallbackName: draft.name.trim() || `Новый модуль ${existingIds.size + 1}`,
+        currentProduces: []
       });
       if (!result) {
+        showAdminNotice(
+          'error',
+          'Не удалось сохранить модуль: выберите хотя бы одну доменную область.'
+        );
         return;
       }
 
       const { module: newModule, consumedArtifactIds } = result;
+      const recalculatedModules = recalculateReuseScores([...moduleData, newModule]);
+      const createdModule = recalculatedModules.find((module) => module.id === moduleId);
+      setModuleDataState(recalculatedModules);
 
       setArtifactData((prev) =>
         prev.map((artifact) => {
@@ -880,14 +910,12 @@ function App() {
           if (consumedArtifactIds.includes(artifact.id) && !artifact.consumerIds.includes(moduleId)) {
             next = { ...next, consumerIds: [...artifact.consumerIds, moduleId] };
           }
-          if (newModule.produces.includes(artifact.id) && artifact.producedBy !== moduleId) {
+          if (createdModule?.produces.includes(artifact.id) && artifact.producedBy !== moduleId) {
             next = { ...next, producedBy: moduleId };
           }
           return next;
         })
       );
-
-      setModuleData([...moduleData, newModule]);
       setLayoutPositions((prev) => {
         if (prev[moduleId]) {
           return prev;
@@ -906,17 +934,22 @@ function App() {
       });
       setSelectedDomains((prev) => {
         const next = new Set(prev);
-        newModule.domains.forEach((domainId) => {
+        createdModule?.domains.forEach((domainId) => {
           if (domainId) {
             next.add(domainId);
           }
         });
         return next;
       });
-      setSelectedNode({ ...newModule, type: 'module' });
+      if (createdModule) {
+        setSelectedNode({ ...createdModule, type: 'module' });
+      }
       setViewMode('graph');
+      if (createdModule) {
+        showAdminNotice('success', `Модуль «${createdModule.name}» создан.`);
+      }
     },
-    [defaultDomainId, leafDomainIdSet, moduleData, selectedNode]
+    [defaultDomainId, leafDomainIdSet, moduleData, selectedNode, showAdminNotice]
   );
 
   const handleUpdateModule = useCallback(
@@ -936,18 +969,25 @@ function App() {
               : [];
 
       const result = buildModuleFromDraft(moduleId, draft, fallbackDomains, leafDomainIdSet, {
-        fallbackName: existing.name
+        fallbackName: existing.name,
+        currentProduces: existing.produces
       });
       if (!result) {
+        showAdminNotice(
+          'error',
+          'Не удалось сохранить модуль: выберите хотя бы одну доменную область.'
+        );
         return;
       }
 
       const { module: updatedModule, consumedArtifactIds } = result;
-      const producedSet = new Set(updatedModule.produces);
-
-      setModuleData((prev) =>
-        prev.map((module) => (module.id === moduleId ? updatedModule : module))
+      const recalculatedModules = recalculateReuseScores(
+        moduleData.map((module) => (module.id === moduleId ? updatedModule : module))
       );
+      const recalculatedModule = recalculatedModules.find((module) => module.id === moduleId);
+      const producedSet = new Set(recalculatedModule?.produces ?? []);
+
+      setModuleDataState(recalculatedModules);
 
       setArtifactData((prev) =>
         prev.map((artifact) => {
@@ -976,14 +1016,21 @@ function App() {
       );
 
       setSelectedNode((prev) =>
-        prev && prev.id === moduleId ? { ...updatedModule, type: 'module' } : prev
+        prev && prev.id === moduleId && recalculatedModule
+          ? { ...recalculatedModule, type: 'module' }
+          : prev
       );
+
+      if (recalculatedModule) {
+        showAdminNotice('success', `Модуль «${recalculatedModule.name}» обновлён.`);
+      }
     },
-    [defaultDomainId, leafDomainIdSet, moduleData]
+    [defaultDomainId, leafDomainIdSet, moduleData, showAdminNotice]
   );
 
   const handleDeleteModule = useCallback(
     (moduleId: string) => {
+      const removedModule = moduleData.find((module) => module.id === moduleId);
       const producedArtifacts = artifactData
         .filter((artifact) => artifact.producedBy === moduleId)
         .map((artifact) => artifact.id);
@@ -998,22 +1045,22 @@ function App() {
           }))
       );
 
-      setModuleData((prev) =>
-        prev
-          .filter((module) => module.id !== moduleId)
-          .map((module) => ({
-            ...module,
-            dependencies: module.dependencies.filter((dependencyId) => dependencyId !== moduleId),
-            dataOut: module.dataOut.map((output) => ({
-              ...output,
-              consumerIds: (output.consumerIds ?? []).filter((consumerId) => consumerId !== moduleId)
-            })),
-            produces: module.produces.filter((artifactId) => !removedArtifactIds.has(artifactId)),
-            dataIn: module.dataIn.filter((input) =>
-              input.sourceId ? !removedArtifactIds.has(input.sourceId) : true
-            )
-          }))
-      );
+      const nextModulesBase = moduleData
+        .filter((module) => module.id !== moduleId)
+        .map((module) => ({
+          ...module,
+          dependencies: module.dependencies.filter((dependencyId) => dependencyId !== moduleId),
+          dataOut: module.dataOut.map((output) => ({
+            ...output,
+            consumerIds: (output.consumerIds ?? []).filter((consumerId) => consumerId !== moduleId)
+          })),
+          produces: module.produces.filter((artifactId) => !removedArtifactIds.has(artifactId)),
+          dataIn: module.dataIn.filter((input) =>
+            input.sourceId ? !removedArtifactIds.has(input.sourceId) : true
+          )
+        }));
+
+      setModuleDataState(recalculateReuseScores(nextModulesBase));
 
       setLayoutPositions((prev) => {
         const next = { ...prev };
@@ -1033,8 +1080,11 @@ function App() {
         }
         return prev;
       });
+      if (removedModule) {
+        showAdminNotice('success', `Модуль «${removedModule.name}» удалён.`);
+      }
     },
-    [artifactData, leafDomainIdSet]
+    [artifactData, moduleData, showAdminNotice]
   );
 
   const handleCreateDomain = useCallback(
@@ -1058,11 +1108,13 @@ function App() {
       const moduleIds = parentId ? draft.moduleIds : [];
       if (moduleIds.length > 0) {
         const moduleSet = new Set(moduleIds);
-        setModuleData((prev) =>
-          prev.map((module) =>
-            moduleSet.has(module.id) && !module.domains.includes(domainId)
-              ? { ...module, domains: [...module.domains, domainId] }
-              : module
+        setModuleDataState((prev) =>
+          recalculateReuseScores(
+            prev.map((module) =>
+              moduleSet.has(module.id) && !module.domains.includes(domainId)
+                ? { ...module, domains: [...module.domains, domainId] }
+                : module
+            )
           )
         );
       }
@@ -1077,8 +1129,12 @@ function App() {
         setSelectedNode({ ...newDomain, type: 'domain' });
       }
       setViewMode('graph');
+      showAdminNotice(
+        'success',
+        `${draft.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${normalizedName}» создан.`
+      );
     },
-    [domainData]
+    [domainData, showAdminNotice]
   );
 
   const handleUpdateDomain = useCallback(
@@ -1109,16 +1165,18 @@ function App() {
       setDomainData(rebuiltTree);
 
       const moduleSet = targetParentId ? new Set(draft.moduleIds) : new Set<string>();
-      setModuleData((prev) =>
-        prev.map((module) => {
-          const hasDomain = module.domains.includes(domainId);
-          if (moduleSet.has(module.id)) {
-            return hasDomain ? module : { ...module, domains: [...module.domains, domainId] };
-          }
-          return hasDomain
-            ? { ...module, domains: module.domains.filter((id) => id !== domainId) }
-            : module;
-        })
+      setModuleDataState((prev) =>
+        recalculateReuseScores(
+          prev.map((module) => {
+            const hasDomain = module.domains.includes(domainId);
+            if (moduleSet.has(module.id)) {
+              return hasDomain ? module : { ...module, domains: [...module.domains, domainId] };
+            }
+            return hasDomain
+              ? { ...module, domains: module.domains.filter((id) => id !== domainId) }
+              : module;
+          })
+        )
       );
 
       setSelectedNode((prev) =>
@@ -1128,8 +1186,12 @@ function App() {
             : { ...updatedDomain, type: 'domain' }
           : prev
       );
+      showAdminNotice(
+        'success',
+        `${updatedDomain.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${sanitizedName}» обновлён.`
+      );
     },
-    [domainData]
+    [domainData, showAdminNotice]
   );
 
   const handleDeleteDomain = useCallback(
@@ -1142,11 +1204,13 @@ function App() {
       const removedIds = new Set(collectDomainIds(removedDomain));
 
       setDomainData(nextTree);
-      setModuleData((prev) =>
-        prev.map((module) => ({
-          ...module,
-          domains: module.domains.filter((id) => !removedIds.has(id))
-        }))
+      setModuleDataState((prev) =>
+        recalculateReuseScores(
+          prev.map((module) => ({
+            ...module,
+            domains: module.domains.filter((id) => !removedIds.has(id))
+          }))
+        )
       );
       setArtifactData((prev) => prev.filter((artifact) => !removedIds.has(artifact.domainId)));
       setSelectedDomains((prev) => {
@@ -1162,8 +1226,12 @@ function App() {
         return next;
       });
       setSelectedNode((prev) => (prev && removedIds.has(prev.id) ? null : prev));
+      showAdminNotice(
+        'success',
+        `${removedDomain.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${removedDomain.name}» удалён.`
+      );
     },
-    [domainData]
+    [domainData, showAdminNotice]
   );
 
   const handleCreateArtifact = useCallback(
@@ -1181,6 +1249,7 @@ function App() {
       const consumers = deduplicateNonEmpty(draft.consumerIds);
 
       if (!domainId) {
+        showAdminNotice('error', 'Не удалось сохранить артефакт: выберите доменную область.');
         return;
       }
 
@@ -1197,48 +1266,50 @@ function App() {
 
       setArtifactData([...artifactData, newArtifact]);
 
-      setModuleData((prev) =>
-        prev.map((module) => {
-          let next = module;
+      setModuleDataState((prev) =>
+        recalculateReuseScores(
+          prev.map((module) => {
+            let next = module;
 
-          if (producerId && module.id === producerId) {
-            const produces = module.produces.includes(artifactId)
-              ? module.produces
-              : [...module.produces, artifactId];
-            const existingOutputIndex = module.dataOut.findIndex((output) => output.label === normalizedName);
-            const dataOut = existingOutputIndex >= 0
-              ? module.dataOut.map((output, index) =>
-                  index === existingOutputIndex
-                    ? { ...output, label: normalizedName, consumerIds: consumers }
-                    : output
-                )
-              : [
-                  ...module.dataOut,
+            if (producerId && module.id === producerId) {
+              const produces = module.produces.includes(artifactId)
+                ? module.produces
+                : [...module.produces, artifactId];
+              const existingOutputIndex = module.dataOut.findIndex((output) => output.label === normalizedName);
+              const dataOut = existingOutputIndex >= 0
+                ? module.dataOut.map((output, index) =>
+                    index === existingOutputIndex
+                      ? { ...output, label: normalizedName, consumerIds: consumers }
+                      : output
+                  )
+                : [
+                    ...module.dataOut,
+                    {
+                      id: `output-${module.dataOut.length + 1}-${artifactId}`,
+                      label: normalizedName,
+                      consumerIds: consumers
+                    }
+                  ];
+              next = { ...next, produces, dataOut };
+            }
+
+            if (consumers.includes(module.id) && !module.dataIn.some((input) => input.sourceId === artifactId)) {
+              next = {
+                ...next,
+                dataIn: [
+                  ...module.dataIn,
                   {
-                    id: `output-${module.dataOut.length + 1}-${artifactId}`,
+                    id: `input-${module.dataIn.length + 1}-${artifactId}`,
                     label: normalizedName,
-                    consumerIds: consumers
+                    sourceId: artifactId
                   }
-                ];
-            next = { ...next, produces, dataOut };
-          }
+                ]
+              };
+            }
 
-          if (consumers.includes(module.id) && !module.dataIn.some((input) => input.sourceId === artifactId)) {
-            next = {
-              ...next,
-              dataIn: [
-                ...module.dataIn,
-                {
-                  id: `input-${module.dataIn.length + 1}-${artifactId}`,
-                  label: normalizedName,
-                  sourceId: artifactId
-                }
-              ]
-            };
-          }
-
-          return next;
-        })
+            return next;
+          })
+        )
       );
 
       setSelectedNode({ ...newArtifact, type: 'artifact', reuseScore: 0 });
@@ -1248,8 +1319,9 @@ function App() {
         return next;
       });
       setViewMode('graph');
+      showAdminNotice('success', `Артефакт «${normalizedName}» создан.`);
     },
-    [artifactData, defaultDomainId, leafDomainIdSet, moduleById]
+    [artifactData, defaultDomainId, leafDomainIdSet, moduleById, showAdminNotice]
   );
 
   const handleUpdateArtifact = useCallback(
@@ -1266,6 +1338,7 @@ function App() {
       const producerId = draft.producedBy?.trim();
       const candidateDomainId = draft.domainId ?? existing.domainId;
       if (!candidateDomainId || !leafDomainIdSet.has(candidateDomainId)) {
+        showAdminNotice('error', 'Не удалось сохранить артефакт: выберите доменную область.');
         return;
       }
       const domainId = candidateDomainId;
@@ -1286,88 +1359,91 @@ function App() {
         prev.map((artifact) => (artifact.id === artifactId ? updatedArtifact : artifact))
       );
 
-      setModuleData((prev) =>
-        prev.map((module) => {
-          let next = module;
-          const isProducer = producerId && module.id === producerId;
-          const wasProducer = existing.producedBy && module.id === existing.producedBy;
-          let produces = module.produces;
-          let dataOut = module.dataOut;
+      setModuleDataState((prev) =>
+        recalculateReuseScores(
+          prev.map((module) => {
+            let next = module;
+            const isProducer = producerId && module.id === producerId;
+            const wasProducer = existing.producedBy && module.id === existing.producedBy;
+            let produces = module.produces;
+            let dataOut = module.dataOut;
 
-          if (isProducer) {
-            if (!produces.includes(artifactId)) {
-              produces = [...produces, artifactId];
-            }
-            const outputIndex = dataOut.findIndex(
-              (output) => output.label === existing.name || output.label === normalizedName
-            );
-            if (outputIndex >= 0) {
-              dataOut = dataOut.map((output, index) =>
-                index === outputIndex
-                  ? {
-                      ...output,
-                      label: normalizedName,
-                      consumerIds: consumers
-                    }
-                  : output
+            if (isProducer) {
+              if (!produces.includes(artifactId)) {
+                produces = [...produces, artifactId];
+              }
+              const outputIndex = dataOut.findIndex(
+                (output) => output.label === existing.name || output.label === normalizedName
               );
-            } else {
-              dataOut = [
-                ...dataOut,
-                {
-                  id: `output-${dataOut.length + 1}-${artifactId}`,
-                  label: normalizedName,
-                  consumerIds: consumers
-                }
-              ];
-            }
-          } else if (wasProducer) {
-            produces = produces.filter((id) => id !== artifactId);
-            dataOut = dataOut.filter(
-              (output) => output.label !== existing.name && output.label !== normalizedName
-            );
-          }
-
-          const isConsumer = consumers.includes(module.id);
-          const wasConsumer = existing.consumerIds.includes(module.id);
-          let dataIn = module.dataIn;
-
-          if (isConsumer) {
-            if (dataIn.some((input) => input.sourceId === artifactId)) {
-              dataIn = dataIn.map((input) =>
-                input.sourceId === artifactId ? { ...input, label: normalizedName } : input
+              if (outputIndex >= 0) {
+                dataOut = dataOut.map((output, index) =>
+                  index === outputIndex
+                    ? {
+                        ...output,
+                        label: normalizedName,
+                        consumerIds: consumers
+                      }
+                    : output
+                );
+              } else {
+                dataOut = [
+                  ...dataOut,
+                  {
+                    id: `output-${dataOut.length + 1}-${artifactId}`,
+                    label: normalizedName,
+                    consumerIds: consumers
+                  }
+                ];
+              }
+            } else if (wasProducer) {
+              produces = produces.filter((id) => id !== artifactId);
+              dataOut = dataOut.filter(
+                (output) => output.label !== existing.name && output.label !== normalizedName
               );
-            } else {
-              dataIn = [
-                ...dataIn,
-                {
-                  id: `input-${dataIn.length + 1}-${artifactId}`,
-                  label: normalizedName,
-                  sourceId: artifactId
-                }
-              ];
             }
-          } else if (wasConsumer) {
-            dataIn = dataIn.filter((input) => input.sourceId !== artifactId);
-          }
 
-          if (
-            produces !== module.produces ||
-            dataOut !== module.dataOut ||
-            dataIn !== module.dataIn
-          ) {
-            next = { ...module, produces, dataOut, dataIn };
-          }
+            const isConsumer = consumers.includes(module.id);
+            const wasConsumer = existing.consumerIds.includes(module.id);
+            let dataIn = module.dataIn;
 
-          return next;
-        })
+            if (isConsumer) {
+              if (dataIn.some((input) => input.sourceId === artifactId)) {
+                dataIn = dataIn.map((input) =>
+                  input.sourceId === artifactId ? { ...input, label: normalizedName } : input
+                );
+              } else {
+                dataIn = [
+                  ...dataIn,
+                  {
+                    id: `input-${dataIn.length + 1}-${artifactId}`,
+                    label: normalizedName,
+                    sourceId: artifactId
+                  }
+                ];
+              }
+            } else if (wasConsumer) {
+              dataIn = dataIn.filter((input) => input.sourceId !== artifactId);
+            }
+
+            if (
+              produces !== module.produces ||
+              dataOut !== module.dataOut ||
+              dataIn !== module.dataIn
+            ) {
+              next = { ...module, produces, dataOut, dataIn };
+            }
+
+            return next;
+          })
+        )
       );
 
       setSelectedNode((prev) =>
         prev && prev.id === artifactId ? { ...updatedArtifact, type: 'artifact', reuseScore: 0 } : prev
       );
+      showAdminNotice('success', `Артефакт «${normalizedName}» обновлён.`);
     },
-    [artifactData]
+    [artifactData, showAdminNotice]
   );
 
   const handleDeleteArtifact = useCallback(
@@ -1379,13 +1455,15 @@ function App() {
 
       setArtifactData((prev) => prev.filter((artifact) => artifact.id !== artifactId));
 
-      setModuleData((prev) =>
-        prev.map((module) => ({
-          ...module,
-          produces: module.produces.filter((id) => id !== artifactId),
-          dataOut: module.dataOut.filter((output) => output.label !== existing.name),
-          dataIn: module.dataIn.filter((input) => input.sourceId !== artifactId)
-        }))
+      setModuleDataState((prev) =>
+        recalculateReuseScores(
+          prev.map((module) => ({
+            ...module,
+            produces: module.produces.filter((id) => id !== artifactId),
+            dataOut: module.dataOut.filter((output) => output.label !== existing.name),
+            dataIn: module.dataIn.filter((input) => input.sourceId !== artifactId)
+          }))
+        )
       );
 
       setLayoutPositions((prev) => {
@@ -1395,8 +1473,9 @@ function App() {
       });
 
       setSelectedNode((prev) => (prev && prev.id === artifactId ? null : prev));
+      showAdminNotice('success', `Артефакт «${existing.name}» удалён.`);
     },
-    [artifactData]
+    [artifactData, showAdminNotice]
   );
 
   const handleImportGraph = useCallback(
@@ -1483,6 +1562,21 @@ function App() {
           onChange={(tab) => setViewMode(tab.value)}
         />
       </header>
+      {adminNotice && (
+        <div
+          key={adminNotice.id}
+          className={`${styles.noticeBanner} ${
+            adminNotice.type === 'success' ? styles.noticeSuccess : styles.noticeError
+          }`}
+          role={adminNotice.type === 'error' ? 'alert' : 'status'}
+          aria-live={adminNotice.type === 'error' ? 'assertive' : 'polite'}
+        >
+          <Text size="s" view={adminNotice.type === 'error' ? 'alert' : 'success'}>
+            {adminNotice.message}
+          </Text>
+          <Button size="xs" view="ghost" label="Скрыть" onClick={dismissAdminNotice} />
+        </div>
+      )}
       <main
         className={styles.main}
         hidden={!isGraphActive}
@@ -1618,7 +1712,7 @@ function buildModuleFromDraft(
   draft: ModuleDraftPayload,
   fallbackDomains: string[],
   allowedDomainIds: Set<string>,
-  options: { fallbackName: string }
+  options: { fallbackName: string; currentProduces?: string[] }
 ): ModuleBuildResult | null {
   const normalizedName = draft.name.trim() || options.fallbackName;
   const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
@@ -1633,7 +1727,7 @@ function buildModuleFromDraft(
   }
 
   const dependencies = deduplicateNonEmpty(draft.dependencyIds).filter((id) => id !== moduleId);
-  const produces = deduplicateNonEmpty(draft.producedArtifactIds);
+  const produces = deduplicateNonEmpty(options.currentProduces ?? []);
 
   const preparedInputs = (draft.dataIn.length > 0 ? draft.dataIn : [{ id: '', label: '', sourceId: undefined }]).map((input, index) => ({
     id: input.id?.trim() || `input-${index + 1}`,
@@ -1722,6 +1816,51 @@ function buildModuleFromDraft(
   };
 
   return { module, consumedArtifactIds };
+}
+
+function recalculateReuseScores(modules: ModuleNode[]): ModuleNode[] {
+  if (modules.length === 0) {
+    return modules;
+  }
+
+  const integrationMap = buildModuleIntegrationMap(modules);
+  const denominator = Math.max(1, modules.length - 1);
+
+  return modules.map((module) => {
+    const connections = integrationMap.get(module.id);
+    const score = connections ? Math.min(1, connections.size / denominator) : 0;
+    return { ...module, reuseScore: score };
+  });
+}
+
+function buildModuleIntegrationMap(modules: ModuleNode[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+
+  modules.forEach((module) => {
+    map.set(module.id, new Set());
+  });
+
+  modules.forEach((module) => {
+    module.dependencies.forEach((dependencyId) => {
+      if (!map.has(dependencyId) || dependencyId === module.id) {
+        return;
+      }
+      map.get(module.id)?.add(dependencyId);
+      map.get(dependencyId)?.add(module.id);
+    });
+
+    module.dataOut.forEach((output) => {
+      (output.consumerIds ?? []).forEach((consumerId) => {
+        if (!map.has(consumerId) || consumerId === module.id) {
+          return;
+        }
+        map.get(module.id)?.add(consumerId);
+        map.get(consumerId)?.add(module.id);
+      });
+    });
+  });
+
+  return map;
 }
 
 function clampNumber(value: number, min: number, max: number): number {

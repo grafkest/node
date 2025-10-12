@@ -81,6 +81,16 @@
   gap: 6px;
 }
 
+.metricDisplay {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metricHint {
+  margin: 0;
+}
+
 .label {
   margin: 0;
 }
