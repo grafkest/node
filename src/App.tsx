@@ -429,6 +429,15 @@ function App() {
 
     if (showAllConnections) {
       filteredModules.forEach((module) => {
+        module.dependencies.forEach((dependencyId) => {
+          extraModuleIds.add(dependencyId);
+        });
+
+        const dependents = moduleDependents.get(module.id);
+        dependents?.forEach((dependentId) => {
+          extraModuleIds.add(dependentId);
+        });
+
         module.produces.forEach((artifactId) => {
           const artifact = artifactMap.get(artifactId);
           artifact?.consumerIds.forEach((consumerId) => extraModuleIds.add(consumerId));
@@ -465,7 +474,14 @@ function App() {
     });
 
     return extended;
-  }, [filteredModules, contextModuleIds, moduleById, showAllConnections, artifactMap]);
+  }, [
+    filteredModules,
+    contextModuleIds,
+    moduleById,
+    showAllConnections,
+    artifactMap,
+    moduleDependents
+  ]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
@@ -793,7 +809,9 @@ function App() {
     (positions: Record<string, GraphLayoutNodePosition>) => {
       setLayoutPositions((prev) => {
         const merged = mergeLayoutPositions(prev, positions);
-        const pruned = pruneLayoutPositions(merged, activeNodeIds);
+        const ensuredActiveIds = new Set(activeNodeIds);
+        Object.keys(positions).forEach((id) => ensuredActiveIds.add(id));
+        const pruned = pruneLayoutPositions(merged, ensuredActiveIds);
         return layoutsEqual(prev, pruned) ? prev : pruned;
       });
     },
