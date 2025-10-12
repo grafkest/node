@@ -21,7 +21,7 @@ export async function fetchGraphSnapshot(signal?: AbortSignal): Promise<GraphSna
     modules: snapshot.modules,
     domains: snapshot.domains,
     artifacts: snapshot.artifacts,
-    layout: normalizeLayout(snapshot.layout)
+    layout: normalizeLayoutSnapshot(snapshot.layout)
   };
 }
 
@@ -44,7 +44,9 @@ export async function persistGraphSnapshot(
   }
 }
 
-function normalizeLayout(layout: GraphSnapshotPayload['layout']): GraphLayoutSnapshot | undefined {
+export function normalizeLayoutSnapshot(
+  layout: GraphSnapshotPayload['layout']
+): GraphLayoutSnapshot | undefined {
   if (!layout || typeof layout !== 'object' || !layout.nodes) {
     return undefined;
   }
