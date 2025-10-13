@@ -150,6 +150,19 @@
   gap: 8px;
 }
 
+.inlineForm {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.inlineButtons {
+  display: flex;
+  gap: 8px;
+}
+
 .chipList {
   display: flex;
   flex-wrap: wrap;

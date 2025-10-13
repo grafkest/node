@@ -7,6 +7,8 @@ export type DomainNode = {
    * Корневые домены используются как группирующие папки и не попадают в граф или статистику.
    */
   isCatalogRoot?: boolean;
+  experts?: string[];
+  meetupLink?: string;
 };
 
 export type ModuleStatus = 'in-dev' | 'production' | 'deprecated';
@@ -30,7 +32,9 @@ export type TeamRole =
   | 'Backend'
   | 'Frontend'
   | 'Архитектор'
-  | 'Тестировщик';
+  | 'Тестировщик'
+  | 'Руководитель проекта'
+  | 'UX';
 
 export type TeamMember = {
   id: string;
@@ -75,7 +79,7 @@ export type ModuleNode = {
   name: string;
   description: string;
   domains: string[];
-  team: string;
+  creatorCompany: string;
   productName: string;
   projectTeam: TeamMember[];
   technologyStack: string[];
@@ -109,6 +113,8 @@ export const domainTree: DomainNode[] = [
     name: 'Инфраструктурное планирование',
     description:
       'Концептуальное проектирование и реинжиниринг наземной инфраструктуры месторождений',
+    experts: ['Ирина Соколова', 'Павел Ефимов'],
+    meetupLink: 'https://meetups.nedra.digital/infraplan',
     children: [
       {
         id: 'data-preparation',
@@ -134,6 +140,8 @@ export const domainTree: DomainNode[] = [
     id: 'digital-operations',
     name: 'Цифровое управление добычей',
     description: 'Мониторинг, оптимизация и дистанционное управление объектами добычи',
+    experts: ['Александр Романов', 'Дарья Климова'],
+    meetupLink: 'https://meetups.nedra.digital/digital-operations',
     children: [
       {
         id: 'real-time-monitoring',
@@ -156,6 +164,8 @@ export const domainTree: DomainNode[] = [
     id: 'workover-operations',
     name: 'Внутрискважинные операции',
     description: 'Планирование, контроль и аналитика работ по ремонту скважин',
+    experts: ['Максим Орлов', 'Ольга Шаталова'],
+    meetupLink: 'https://meetups.nedra.digital/workover',
     children: [
       {
         id: 'workover-planning',
@@ -199,7 +209,7 @@ export const modules: ModuleNode[] = [
     description:
       'Консолидирует инженерные и производственные данные, нормализует их и подготавливает к инфраструктурному моделированию.',
     domains: ['data-preparation'],
-    team: 'INFRAPLAN Data Services',
+    creatorCompany: 'INFRAPLAN Data Services',
     productName: 'Nedra.Production INFRAPLAN',
     projectTeam: [
       { id: 'infraplan-owner', fullName: 'Алексей Сорокин', role: 'Владелец продукта' },
@@ -283,7 +293,7 @@ export const modules: ModuleNode[] = [
     description:
       'Автоматизирует подбор вариантов размещения объектов обустройства с учётом рельефа, технологических и экологических ограничений.',
     domains: ['layout-optimization'],
-    team: 'INFRAPLAN Modeling',
+    creatorCompany: 'INFRAPLAN Modeling',
     productName: 'Nedra.Production INFRAPLAN',
     projectTeam: [
       { id: 'layout-owner', fullName: 'Надежда Малахова', role: 'Владелец продукта' },
@@ -363,7 +373,7 @@ export const modules: ModuleNode[] = [
     description:
       'Расчитывает экономическую эффективность вариантов обустройства и формирует инвестиционные досье.',
     domains: ['economic-evaluation'],
-    team: 'INFRAPLAN Economics',
+    creatorCompany: 'INFRAPLAN Economics',
     productName: 'Nedra.Production INFRAPLAN',
     projectTeam: [
       { id: 'econ-owner', fullName: 'Светлана Дорофеева', role: 'Владелец продукта' },
@@ -445,7 +455,7 @@ export const modules: ModuleNode[] = [
     description:
       'Собирает телеметрию наземной инфраструктуры в реальном времени и формирует интегрированное хранилище цифрового двойника.',
     domains: ['real-time-monitoring'],
-    team: 'Digital Twin Telemetry',
+    creatorCompany: 'Digital Twin Telemetry',
     productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
       { id: 'dtwin-mon-owner', fullName: 'Егор Панин', role: 'Владелец продукта' },
@@ -530,7 +540,7 @@ export const modules: ModuleNode[] = [
     description:
       'Генерирует рекомендации по управлению режимами объектов и прогнозирует эффект от внедрения цифрового двойника.',
     domains: ['production-optimization'],
-    team: 'Digital Twin Orchestration',
+    creatorCompany: 'Digital Twin Orchestration',
     productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
       { id: 'dtwin-opt-owner', fullName: 'Тимур Алиев', role: 'Владелец продукта' },
@@ -616,7 +626,7 @@ export const modules: ModuleNode[] = [
     description:
       'Обеспечивает дистанционное управление производственными узлами и обратную связь по выполнению команд.',
     domains: ['remote-control'],
-    team: 'Digital Twin Remote Ops',
+    creatorCompany: 'Digital Twin Remote Ops',
     productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
       { id: 'dtwin-remote-owner', fullName: 'Оксана Кривцова', role: 'Владелец продукта' },
@@ -696,7 +706,7 @@ export const modules: ModuleNode[] = [
     description:
       'Формирует и согласует программы ремонтно-изоляционных и капитальных работ по скважинам.',
     domains: ['workover-planning'],
-    team: 'WWO Planning Office',
+    creatorCompany: 'WWO Planning Office',
     productName: 'Nedra.Production WWO',
     projectTeam: [
       { id: 'wwo-plan-owner', fullName: 'Галина Кручина', role: 'Владелец продукта' },
@@ -777,7 +787,7 @@ export const modules: ModuleNode[] = [
     description:
       'Контролирует выполнение ремонтных и изоляционных работ, собирает фактические параметры и фотоотчёты с площадки.',
     domains: ['field-execution'],
-    team: 'WWO Field Operations',
+    creatorCompany: 'WWO Field Operations',
     productName: 'Nedra.Production WWO',
     projectTeam: [
       { id: 'wwo-exec-owner', fullName: 'Фарид Мансуров', role: 'Владелец продукта' },
@@ -857,7 +867,7 @@ export const modules: ModuleNode[] = [
     description:
       'Анализирует эффективность ремонтов, выявляет отклонения и поддерживает управленческие решения по фонду скважин.',
     domains: ['quality-analytics'],
-    team: 'WWO Analytics Lab',
+    creatorCompany: 'WWO Analytics Lab',
     productName: 'Nedra.Production WWO',
     projectTeam: [
       { id: 'wwo-analytics-owner', fullName: 'Ольга Вершинина', role: 'Владелец продукта' },
@@ -941,7 +951,7 @@ export const modules: ModuleNode[] = [
     description:
       'Площадка для быстрых продуктовых экспериментов, собирающая телеметрию и мгновенно распространяющая результаты в продуктовые команды.',
     domains: ['real-time-monitoring', 'production-optimization'],
-    team: 'Лаборатория цифровых испытаний',
+    creatorCompany: 'Лаборатория цифровых испытаний',
     productName: 'Digital Operations Suite',
     projectTeam: [
       { id: 'lab-owner', fullName: 'Кира Левина', role: 'Владелец продукта' },
@@ -1041,7 +1051,7 @@ export const artifacts: ArtifactNode[] = [
       'module-infraplan-economics',
       'module-dtwin-optimizer'
     ],
-    dataType: 'Инженерные данные',
+    dataType: 'Excel',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-source-pack.zip'
   },
   {
@@ -1052,7 +1062,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'layout-optimization',
     producedBy: 'module-infraplan-layout',
     consumerIds: ['module-infraplan-economics'],
-    dataType: 'Геомодели',
+    dataType: 'LAS',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-layout.json'
   },
   {
@@ -1063,7 +1073,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'economic-evaluation',
     producedBy: 'module-infraplan-economics',
     consumerIds: [],
-    dataType: 'Финансовая аналитика',
+    dataType: 'PDF',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-economics.pdf'
   },
   {
@@ -1074,7 +1084,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'real-time-monitoring',
     producedBy: 'module-dtwin-monitoring',
     consumerIds: ['module-dtwin-optimizer'],
-    dataType: 'Потоковые данные',
+    dataType: 'Parquet',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-telemetry.parquet'
   },
   {
@@ -1085,7 +1095,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'production-optimization',
     producedBy: 'module-dtwin-optimizer',
     consumerIds: ['module-dtwin-remote-control'],
-    dataType: 'Управляющие команды',
+    dataType: 'JSON',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-optimization-orders.json'
   },
   {
@@ -1096,7 +1106,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'remote-control',
     producedBy: 'module-dtwin-remote-control',
     consumerIds: [],
-    dataType: 'Управляющие сигналы',
+    dataType: 'Avro',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-remote-commands.avro'
   },
   {
@@ -1107,7 +1117,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'workover-planning',
     producedBy: 'module-wwo-planner',
     consumerIds: ['module-wwo-execution', 'module-wwo-analytics'],
-    dataType: 'Производственный план',
+    dataType: 'XLSX',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-plan.xlsx'
   },
   {
@@ -1118,7 +1128,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'field-execution',
     producedBy: 'module-wwo-execution',
     consumerIds: ['module-wwo-analytics', 'module-wwo-planner'],
-    dataType: 'Операционные данные',
+    dataType: 'CSV',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-operations-log.csv'
   },
   {
@@ -1129,7 +1139,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'quality-analytics',
     producedBy: 'module-wwo-analytics',
     consumerIds: [],
-    dataType: 'BI-отчёт',
+    dataType: 'Power BI',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-performance-dashboard.pdf'
   }
 ];

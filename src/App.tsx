@@ -1337,11 +1337,15 @@ function App() {
       const normalizedName = draft.name.trim() || `Новый домен ${existingIds.size + 1}`;
       const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
       const parentId = draft.isCatalogRoot ? undefined : draft.parentId;
+      const experts = draft.experts.map((expert) => expert.trim()).filter((expert) => expert);
+      const meetupLink = draft.meetupLink.trim();
       const newDomain: DomainNode = {
         id: domainId,
         name: normalizedName,
         description: normalizedDescription,
-        isCatalogRoot: draft.isCatalogRoot
+        isCatalogRoot: draft.isCatalogRoot,
+        experts,
+        meetupLink: meetupLink || undefined
       };
 
       const updatedDomains = addDomainToTree(domainData, parentId, newDomain);
@@ -1389,12 +1393,16 @@ function App() {
       const sanitizedName = draft.name.trim() || extracted.name;
       const sanitizedDescription =
         draft.description.trim() || extracted.description || 'Описание не заполнено';
+      const experts = draft.experts.map((expert) => expert.trim()).filter((expert) => expert);
+      const meetupLink = draft.meetupLink.trim();
 
       const updatedDomain: DomainNode = {
         ...extracted,
         name: sanitizedName,
         description: sanitizedDescription,
-        isCatalogRoot: draft.isCatalogRoot
+        isCatalogRoot: draft.isCatalogRoot,
+        experts,
+        meetupLink: meetupLink || undefined
       };
 
       const descendantIds = new Set(collectDomainIds(updatedDomain));
@@ -1772,6 +1780,15 @@ function App() {
       return;
     }
 
+    const normalizedName = trimmedName.toLowerCase();
+    const hasDuplicate = graphs.some(
+      (graph) => graph.name.trim().toLowerCase() === normalizedName
+    );
+    if (hasDuplicate) {
+      setGraphActionStatus({ type: 'error', message: 'Граф с таким названием уже существует.' });
+      return;
+    }
+
     const includeDomains = graphCopyOptions.has('domains');
     const includeModules = graphCopyOptions.has('modules');
     const includeArtifacts = graphCopyOptions.has('artifacts');
@@ -1815,7 +1832,8 @@ function App() {
     graphCopyOptions,
     isGraphActionInProgress,
     refreshGraphs,
-    showAdminNotice
+    showAdminNotice,
+    graphs
   ]);
 
   const handleDeleteGraph = useCallback(
@@ -2276,7 +2294,8 @@ function buildModuleFromDraft(
   const normalizedName = draft.name.trim() || options.fallbackName;
   const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
   const normalizedProduct = draft.productName.trim() || 'Новый продукт';
-  const normalizedTeam = draft.team.trim() || 'Команда не указана';
+  const normalizedCreatorCompany =
+    draft.creatorCompany.trim() || 'Компания создатель не указана';
 
   const uniqueDomains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
   const fallbackCandidates = deduplicateNonEmpty(fallbackDomains).filter((id) => allowedDomainIds.has(id));
@@ -2366,7 +2385,7 @@ function buildModuleFromDraft(
     name: normalizedName,
     description: normalizedDescription,
     domains: resolvedDomains,
-    team: normalizedTeam,
+    creatorCompany: normalizedCreatorCompany,
     productName: normalizedProduct,
     projectTeam: preparedTeam,
     technologyStack,

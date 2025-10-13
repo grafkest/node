@@ -168,7 +168,7 @@ const StatsDashboard = ({
 
   const teamLeaders = useMemo<TeamDatum[]>(() => {
     const counts = modules.reduce<Record<string, number>>((acc, module) => {
-      acc[module.team] = (acc[module.team] ?? 0) + 1;
+      acc[module.creatorCompany] = (acc[module.creatorCompany] ?? 0) + 1;
       return acc;
     }, {});
 
@@ -367,7 +367,7 @@ const StatsDashboard = ({
         </Card>
         <Card className={styles.card} verticalSpace="l" horizontalSpace="l" shadow={false}>
           <Text size="s" weight="semibold" className={styles.cardTitle}>
-            Команды-лидеры по числу модулей
+            Компании-лидеры по числу модулей
           </Text>
           <Bar {...teamBarProps} />
         </Card>
