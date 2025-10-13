@@ -5,7 +5,7 @@ import { Select } from '@consta/uikit/Select';
 import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type ArtifactNode,
   type DomainNode,
@@ -27,7 +27,7 @@ export type ModuleDraftPayload = {
   name: string;
   description: string;
   productName: string;
-  team: string;
+  creatorCompany: string;
   status: ModuleStatus;
   domainIds: string[];
   dependencyIds: string[];
@@ -60,6 +60,8 @@ export type DomainDraftPayload = {
   parentId?: string;
   moduleIds: string[];
   isCatalogRoot: boolean;
+  experts: string[];
+  meetupLink: string;
 };
 
 export type ArtifactDraftPayload = {
@@ -120,6 +122,15 @@ const adminTabs = [
 
 const ROOT_DOMAIN_OPTION = '__root__';
 const CREATE_COMPANY_OPTION = '__create__';
+const CREATE_PRODUCT_OPTION = '__create_product__';
+const CREATE_CREATOR_COMPANY_OPTION = '__create_creator_company__';
+const CREATE_LOCALIZATION_OPTION = '__create_localization__';
+const CREATE_RID_COMPANY_OPTION = '__create_rid_company__';
+const CREATE_RID_DIVISION_OPTION = '__create_rid_division__';
+const CREATE_TECHNOLOGY_OPTION = '__create_technology__';
+const CREATE_LIBRARY_OPTION = '__create_library__';
+const CREATE_LIBRARY_VERSION_OPTION = '__create_library_version__';
+const CREATE_DATA_TYPE_OPTION = '__create_data_type__';
 
 const statusLabels: Record<ModuleStatus, string> = {
   'in-dev': 'В разработке',
@@ -145,7 +156,9 @@ const teamRoleOptions: SelectItem<TeamRole>[] = (
     'Backend',
     'Frontend',
     'Архитектор',
-    'Тестировщик'
+    'Тестировщик',
+    'Руководитель проекта',
+    'UX'
   ] as TeamRole[]
 ).map((role) => ({ label: role, value: role }));
 
@@ -211,29 +224,85 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [modules]);
 
+  const knownProductNames = useMemo(() => buildProductNames(modules), [modules]);
+  const knownCreatorCompanies = useMemo(() => buildCreatorCompanies(modules), [modules]);
+  const knownLocalizations = useMemo(() => buildLocalizationList(modules), [modules]);
+  const knownTechnologyOptions = useMemo(() => buildTechnologyList(modules), [modules]);
+  const knownRidCompanyRegistry = useMemo(
+    () => buildRidCompanyRegistry(modules),
+    [modules]
+  );
+  const knownLibraryRegistry = useMemo(() => buildLibraryRegistry(modules), [modules]);
+  const knownArtifactDataTypes = useMemo(() => buildArtifactDataTypes(artifacts), [artifacts]);
+
   const [companyNames, setCompanyNames] = useState<string[]>(knownCompanyNames);
+  const [productNames, setProductNames] = useState<string[]>(knownProductNames);
+  const [creatorCompanies, setCreatorCompanies] = useState<string[]>(knownCreatorCompanies);
+  const [localizations, setLocalizations] = useState<string[]>(knownLocalizations);
+  const [technologyOptions, setTechnologyOptions] = useState<string[]>(knownTechnologyOptions);
+  const [ridCompanyRegistry, setRidCompanyRegistry] = useState<Record<string, string[]>>(
+    knownRidCompanyRegistry
+  );
+  const [libraryRegistry, setLibraryRegistry] = useState<Record<string, string[]>>(
+    knownLibraryRegistry
+  );
+  const [artifactDataTypes, setArtifactDataTypes] = useState<string[]>(knownArtifactDataTypes);
 
   useEffect(() => {
-    setCompanyNames((prev) => {
-      const merged = new Set(prev);
-      knownCompanyNames.forEach((name) => merged.add(name));
-      return Array.from(merged).sort((a, b) => a.localeCompare(b, 'ru'));
-    });
+    setCompanyNames((prev) => mergeStringCollections(prev, knownCompanyNames));
   }, [knownCompanyNames]);
 
+  useEffect(() => {
+    setProductNames((prev) => mergeStringCollections(prev, knownProductNames));
+  }, [knownProductNames]);
+
+  useEffect(() => {
+    setCreatorCompanies((prev) => mergeStringCollections(prev, knownCreatorCompanies));
+  }, [knownCreatorCompanies]);
+
+  useEffect(() => {
+    setLocalizations((prev) => mergeStringCollections(prev, knownLocalizations));
+  }, [knownLocalizations]);
+
+  useEffect(() => {
+    setTechnologyOptions((prev) => mergeStringCollections(prev, knownTechnologyOptions));
+  }, [knownTechnologyOptions]);
+
+  useEffect(() => {
+    setRidCompanyRegistry((prev) => mergeRegistry(prev, knownRidCompanyRegistry));
+  }, [knownRidCompanyRegistry]);
+
+  useEffect(() => {
+    setLibraryRegistry((prev) => mergeRegistry(prev, knownLibraryRegistry));
+  }, [knownLibraryRegistry]);
+
+  useEffect(() => {
+    setArtifactDataTypes((prev) => mergeStringCollections(prev, knownArtifactDataTypes));
+  }, [knownArtifactDataTypes]);
+
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
-  const domainParentItems = useMemo(
-    () => [ROOT_DOMAIN_OPTION, ...domainOptions.slice(1).map((item) => item.value)],
-    [domainOptions]
+  const catalogDomainIds = useMemo(() => collectCatalogDomainIds(domains), [domains]);
+  const parentDomainIds = useMemo(
+    () => flattenDomainTree(domains).map((domain) => domain.id),
+    [domains]
   );
+  const domainDescendantMap = useMemo(() => buildDomainDescendantMap(domains), [domains]);
   const domainParentLabelMap = useMemo(
-    () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой домен', ...domainLabelMap }),
+    () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой каталог', ...domainLabelMap }),
     [domainLabelMap]
   );
 
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
   const [selectedDomainId, setSelectedDomainId] = useState<string>('__new__');
   const [selectedArtifactId, setSelectedArtifactId] = useState<string>('__new__');
+
+  const forbiddenParentIds = useMemo(() => {
+    if (selectedDomainId === '__new__') {
+      return [] as string[];
+    }
+    const descendants = domainDescendantMap[selectedDomainId] ?? [];
+    return [selectedDomainId, ...descendants];
+  }, [domainDescendantMap, selectedDomainId]);
 
   const [moduleDraft, setModuleDraft] = useState<ModuleDraftPayload>(() => createDefaultModuleDraft());
   const [moduleStep, setModuleStep] = useState<number>(0);
@@ -374,12 +443,85 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!trimmed) {
       return;
     }
-    setCompanyNames((prev) => {
-      if (prev.some((item) => item === trimmed)) {
-        return prev;
-      }
-      return [...prev, trimmed].sort((a, b) => a.localeCompare(b, 'ru'));
-    });
+    setCompanyNames((prev) => mergeStringCollections(prev, [trimmed]));
+  };
+
+  const registerProductName = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    setProductNames((prev) => mergeStringCollections(prev, [trimmed]));
+  };
+
+  const registerCreatorCompany = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    setCreatorCompanies((prev) => mergeStringCollections(prev, [trimmed]));
+  };
+
+  const registerLocalization = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    setLocalizations((prev) => mergeStringCollections(prev, [trimmed]));
+  };
+
+  const registerTechnology = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    setTechnologyOptions((prev) => mergeStringCollections(prev, [trimmed]));
+  };
+
+  const registerRidCompany = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    setRidCompanyRegistry((prev) => mergeRegistry(prev, { [trimmed]: [] }));
+  };
+
+  const registerRidDivision = (company: string, division: string) => {
+    const normalizedCompany = company.trim();
+    const normalizedDivision = division.trim();
+    if (!normalizedCompany || !normalizedDivision) {
+      return;
+    }
+    setRidCompanyRegistry((prev) =>
+      mergeRegistry(prev, { [normalizedCompany]: [normalizedDivision] })
+    );
+  };
+
+  const registerLibrary = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    setLibraryRegistry((prev) => mergeRegistry(prev, { [trimmed]: [] }));
+  };
+
+  const registerLibraryVersion = (library: string, version: string) => {
+    const trimmedLibrary = library.trim();
+    const trimmedVersion = version.trim();
+    if (!trimmedLibrary || !trimmedVersion) {
+      return;
+    }
+    setLibraryRegistry((prev) =>
+      mergeRegistry(prev, { [trimmedLibrary]: [trimmedVersion] })
+    );
+  };
+
+  const registerArtifactDataType = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    setArtifactDataTypes((prev) => mergeStringCollections(prev, [trimmed]));
   };
 
   const moduleSelectValue = moduleOptions.find((item) => item.value === selectedModuleId) ?? moduleOptions[0];
@@ -465,6 +607,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             moduleLabelMap={moduleLabelMap}
             artifactItems={artifacts.map((artifact) => artifact.id)}
             artifactLabelMap={artifactLabelMap}
+            productNames={productNames}
+            onRegisterProduct={registerProductName}
+            creatorCompanies={creatorCompanies}
+            onRegisterCreatorCompany={registerCreatorCompany}
+            localizations={localizations}
+            onRegisterLocalization={registerLocalization}
+            ridCompanyRegistry={ridCompanyRegistry}
+            onRegisterRidCompany={registerRidCompany}
+            onRegisterRidDivision={registerRidDivision}
+            technologyOptions={technologyOptions}
+            onRegisterTechnology={registerTechnology}
+            libraryRegistry={libraryRegistry}
+            onRegisterLibrary={registerLibrary}
+            onRegisterLibraryVersion={registerLibraryVersion}
             companyNames={companyNames}
             onRegisterCompany={registerCompanyName}
             onChange={setModuleDraft}
@@ -479,10 +635,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedDomainId === '__new__' ? 'create' : 'edit'}
             draft={domainDraft}
             step={domainStep}
-            parentItems={domainParentItems}
+            parentCatalogIds={catalogDomainIds}
+            parentDomainIds={parentDomainIds}
+            forbiddenParentIds={forbiddenParentIds}
             parentLabelMap={domainParentLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
+            currentDomainId={selectedDomainId === '__new__' ? undefined : selectedDomainId}
             onChange={setDomainDraft}
             onStepChange={setDomainStep}
             onSubmit={handleDomainSubmit}
@@ -501,6 +660,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             moduleLabelMap={moduleLabelMap}
             artifactItems={artifacts.map((artifact) => artifact.id)}
             artifactLabelMap={artifactLabelMap}
+            dataTypes={artifactDataTypes}
+            onRegisterDataType={registerArtifactDataType}
             onChange={setArtifactDraft}
             onStepChange={setArtifactStep}
             onSubmit={handleArtifactSubmit}
@@ -523,6 +684,20 @@ type ModuleFormProps = {
   moduleLabelMap: Record<string, string>;
   artifactItems: string[];
   artifactLabelMap: Record<string, string>;
+  productNames: string[];
+  onRegisterProduct: (name: string) => void;
+  creatorCompanies: string[];
+  onRegisterCreatorCompany: (name: string) => void;
+  localizations: string[];
+  onRegisterLocalization: (value: string) => void;
+  ridCompanyRegistry: Record<string, string[]>;
+  onRegisterRidCompany: (company: string) => void;
+  onRegisterRidDivision: (company: string, division: string) => void;
+  technologyOptions: string[];
+  onRegisterTechnology: (technology: string) => void;
+  libraryRegistry: Record<string, string[]>;
+  onRegisterLibrary: (library: string) => void;
+  onRegisterLibraryVersion: (library: string, version: string) => void;
   companyNames: string[];
   onRegisterCompany: (name: string) => void;
   onChange: (draft: ModuleDraftPayload) => void;
@@ -542,6 +717,20 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   moduleLabelMap,
   artifactItems,
   artifactLabelMap,
+  productNames,
+  onRegisterProduct,
+  creatorCompanies,
+  onRegisterCreatorCompany,
+  localizations,
+  onRegisterLocalization,
+  ridCompanyRegistry,
+  onRegisterRidCompany,
+  onRegisterRidDivision,
+  technologyOptions,
+  onRegisterTechnology,
+  libraryRegistry,
+  onRegisterLibrary,
+  onRegisterLibraryVersion,
   companyNames,
   onRegisterCompany,
   onChange,
@@ -549,9 +738,28 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   onSubmit,
   onDelete
 }) => {
-  const [technologyInput, setTechnologyInput] = useState('');
-  const [libraryNameInput, setLibraryNameInput] = useState('');
-  const [libraryVersionInput, setLibraryVersionInput] = useState('');
+  const [productCreation, setProductCreation] = useState<
+    { value: string; previous: string } | null
+  >(null);
+  const [creatorCompanyCreation, setCreatorCompanyCreation] = useState<
+    { value: string; previous: string } | null
+  >(null);
+  const [localizationCreation, setLocalizationCreation] = useState<
+    { value: string; previous: string } | null
+  >(null);
+  const [ridCompanyCreation, setRidCompanyCreation] = useState<
+    { value: string; previous: { company: string; division: string } } | null
+  >(null);
+  const [ridDivisionCreation, setRidDivisionCreation] = useState<
+    { value: string; previous: string } | null
+  >(null);
+  const [technologyCreation, setTechnologyCreation] = useState<{ value: string } | null>(null);
+  const [libraryNameCreation, setLibraryNameCreation] = useState<
+    Record<number, { value: string; previous: string }>
+  >({});
+  const [libraryVersionCreation, setLibraryVersionCreation] = useState<
+    Record<number, { value: string; previous: string }>
+  >({});
   const [companyCreationInputs, setCompanyCreationInputs] = useState<
     Record<number, { value: string; previous: string }>
   >({});
@@ -559,12 +767,14 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   const isDomainMissing = mode === 'create' && draft.domainIds.length === 0;
 
   useEffect(() => {
-    setTechnologyInput('');
-    setLibraryNameInput('');
-    setLibraryVersionInput('');
-  }, [draft]);
-
-  useEffect(() => {
+    setProductCreation(null);
+    setCreatorCompanyCreation(null);
+    setLocalizationCreation(null);
+    setRidCompanyCreation(null);
+    setRidDivisionCreation(null);
+    setTechnologyCreation(null);
+    setLibraryNameCreation({});
+    setLibraryVersionCreation({});
     setCompanyCreationInputs({});
   }, [moduleKey]);
 
@@ -585,6 +795,148 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
       { label: 'Добавить новую компанию', value: CREATE_COMPANY_OPTION }
     ];
   }, [companyNames, draft.userStats.companies]);
+
+  const productSelectItems = useMemo<SelectItem<string>[]>(() => {
+    const names = new Set(productNames);
+    const current = draft.productName.trim();
+    if (current) {
+      names.add(current);
+    }
+    return [
+      ...Array.from(names)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<SelectItem<string>>((name) => ({ label: name, value: name })),
+      { label: 'Добавить новый продукт', value: CREATE_PRODUCT_OPTION }
+    ];
+  }, [draft.productName, productNames]);
+
+  const creatorCompanyItems = useMemo<SelectItem<string>[]>(() => {
+    const names = new Set(creatorCompanies);
+    const current = draft.creatorCompany.trim();
+    if (current) {
+      names.add(current);
+    }
+    return [
+      ...Array.from(names)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<SelectItem<string>>((name) => ({ label: name, value: name })),
+      { label: 'Добавить новую компанию', value: CREATE_CREATOR_COMPANY_OPTION }
+    ];
+  }, [creatorCompanies, draft.creatorCompany]);
+
+  const localizationItems = useMemo<SelectItem<string>[]>(() => {
+    const values = new Set(localizations);
+    const current = draft.localization.trim();
+    if (current) {
+      values.add(current);
+    }
+    return [
+      ...Array.from(values)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<SelectItem<string>>((value) => ({ label: value, value })),
+      { label: 'Добавить новую локализацию', value: CREATE_LOCALIZATION_OPTION }
+    ];
+  }, [draft.localization, localizations]);
+
+  const ridCompanyItems = useMemo<SelectItem<string>[]>(() => {
+    const names = new Set(Object.keys(ridCompanyRegistry));
+    const current = draft.ridOwner.company.trim();
+    if (current) {
+      names.add(current);
+    }
+    return [
+      ...Array.from(names)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<SelectItem<string>>((name) => ({ label: name, value: name })),
+      { label: 'Добавить новую компанию', value: CREATE_RID_COMPANY_OPTION }
+    ];
+  }, [draft.ridOwner.company, ridCompanyRegistry]);
+
+  const ridDivisionItems = useMemo<SelectItem<string>[]>(() => {
+    const company = draft.ridOwner.company.trim();
+    const divisions = new Set<string>();
+    if (company && ridCompanyRegistry[company]) {
+      ridCompanyRegistry[company].forEach((division) => {
+        const trimmed = division.trim();
+        if (trimmed) {
+          divisions.add(trimmed);
+        }
+      });
+    }
+    const current = draft.ridOwner.division.trim();
+    if (current) {
+      divisions.add(current);
+    }
+    const base = Array.from(divisions)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map<SelectItem<string>>((division) => ({ label: division, value: division }));
+    return [
+      ...base,
+      { label: 'Добавить новое подразделение', value: CREATE_RID_DIVISION_OPTION }
+    ];
+  }, [draft.ridOwner.company, draft.ridOwner.division, ridCompanyRegistry]);
+
+  const technologySelectItems = useMemo<SelectItem<string>[]>(() => {
+    const names = new Set(technologyOptions);
+    draft.technologyStack.forEach((technology) => {
+      const trimmed = technology.trim();
+      if (trimmed) {
+        names.add(trimmed);
+      }
+    });
+    return [
+      ...Array.from(names)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<SelectItem<string>>((name) => ({ label: name, value: name })),
+      { label: 'Добавить новую технологию', value: CREATE_TECHNOLOGY_OPTION }
+    ];
+  }, [draft.technologyStack, technologyOptions]);
+
+  const libraryNameItems = useMemo<SelectItem<string>[]>(() => {
+    const names = new Set(Object.keys(libraryRegistry));
+    draft.libraries.forEach((library) => {
+      const trimmed = library.name.trim();
+      if (trimmed) {
+        names.add(trimmed);
+      }
+    });
+    return [
+      ...Array.from(names)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<SelectItem<string>>((name) => ({ label: name, value: name })),
+      { label: 'Добавить новую библиотеку', value: CREATE_LIBRARY_OPTION }
+    ];
+  }, [draft.libraries, libraryRegistry]);
+
+  const getLibraryVersionItems = useCallback(
+    (libraryName: string): SelectItem<string>[] => {
+      const normalized = libraryName.trim();
+      const versions = new Set<string>();
+      if (normalized && libraryRegistry[normalized]) {
+        libraryRegistry[normalized].forEach((version) => {
+          const trimmed = version.trim();
+          if (trimmed) {
+            versions.add(trimmed);
+          }
+        });
+      }
+      draft.libraries.forEach((library) => {
+        if (library.name.trim() === normalized) {
+          const trimmed = library.version.trim();
+          if (trimmed) {
+            versions.add(trimmed);
+          }
+        }
+      });
+      return [
+        ...Array.from(versions)
+          .sort((a, b) => a.localeCompare(b, 'ru'))
+          .map<SelectItem<string>>((version) => ({ label: version, value: version })),
+        { label: 'Добавить новую версию', value: CREATE_LIBRARY_VERSION_OPTION }
+      ];
+    },
+    [draft.libraries, libraryRegistry]
+  );
 
   const goToStep = (nextStep: number) => {
     const normalized = Math.min(Math.max(nextStep, 0), moduleSections.length - 1);
@@ -710,34 +1062,74 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     handleFieldChange('nonFunctional', { ...draft.nonFunctional, ...patch });
   };
 
-  const addTechnology = () => {
-    const value = technologyInput.trim();
-    if (!value || draft.technologyStack.includes(value)) {
-      return;
-    }
-    handleFieldChange('technologyStack', [...draft.technologyStack, value]);
-    setTechnologyInput('');
-  };
-
   const removeTechnology = (value: string) => {
     handleFieldChange(
       'technologyStack',
       draft.technologyStack.filter((item) => item !== value)
     );
   };
-
-  const addLibrary = () => {
-    const name = libraryNameInput.trim();
-    const version = libraryVersionInput.trim();
-    if (!name || !version) {
+  const handleTechnologySelection = (item: SelectItem<string> | null) => {
+    if (!item) {
       return;
     }
-    handleFieldChange('libraries', [...draft.libraries, { name, version }]);
-    setLibraryNameInput('');
-    setLibraryVersionInput('');
+    if (item.value === CREATE_TECHNOLOGY_OPTION) {
+      setTechnologyCreation({ value: '' });
+      return;
+    }
+    if (draft.technologyStack.includes(item.value)) {
+      return;
+    }
+    handleFieldChange('technologyStack', [...draft.technologyStack, item.value]);
+  };
+
+  const updateTechnologyCreationValue = (value: string) => {
+    setTechnologyCreation({ value });
+  };
+
+  const confirmTechnologyCreation = () => {
+    if (!technologyCreation) {
+      return;
+    }
+    const trimmed = technologyCreation.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterTechnology(trimmed);
+    if (!draft.technologyStack.includes(trimmed)) {
+      handleFieldChange('technologyStack', [...draft.technologyStack, trimmed]);
+    }
+    setTechnologyCreation(null);
+  };
+
+  const cancelTechnologyCreation = () => {
+    setTechnologyCreation(null);
+  };
+
+  const addLibraryEntry = () => {
+    handleFieldChange('libraries', [...draft.libraries, { name: '', version: '' }]);
   };
 
   const updateLibrary = (index: number, patch: Partial<LibraryDependency>) => {
+    if ('name' in patch) {
+      setLibraryNameCreation((prev) => {
+        if (!(index in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+    }
+    if ('version' in patch) {
+      setLibraryVersionCreation((prev) => {
+        if (!(index in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+    }
     const next = draft.libraries.map((library, idx) =>
       idx === index ? { ...library, ...patch } : library
     );
@@ -745,10 +1137,343 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   };
 
   const removeLibrary = (index: number) => {
+    setLibraryNameCreation((prev) => {
+      if (!Object.keys(prev).length) {
+        return prev;
+      }
+      const next: Record<number, { value: string; previous: string }> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const idx = Number(key);
+        if (idx === index) {
+          return;
+        }
+        next[idx > index ? idx - 1 : idx] = value;
+      });
+      return next;
+    });
+    setLibraryVersionCreation((prev) => {
+      if (!Object.keys(prev).length) {
+        return prev;
+      }
+      const next: Record<number, { value: string; previous: string }> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const idx = Number(key);
+        if (idx === index) {
+          return;
+        }
+        next[idx > index ? idx - 1 : idx] = value;
+      });
+      return next;
+    });
     handleFieldChange(
       'libraries',
       draft.libraries.filter((_, idx) => idx !== index)
     );
+  };
+
+  const handleProductSelection = (item: SelectItem<string> | null) => {
+    if (!item) {
+      return;
+    }
+    if (item.value === CREATE_PRODUCT_OPTION) {
+      setProductCreation({ value: '', previous: draft.productName });
+      handleFieldChange('productName', '');
+      return;
+    }
+    setProductCreation(null);
+    handleFieldChange('productName', item.value);
+  };
+
+  const updateProductCreationValue = (value: string) => {
+    setProductCreation((prev) => (prev ? { ...prev, value } : { value, previous: draft.productName }));
+  };
+
+  const confirmProductCreation = () => {
+    if (!productCreation) {
+      return;
+    }
+    const trimmed = productCreation.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterProduct(trimmed);
+    handleFieldChange('productName', trimmed);
+    setProductCreation(null);
+  };
+
+  const cancelProductCreation = () => {
+    if (!productCreation) {
+      return;
+    }
+    handleFieldChange('productName', productCreation.previous);
+    setProductCreation(null);
+  };
+
+  const handleCreatorCompanySelection = (item: SelectItem<string> | null) => {
+    if (!item) {
+      return;
+    }
+    if (item.value === CREATE_CREATOR_COMPANY_OPTION) {
+      setCreatorCompanyCreation({ value: '', previous: draft.creatorCompany });
+      handleFieldChange('creatorCompany', '');
+      return;
+    }
+    setCreatorCompanyCreation(null);
+    handleFieldChange('creatorCompany', item.value);
+  };
+
+  const updateCreatorCompanyCreationValue = (value: string) => {
+    setCreatorCompanyCreation((prev) =>
+      prev ? { ...prev, value } : { value, previous: draft.creatorCompany }
+    );
+  };
+
+  const confirmCreatorCompanyCreation = () => {
+    if (!creatorCompanyCreation) {
+      return;
+    }
+    const trimmed = creatorCompanyCreation.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterCreatorCompany(trimmed);
+    handleFieldChange('creatorCompany', trimmed);
+    setCreatorCompanyCreation(null);
+  };
+
+  const cancelCreatorCompanyCreation = () => {
+    if (!creatorCompanyCreation) {
+      return;
+    }
+    handleFieldChange('creatorCompany', creatorCompanyCreation.previous);
+    setCreatorCompanyCreation(null);
+  };
+
+  const handleLocalizationSelection = (item: SelectItem<string> | null) => {
+    if (!item) {
+      return;
+    }
+    if (item.value === CREATE_LOCALIZATION_OPTION) {
+      setLocalizationCreation({ value: '', previous: draft.localization });
+      handleFieldChange('localization', '');
+      return;
+    }
+    setLocalizationCreation(null);
+    handleFieldChange('localization', item.value);
+  };
+
+  const updateLocalizationCreationValue = (value: string) => {
+    setLocalizationCreation((prev) =>
+      prev ? { ...prev, value } : { value, previous: draft.localization }
+    );
+  };
+
+  const confirmLocalizationCreation = () => {
+    if (!localizationCreation) {
+      return;
+    }
+    const trimmed = localizationCreation.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterLocalization(trimmed);
+    handleFieldChange('localization', trimmed);
+    setLocalizationCreation(null);
+  };
+
+  const cancelLocalizationCreation = () => {
+    if (!localizationCreation) {
+      return;
+    }
+    handleFieldChange('localization', localizationCreation.previous);
+    setLocalizationCreation(null);
+  };
+
+  const handleRidCompanySelection = (item: SelectItem<string> | null) => {
+    if (!item) {
+      return;
+    }
+    if (item.value === CREATE_RID_COMPANY_OPTION) {
+      setRidCompanyCreation({
+        value: '',
+        previous: { company: draft.ridOwner.company, division: draft.ridOwner.division }
+      });
+      setRidDivisionCreation(null);
+      handleFieldChange('ridOwner', { company: '', division: '' });
+      return;
+    }
+    setRidCompanyCreation(null);
+    handleFieldChange('ridOwner', { company: item.value, division: '' });
+  };
+
+  const updateRidCompanyCreationValue = (value: string) => {
+    setRidCompanyCreation((prev) =>
+      prev
+        ? { ...prev, value }
+        : { value, previous: { company: draft.ridOwner.company, division: draft.ridOwner.division } }
+    );
+  };
+
+  const confirmRidCompanyCreation = () => {
+    if (!ridCompanyCreation) {
+      return;
+    }
+    const trimmed = ridCompanyCreation.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterRidCompany(trimmed);
+    handleFieldChange('ridOwner', { company: trimmed, division: '' });
+    setRidCompanyCreation(null);
+  };
+
+  const cancelRidCompanyCreation = () => {
+    if (!ridCompanyCreation) {
+      return;
+    }
+    handleFieldChange('ridOwner', {
+      company: ridCompanyCreation.previous.company,
+      division: ridCompanyCreation.previous.division
+    });
+    setRidCompanyCreation(null);
+  };
+
+  const handleRidDivisionSelection = (item: SelectItem<string> | null) => {
+    if (!item) {
+      return;
+    }
+    if (item.value === CREATE_RID_DIVISION_OPTION) {
+      setRidDivisionCreation({ value: '', previous: draft.ridOwner.division });
+      handleFieldChange('ridOwner', { ...draft.ridOwner, division: '' });
+      return;
+    }
+    setRidDivisionCreation(null);
+    handleFieldChange('ridOwner', { ...draft.ridOwner, division: item.value });
+  };
+
+  const updateRidDivisionCreationValue = (value: string) => {
+    setRidDivisionCreation((prev) =>
+      prev ? { ...prev, value } : { value, previous: draft.ridOwner.division }
+    );
+  };
+
+  const confirmRidDivisionCreation = () => {
+    if (!ridDivisionCreation) {
+      return;
+    }
+    const trimmed = ridDivisionCreation.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    const company = draft.ridOwner.company.trim();
+    if (company) {
+      onRegisterRidDivision(company, trimmed);
+    }
+    handleFieldChange('ridOwner', { ...draft.ridOwner, division: trimmed });
+    setRidDivisionCreation(null);
+  };
+
+  const cancelRidDivisionCreation = () => {
+    if (!ridDivisionCreation) {
+      return;
+    }
+    handleFieldChange('ridOwner', { ...draft.ridOwner, division: ridDivisionCreation.previous });
+    setRidDivisionCreation(null);
+  };
+
+  const startLibraryNameCreation = (index: number) => {
+    setLibraryNameCreation((prev) => ({
+      ...prev,
+      [index]: { value: '', previous: draft.libraries[index]?.name ?? '' }
+    }));
+    updateLibrary(index, { name: '' });
+  };
+
+  const updateLibraryNameCreationValue = (index: number, value: string) => {
+    setLibraryNameCreation((prev) => {
+      const previous = prev[index]?.previous ?? draft.libraries[index]?.name ?? '';
+      return { ...prev, [index]: { value, previous } };
+    });
+  };
+
+  const confirmLibraryNameCreation = (index: number) => {
+    const current = libraryNameCreation[index];
+    if (!current) {
+      return;
+    }
+    const trimmed = current.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterLibrary(trimmed);
+    setLibraryNameCreation((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    updateLibrary(index, { name: trimmed });
+  };
+
+  const cancelLibraryNameCreation = (index: number) => {
+    const current = libraryNameCreation[index];
+    if (!current) {
+      return;
+    }
+    setLibraryNameCreation((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    updateLibrary(index, { name: current.previous });
+  };
+
+  const startLibraryVersionCreation = (index: number) => {
+    setLibraryVersionCreation((prev) => ({
+      ...prev,
+      [index]: { value: '', previous: draft.libraries[index]?.version ?? '' }
+    }));
+    updateLibrary(index, { version: '' });
+  };
+
+  const updateLibraryVersionCreationValue = (index: number, value: string) => {
+    setLibraryVersionCreation((prev) => {
+      const previous = prev[index]?.previous ?? draft.libraries[index]?.version ?? '';
+      return { ...prev, [index]: { value, previous } };
+    });
+  };
+
+  const confirmLibraryVersionCreation = (index: number) => {
+    const current = libraryVersionCreation[index];
+    if (!current) {
+      return;
+    }
+    const trimmed = current.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    const libraryName = draft.libraries[index]?.name.trim() ?? '';
+    if (libraryName) {
+      onRegisterLibraryVersion(libraryName, trimmed);
+    }
+    setLibraryVersionCreation((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    updateLibrary(index, { version: trimmed });
+  };
+
+  const cancelLibraryVersionCreation = (index: number) => {
+    const current = libraryVersionCreation[index];
+    if (!current) {
+      return;
+    }
+    setLibraryVersionCreation((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    updateLibrary(index, { version: current.previous });
   };
 
   const updateProjectMember = (index: number, patch: Partial<TeamMember>) => {
@@ -822,6 +1547,34 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
 
   const currentStep = Math.min(Math.max(step, 0), moduleSections.length - 1);
 
+  const selectedProductItem =
+    productCreation
+      ? productSelectItems.find((item) => item.value === CREATE_PRODUCT_OPTION) ?? null
+      : productSelectItems.find((item) => item.value === draft.productName.trim()) ?? null;
+
+  const selectedCreatorCompanyItem =
+    creatorCompanyCreation
+      ? creatorCompanyItems.find((item) => item.value === CREATE_CREATOR_COMPANY_OPTION) ?? null
+      : creatorCompanyItems.find((item) => item.value === draft.creatorCompany.trim()) ?? null;
+
+  const selectedLocalizationItem =
+    localizationCreation
+      ? localizationItems.find((item) => item.value === CREATE_LOCALIZATION_OPTION) ?? null
+      : localizationItems.find((item) => item.value === draft.localization.trim()) ?? null;
+
+  const selectedRidCompanyItem =
+    ridCompanyCreation
+      ? ridCompanyItems.find((item) => item.value === CREATE_RID_COMPANY_OPTION) ?? null
+      : ridCompanyItems.find((item) => item.value === draft.ridOwner.company.trim()) ?? null;
+
+  const canSelectRidDivision =
+    !ridCompanyCreation && Boolean(draft.ridOwner.company.trim());
+
+  const selectedRidDivisionItem =
+    ridDivisionCreation
+      ? ridDivisionItems.find((item) => item.value === CREATE_RID_DIVISION_OPTION) ?? null
+      : ridDivisionItems.find((item) => item.value === draft.ridOwner.division.trim()) ?? null;
+
   return (
     <div className={styles.formBody}>
       <div className={styles.formHeader}>
@@ -883,39 +1636,108 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                       className={styles.input}
                     />
                   </label>
-                  <label className={styles.field}>
+                  <div className={styles.field}>
                     <Text size="xs" weight="semibold" className={styles.label}>
-                      Команда
+                      Компания создатель решения
                     </Text>
-                    <input
-                      className={styles.input}
-                      value={draft.team}
-                      onChange={(event) => handleFieldChange('team', event.target.value)}
-                      placeholder="Команда сопровождения"
+                    <Select<SelectItem<string>>
+                      size="s"
+                      items={creatorCompanyItems}
+                      value={selectedCreatorCompanyItem}
+                      getItemLabel={(item) => item.label}
+                      getItemKey={(item) => item.value}
+                      placeholder="Выберите компанию"
+                      onChange={handleCreatorCompanySelection}
                     />
-                  </label>
-                  <label className={styles.field}>
+                    {creatorCompanyCreation && (
+                      <div className={styles.inlineForm}>
+                        <input
+                          className={styles.input}
+                          value={creatorCompanyCreation.value}
+                          onChange={(event) => updateCreatorCompanyCreationValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              confirmCreatorCompanyCreation();
+                            }
+                          }}
+                          placeholder="Например, Nedra Digital"
+                        />
+                        <div className={styles.inlineButtons}>
+                          <Button size="xs" label="Сохранить" view="primary" onClick={confirmCreatorCompanyCreation} />
+                          <Button size="xs" label="Отмена" view="ghost" onClick={cancelCreatorCompanyCreation} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className={styles.field}>
                     <Text size="xs" weight="semibold" className={styles.label}>
                       Название продукта
                     </Text>
-                    <input
-                      className={styles.input}
-                      value={draft.productName}
-                      onChange={(event) => handleFieldChange('productName', event.target.value)}
-                      placeholder="Например, Digital Twin Suite"
+                    <Select<SelectItem<string>>
+                      size="s"
+                      items={productSelectItems}
+                      value={selectedProductItem}
+                      getItemLabel={(item) => item.label}
+                      getItemKey={(item) => item.value}
+                      placeholder="Выберите продукт"
+                      onChange={handleProductSelection}
                     />
-                  </label>
-                  <label className={styles.field}>
+                    {productCreation && (
+                      <div className={styles.inlineForm}>
+                        <input
+                          className={styles.input}
+                          value={productCreation.value}
+                          onChange={(event) => updateProductCreationValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              confirmProductCreation();
+                            }
+                          }}
+                          placeholder="Например, Digital Twin Suite"
+                        />
+                        <div className={styles.inlineButtons}>
+                          <Button size="xs" label="Сохранить" view="primary" onClick={confirmProductCreation} />
+                          <Button size="xs" label="Отмена" view="ghost" onClick={cancelProductCreation} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className={styles.field}>
                     <Text size="xs" weight="semibold" className={styles.label}>
                       Локализация функции
                     </Text>
-                    <input
-                      className={styles.input}
-                      value={draft.localization}
-                      onChange={(event) => handleFieldChange('localization', event.target.value)}
-                      placeholder="ru"
+                    <Select<SelectItem<string>>
+                      size="s"
+                      items={localizationItems}
+                      value={selectedLocalizationItem}
+                      getItemLabel={(item) => item.label}
+                      getItemKey={(item) => item.value}
+                      placeholder="Выберите локализацию"
+                      onChange={handleLocalizationSelection}
                     />
-                  </label>
+                    {localizationCreation && (
+                      <div className={styles.inlineForm}>
+                        <input
+                          className={styles.input}
+                          value={localizationCreation.value}
+                          onChange={(event) => updateLocalizationCreationValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              confirmLocalizationCreation();
+                            }
+                          }}
+                          placeholder="Например, ru"
+                        />
+                        <div className={styles.inlineButtons}>
+                          <Button size="xs" label="Сохранить" view="primary" onClick={confirmLocalizationCreation} />
+                          <Button size="xs" label="Отмена" view="ghost" onClick={cancelLocalizationCreation} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 <div className={styles.field}>
                   <Text size="xs" weight="semibold" className={styles.label}>
                     Оценка переиспользования
@@ -1071,28 +1893,83 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                 )}
 
                 <div className={styles.fieldGroup}>
-                  <label className={styles.field}>
+                  <div className={styles.field}>
                     <Text size="xs" weight="semibold" className={styles.label}>
                       Компания-владелец РИД
                     </Text>
-                    <input
-                      className={styles.input}
-                      value={draft.ridOwner.company}
-                      onChange={(event) => updateRidOwner({ company: event.target.value })}
-                      placeholder="АО Компания"
+                    <Select<SelectItem<string>>
+                      size="s"
+                      items={ridCompanyItems}
+                      value={selectedRidCompanyItem}
+                      getItemLabel={(item) => item.label}
+                      getItemKey={(item) => item.value}
+                      placeholder="Выберите компанию"
+                      onChange={handleRidCompanySelection}
                     />
-                  </label>
-                  <label className={styles.field}>
+                    {ridCompanyCreation && (
+                      <div className={styles.inlineForm}>
+                        <input
+                          className={styles.input}
+                          value={ridCompanyCreation.value}
+                          onChange={(event) => updateRidCompanyCreationValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              confirmRidCompanyCreation();
+                            }
+                          }}
+                          placeholder="АО Компания"
+                        />
+                        <div className={styles.inlineButtons}>
+                          <Button size="xs" label="Сохранить" view="primary" onClick={confirmRidCompanyCreation} />
+                          <Button size="xs" label="Отмена" view="ghost" onClick={cancelRidCompanyCreation} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className={styles.field}>
                     <Text size="xs" weight="semibold" className={styles.label}>
                       Подразделение
                     </Text>
-                    <input
-                      className={styles.input}
-                      value={draft.ridOwner.division}
-                      onChange={(event) => updateRidOwner({ division: event.target.value })}
-                      placeholder="Центр компетенций"
-                    />
-                  </label>
+                    {canSelectRidDivision ? (
+                      <Select<SelectItem<string>>
+                        size="s"
+                        items={ridDivisionItems}
+                        value={selectedRidDivisionItem}
+                        getItemLabel={(item) => item.label}
+                        getItemKey={(item) => item.value}
+                        placeholder="Выберите подразделение"
+                        onChange={handleRidDivisionSelection}
+                      />
+                    ) : (
+                      <input
+                        className={styles.input}
+                        value={draft.ridOwner.division}
+                        onChange={(event) => updateRidOwner({ division: event.target.value })}
+                        placeholder="Центр компетенций"
+                      />
+                    )}
+                    {canSelectRidDivision && ridDivisionCreation && (
+                      <div className={styles.inlineForm}>
+                        <input
+                          className={styles.input}
+                          value={ridDivisionCreation.value}
+                          onChange={(event) => updateRidDivisionCreationValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              confirmRidDivisionCreation();
+                            }
+                          }}
+                          placeholder="Центр компетенций"
+                        />
+                        <div className={styles.inlineButtons}>
+                          <Button size="xs" label="Сохранить" view="primary" onClick={confirmRidDivisionCreation} />
+                          <Button size="xs" label="Отмена" view="ghost" onClick={cancelRidDivisionCreation} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -1100,14 +1977,36 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                     Технологический стек
                   </Text>
                   <div className={styles.actionsRow}>
-                    <input
-                      className={styles.input}
-                      value={technologyInput}
-                      onChange={(event) => setTechnologyInput(event.target.value)}
-                      placeholder="Например, TypeScript"
+                    <Select<SelectItem<string>>
+                      size="s"
+                      items={technologySelectItems}
+                      value={null}
+                      placeholder="Выберите технологию"
+                      getItemLabel={(item) => item.label}
+                      getItemKey={(item) => item.value}
+                      onChange={handleTechnologySelection}
                     />
-                    <Button size="xs" view="secondary" label="Добавить" onClick={addTechnology} />
                   </div>
+                  {technologyCreation && (
+                    <div className={styles.inlineForm}>
+                      <input
+                        className={styles.input}
+                        value={technologyCreation.value}
+                        onChange={(event) => updateTechnologyCreationValue(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            confirmTechnologyCreation();
+                          }
+                        }}
+                        placeholder="Например, TypeScript"
+                      />
+                      <div className={styles.inlineButtons}>
+                        <Button size="xs" label="Сохранить" view="primary" onClick={confirmTechnologyCreation} />
+                        <Button size="xs" label="Отмена" view="ghost" onClick={cancelTechnologyCreation} />
+                      </div>
+                    </div>
+                  )}
                   {draft.technologyStack.length > 0 && (
                     <div className={styles.chipList}>
                       {draft.technologyStack.map((item) => (
@@ -1413,42 +2312,158 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                     Перечень библиотек
                   </Text>
                   <div className={styles.actionsRow}>
-                    <input
-                      className={styles.input}
-                      value={libraryNameInput}
-                      onChange={(event) => setLibraryNameInput(event.target.value)}
-                      placeholder="Например, react"
+                    <Button
+                      size="xs"
+                      view="secondary"
+                      label="Добавить библиотеку"
+                      onClick={addLibraryEntry}
                     />
-                    <input
-                      className={styles.input}
-                      value={libraryVersionInput}
-                      onChange={(event) => setLibraryVersionInput(event.target.value)}
-                      placeholder="Например, 18.2.0"
-                    />
-                    <Button size="xs" view="secondary" label="Добавить" onClick={addLibrary} />
                   </div>
-                  <ul className={styles.list}>
-                    {draft.libraries.map((library, index) => (
-                      <li key={`${library.name}-${index}`} className={styles.listItem}>
-                        <input
-                          className={styles.input}
-                          value={library.name}
-                          onChange={(event) => updateLibrary(index, { name: event.target.value })}
-                        />
-                        <input
-                          className={styles.input}
-                          value={library.version}
-                          onChange={(event) => updateLibrary(index, { version: event.target.value })}
-                        />
-                        <Button
-                          size="xs"
-                          view="ghost"
-                          label="Удалить"
-                          onClick={() => removeLibrary(index)}
-                        />
-                      </li>
-                    ))}
-                  </ul>
+                  {draft.libraries.length === 0 ? (
+                    <Text size="xs" view="secondary">
+                      Добавьте библиотеки и версии
+                    </Text>
+                  ) : (
+                    <ul className={styles.list}>
+                      {draft.libraries.map((library, index) => {
+                        const trimmedName = library.name.trim();
+                        const nameSelectValue = libraryNameCreation[index]
+                          ? libraryNameItems.find((item) => item.value === CREATE_LIBRARY_OPTION) ?? null
+                          : libraryNameItems.find((item) => item.value === trimmedName) ?? null;
+                        const versionItems = getLibraryVersionItems(trimmedName);
+                        const versionSelectValue = libraryVersionCreation[index]
+                          ? versionItems.find((item) => item.value === CREATE_LIBRARY_VERSION_OPTION) ?? null
+                          : versionItems.find((item) => item.value === library.version.trim()) ?? null;
+
+                        return (
+                          <li key={`library-${index}`} className={styles.listItem}>
+                            <div className={styles.field}>
+                              <Select<SelectItem<string>>
+                                className={styles.select}
+                                size="s"
+                                items={libraryNameItems}
+                                value={nameSelectValue}
+                                getItemLabel={(item) => item.label}
+                                getItemKey={(item) => item.value}
+                                placeholder="Выберите библиотеку"
+                                onChange={(item) => {
+                                  if (!item) {
+                                    return;
+                                  }
+                                  if (item.value === CREATE_LIBRARY_OPTION) {
+                                    startLibraryNameCreation(index);
+                                    return;
+                                  }
+                                  updateLibrary(index, { name: item.value });
+                                }}
+                              />
+                              {libraryNameCreation[index] && (
+                                <div className={styles.inlineForm}>
+                                  <input
+                                    className={styles.input}
+                                    value={libraryNameCreation[index]?.value ?? ''}
+                                    onChange={(event) =>
+                                      updateLibraryNameCreationValue(index, event.target.value)
+                                    }
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        confirmLibraryNameCreation(index);
+                                      }
+                                    }}
+                                    placeholder="Например, react"
+                                  />
+                                  <div className={styles.inlineButtons}>
+                                    <Button
+                                      size="xs"
+                                      label="Сохранить"
+                                      view="primary"
+                                      onClick={() => confirmLibraryNameCreation(index)}
+                                    />
+                                    <Button
+                                      size="xs"
+                                      label="Отмена"
+                                      view="ghost"
+                                      onClick={() => cancelLibraryNameCreation(index)}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className={styles.field}>
+                              {trimmedName ? (
+                                <Select<SelectItem<string>>
+                                  className={styles.select}
+                                  size="s"
+                                  items={versionItems}
+                                  value={versionSelectValue}
+                                  getItemLabel={(item) => item.label}
+                                  getItemKey={(item) => item.value}
+                                  placeholder="Выберите версию"
+                                  onChange={(item) => {
+                                    if (!item) {
+                                      return;
+                                    }
+                                    if (item.value === CREATE_LIBRARY_VERSION_OPTION) {
+                                      startLibraryVersionCreation(index);
+                                      return;
+                                    }
+                                    updateLibrary(index, { version: item.value });
+                                  }}
+                                />
+                              ) : (
+                                <input
+                                  className={styles.input}
+                                  value={library.version}
+                                  onChange={(event) => updateLibrary(index, { version: event.target.value })}
+                                  placeholder="Сначала выберите библиотеку"
+                                  disabled
+                                />
+                              )}
+                              {libraryVersionCreation[index] && (
+                                <div className={styles.inlineForm}>
+                                  <input
+                                    className={styles.input}
+                                    value={libraryVersionCreation[index]?.value ?? ''}
+                                    onChange={(event) =>
+                                      updateLibraryVersionCreationValue(index, event.target.value)
+                                    }
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        confirmLibraryVersionCreation(index);
+                                      }
+                                    }}
+                                    placeholder="Например, 18.2.0"
+                                  />
+                                  <div className={styles.inlineButtons}>
+                                    <Button
+                                      size="xs"
+                                      label="Сохранить"
+                                      view="primary"
+                                      onClick={() => confirmLibraryVersionCreation(index)}
+                                    />
+                                    <Button
+                                      size="xs"
+                                      label="Отмена"
+                                      view="ghost"
+                                      onClick={() => cancelLibraryVersionCreation(index)}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <Button
+                              size="xs"
+                              view="ghost"
+                              label="Удалить"
+                              onClick={() => removeLibrary(index)}
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
 
                 <div className={styles.fieldGroup}>
@@ -1598,10 +2613,13 @@ type DomainFormProps = {
   mode: 'create' | 'edit';
   draft: DomainDraftPayload;
   step: number;
-  parentItems: string[];
+  parentCatalogIds: string[];
+  parentDomainIds: string[];
+  forbiddenParentIds: string[];
   parentLabelMap: Record<string, string>;
   moduleItems: string[];
   moduleLabelMap: Record<string, string>;
+  currentDomainId?: string;
   onChange: (draft: DomainDraftPayload) => void;
   onStepChange: (step: number) => void;
   onSubmit: () => void;
@@ -1614,10 +2632,13 @@ const DomainForm: React.FC<DomainFormProps> = ({
   mode,
   draft,
   step,
-  parentItems,
+  parentCatalogIds,
+  parentDomainIds,
+  forbiddenParentIds,
   parentLabelMap,
   moduleItems,
   moduleLabelMap,
+  currentDomainId,
   onChange,
   onStepChange,
   onSubmit,
@@ -1628,21 +2649,86 @@ const DomainForm: React.FC<DomainFormProps> = ({
   };
 
   const current = Math.min(Math.max(step, 0), domainSections.length - 1);
-  const parentValue = draft.isCatalogRoot ? ROOT_DOMAIN_OPTION : draft.parentId ?? null;
   const isRootDomain = draft.isCatalogRoot;
+  const forbiddenParentSet = useMemo(
+    () => new Set(forbiddenParentIds.filter(Boolean)),
+    [forbiddenParentIds]
+  );
+  const allowedCatalogParentIds = parentCatalogIds.filter(
+    (id) => id !== currentDomainId && !forbiddenParentSet.has(id)
+  );
+  const allowedDomainParentIds = parentDomainIds.filter(
+    (id) => id !== currentDomainId && !forbiddenParentSet.has(id)
+  );
+  const parentItems = isRootDomain
+    ? [ROOT_DOMAIN_OPTION, ...allowedCatalogParentIds]
+    : allowedDomainParentIds;
+  const parentValue = isRootDomain
+    ? draft.parentId && allowedCatalogParentIds.includes(draft.parentId)
+      ? draft.parentId
+      : ROOT_DOMAIN_OPTION
+    : draft.parentId && allowedDomainParentIds.includes(draft.parentId)
+      ? draft.parentId
+      : null;
+
+  const handleRootToggle = (checked: boolean) => {
+    if (checked) {
+      onChange({
+        ...draft,
+        isCatalogRoot: true,
+        parentId:
+          draft.parentId && allowedCatalogParentIds.includes(draft.parentId)
+            ? draft.parentId
+            : undefined,
+        moduleIds: []
+      });
+      return;
+    }
+
+    onChange({
+      ...draft,
+      isCatalogRoot: false,
+      parentId:
+        draft.parentId && allowedDomainParentIds.includes(draft.parentId)
+          ? draft.parentId
+          : undefined
+    });
+  };
 
   const handleParentChange = (value: string | null) => {
-    if (value === ROOT_DOMAIN_OPTION) {
-      onChange({ ...draft, parentId: undefined, moduleIds: [], isCatalogRoot: true });
+    if (isRootDomain) {
+      if (!value || value === ROOT_DOMAIN_OPTION) {
+        onChange({ ...draft, parentId: undefined });
+        return;
+      }
+
+      if (allowedCatalogParentIds.includes(value)) {
+        onChange({ ...draft, parentId: value });
+      }
       return;
     }
 
     if (!value) {
-      onChange({ ...draft, parentId: undefined, isCatalogRoot: false });
+      onChange({ ...draft, parentId: undefined });
       return;
     }
 
-    onChange({ ...draft, parentId: value, isCatalogRoot: false });
+    if (allowedDomainParentIds.includes(value)) {
+      onChange({ ...draft, parentId: value });
+    }
+  };
+
+  const handleExpertChange = (index: number, value: string) => {
+    const next = draft.experts.map((expert, idx) => (idx === index ? value : expert));
+    onChange({ ...draft, experts: next });
+  };
+
+  const addExpert = () => {
+    onChange({ ...draft, experts: [...draft.experts, ''] });
+  };
+
+  const removeExpert = (index: number) => {
+    onChange({ ...draft, experts: draft.experts.filter((_, idx) => idx !== index) });
   };
 
   return (
@@ -1696,6 +2782,60 @@ const DomainForm: React.FC<DomainFormProps> = ({
                     className={styles.textarea}
                     value={draft.description}
                     onChange={(event) => onChange({ ...draft, description: event.target.value })}
+                  />
+                </label>
+                <div className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Корневой каталог
+                  </Text>
+                  <Switch
+                    size="s"
+                    checked={isRootDomain}
+                    onChange={(event) => handleRootToggle(event.target.checked)}
+                  />
+                  <Text size="2xs" view="secondary" className={styles.hint}>
+                    Корневые домены используются для структурирования справочника и не отображаются в графе.
+                  </Text>
+                </div>
+                <div className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Перечень экспертов
+                  </Text>
+                  {draft.experts.length === 0 ? (
+                    <Text size="xs" view="secondary">
+                      Добавьте экспертов доменной области
+                    </Text>
+                  ) : (
+                    <ul className={styles.list}>
+                      {draft.experts.map((expert, index) => (
+                        <li key={`expert-${index}`} className={styles.listItem}>
+                          <input
+                            className={styles.input}
+                            value={expert}
+                            onChange={(event) => handleExpertChange(index, event.target.value)}
+                            placeholder="ФИО эксперта"
+                          />
+                          <Button
+                            size="xs"
+                            view="ghost"
+                            label="Удалить"
+                            onClick={() => removeExpert(index)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <Button size="xs" view="secondary" label="Добавить эксперта" onClick={addExpert} />
+                </div>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Ссылка на митап
+                  </Text>
+                  <input
+                    className={styles.input}
+                    value={draft.meetupLink}
+                    onChange={(event) => onChange({ ...draft, meetupLink: event.target.value })}
+                    placeholder="https://meetup.example.com"
                   />
                 </label>
               </>
@@ -1775,6 +2915,8 @@ type ArtifactFormProps = {
   moduleLabelMap: Record<string, string>;
   artifactItems: string[];
   artifactLabelMap: Record<string, string>;
+  dataTypes: string[];
+  onRegisterDataType: (value: string) => void;
   onChange: (draft: ArtifactDraftPayload) => void;
   onStepChange: (step: number) => void;
   onSubmit: () => void;
@@ -1791,6 +2933,8 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
   domainLabelMap,
   moduleItems,
   moduleLabelMap,
+  dataTypes,
+  onRegisterDataType,
   onChange,
   onStepChange,
   onSubmit,
@@ -1801,6 +2945,72 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
   };
 
   const current = Math.min(Math.max(step, 0), artifactSections.length - 1);
+
+  const [dataTypeCreation, setDataTypeCreation] = useState<
+    { value: string; previous: string } | null
+  >(null);
+
+  useEffect(() => {
+    setDataTypeCreation(null);
+  }, [draft]);
+
+  const dataTypeItems = useMemo<SelectItem<string>[]>(() => {
+    const values = new Set(dataTypes);
+    const currentValue = draft.dataType.trim();
+    if (currentValue) {
+      values.add(currentValue);
+    }
+    return [
+      ...Array.from(values)
+        .sort((a, b) => a.localeCompare(b, 'ru'))
+        .map<SelectItem<string>>((value) => ({ label: value, value })),
+      { label: 'Добавить новый тип', value: CREATE_DATA_TYPE_OPTION }
+    ];
+  }, [dataTypes, draft.dataType]);
+
+  const selectedDataTypeItem =
+    dataTypeCreation
+      ? dataTypeItems.find((item) => item.value === CREATE_DATA_TYPE_OPTION) ?? null
+      : dataTypeItems.find((item) => item.value === draft.dataType.trim()) ?? null;
+
+  const handleDataTypeSelection = (item: SelectItem<string> | null) => {
+    if (!item) {
+      return;
+    }
+    if (item.value === CREATE_DATA_TYPE_OPTION) {
+      setDataTypeCreation({ value: '', previous: draft.dataType });
+      return;
+    }
+    setDataTypeCreation(null);
+    onChange({ ...draft, dataType: item.value });
+  };
+
+  const updateDataTypeCreationValue = (value: string) => {
+    setDataTypeCreation((prev) =>
+      prev ? { ...prev, value } : { value, previous: draft.dataType }
+    );
+  };
+
+  const confirmDataTypeCreation = () => {
+    if (!dataTypeCreation) {
+      return;
+    }
+    const trimmed = dataTypeCreation.value.trim();
+    if (!trimmed) {
+      return;
+    }
+    onRegisterDataType(trimmed);
+    setDataTypeCreation(null);
+    onChange({ ...draft, dataType: trimmed });
+  };
+
+  const cancelDataTypeCreation = () => {
+    if (!dataTypeCreation) {
+      return;
+    }
+    setDataTypeCreation(null);
+    onChange({ ...draft, dataType: dataTypeCreation.previous });
+  };
 
   return (
     <div className={styles.formBody}>
@@ -1855,16 +3065,40 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
                     onChange={(event) => onChange({ ...draft, description: event.target.value })}
                   />
                 </label>
-                <label className={styles.field}>
+                <div className={styles.field}>
                   <Text size="xs" weight="semibold" className={styles.label}>
                     Тип данных
                   </Text>
-                  <input
-                    className={styles.input}
-                    value={draft.dataType}
-                    onChange={(event) => onChange({ ...draft, dataType: event.target.value })}
+                  <Select<SelectItem<string>>
+                    size="s"
+                    items={dataTypeItems}
+                    value={selectedDataTypeItem}
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.value}
+                    placeholder="Выберите тип данных"
+                    onChange={handleDataTypeSelection}
                   />
-                </label>
+                  {dataTypeCreation && (
+                    <div className={styles.inlineForm}>
+                      <input
+                        className={styles.input}
+                        value={dataTypeCreation.value}
+                        onChange={(event) => updateDataTypeCreationValue(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            confirmDataTypeCreation();
+                          }
+                        }}
+                        placeholder="Например, CSV"
+                      />
+                      <div className={styles.inlineButtons}>
+                        <Button size="xs" label="Сохранить" view="primary" onClick={confirmDataTypeCreation} />
+                        <Button size="xs" label="Отмена" view="ghost" onClick={cancelDataTypeCreation} />
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <label className={styles.field}>
                   <Text size="xs" weight="semibold" className={styles.label}>
                     Пример данных (URL)
@@ -1963,7 +3197,7 @@ function createDefaultModuleDraft(): ModuleDraftPayload {
     name: '',
     description: '',
     productName: '',
-    team: '',
+    creatorCompany: '',
     status: 'in-dev',
     domainIds: [],
     dependencyIds: [],
@@ -2002,7 +3236,9 @@ function createDefaultDomainDraft(): DomainDraftPayload {
     description: '',
     parentId: undefined,
     moduleIds: [],
-    isCatalogRoot: false
+    isCatalogRoot: false,
+    experts: [],
+    meetupLink: ''
   };
 }
 
@@ -2023,7 +3259,7 @@ function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
     name: module.name,
     description: module.description,
     productName: module.productName,
-    team: module.team,
+    creatorCompany: module.creatorCompany,
     status: module.status,
     domainIds: [...module.domains],
     dependencyIds: [...module.dependencies],
@@ -2072,7 +3308,9 @@ function domainToDraft(
     description: domain.description ?? '',
     parentId: parentId ?? undefined,
     moduleIds: isLeaf ? relatedModules : [],
-    isCatalogRoot: Boolean(domain.isCatalogRoot)
+    isCatalogRoot: Boolean(domain.isCatalogRoot),
+    experts: [...(domain.experts ?? [])],
+    meetupLink: domain.meetupLink ?? ''
   };
 }
 
@@ -2111,6 +3349,12 @@ function collectLeafDomainIds(domains: DomainNode[]): string[] {
     .map((domain) => domain.id);
 }
 
+function collectCatalogDomainIds(domains: DomainNode[]): string[] {
+  return flattenDomainTree(domains)
+    .filter((domain) => domain.isCatalogRoot)
+    .map((domain) => domain.id);
+}
+
 function buildModuleLabelMap(modules: ModuleNode[]): Record<string, string> {
   return modules.reduce<Record<string, string>>((acc, module) => {
     acc[module.id] = module.name;
@@ -2127,6 +3371,22 @@ function buildArtifactLabelMap(artifacts: ArtifactNode[]): Record<string, string
 
 function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
   return domains.flatMap((domain) => [domain, ...(domain.children ? flattenDomainTree(domain.children) : [])]);
+}
+
+function buildDomainDescendantMap(domains: DomainNode[]): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+
+  const visit = (node: DomainNode): string[] => {
+    const descendants = (node.children ?? []).flatMap((child) => [child.id, ...visit(child)]);
+    map[node.id] = descendants;
+    return descendants;
+  };
+
+  domains.forEach((domain) => {
+    visit(domain);
+  });
+
+  return map;
 }
 
 function findDomainById(domains: DomainNode[], id: string): DomainNode | null {
@@ -2160,3 +3420,175 @@ function findDomainParentId(domains: DomainNode[], id: string, parentId: string 
 }
 
 export default AdminPanel;
+
+function mergeStringCollections(current: string[], incoming: string[]): string[] {
+  const values = new Set<string>();
+
+  const append = (items: string[]) => {
+    items.forEach((item) => {
+      const normalized = item.trim();
+      if (normalized) {
+        values.add(normalized);
+      }
+    });
+  };
+
+  append(current);
+  append(incoming);
+
+  return Array.from(values).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function mergeRegistry(
+  current: Record<string, string[]>,
+  incoming: Record<string, string[]>
+): Record<string, string[]> {
+  const registry = new Map<string, Set<string>>();
+
+  const append = (source: Record<string, string[]>) => {
+    Object.entries(source).forEach(([rawKey, values]) => {
+      const key = rawKey.trim();
+      if (!key) {
+        return;
+      }
+
+      const target = registry.get(key) ?? new Set<string>();
+      values.forEach((value) => {
+        const normalized = value.trim();
+        if (normalized) {
+          target.add(normalized);
+        }
+      });
+      registry.set(key, target);
+    });
+  };
+
+  append(current);
+  append(incoming);
+
+  return Array.from(registry.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+    .reduce<Record<string, string[]>>((acc, [company, divisions]) => {
+      acc[company] = Array.from(divisions).sort((a, b) => a.localeCompare(b, 'ru'));
+      return acc;
+    }, {});
+}
+
+function buildProductNames(modules: ModuleNode[]): string[] {
+  const names = new Set<string>();
+
+  modules.forEach((module) => {
+    const normalized = module.productName.trim();
+    if (normalized) {
+      names.add(normalized);
+    }
+  });
+
+  return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function buildCreatorCompanies(modules: ModuleNode[]): string[] {
+  const companies = new Set<string>();
+
+  modules.forEach((module) => {
+    const normalized = module.creatorCompany.trim();
+    if (normalized) {
+      companies.add(normalized);
+    }
+  });
+
+  return Array.from(companies).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function buildLocalizationList(modules: ModuleNode[]): string[] {
+  const localizations = new Set<string>();
+
+  modules.forEach((module) => {
+    const normalized = module.localization.trim();
+    if (normalized) {
+      localizations.add(normalized);
+    }
+  });
+
+  return Array.from(localizations).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function buildTechnologyList(modules: ModuleNode[]): string[] {
+  const technologies = new Set<string>();
+
+  modules.forEach((module) => {
+    module.technologyStack.forEach((tech) => {
+      const normalized = tech.trim();
+      if (normalized) {
+        technologies.add(normalized);
+      }
+    });
+  });
+
+  return Array.from(technologies).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function buildRidCompanyRegistry(modules: ModuleNode[]): Record<string, string[]> {
+  const registry = new Map<string, Set<string>>();
+
+  modules.forEach((module) => {
+    const company = module.ridOwner.company.trim();
+    if (!company) {
+      return;
+    }
+
+    const division = module.ridOwner.division.trim();
+    const target = registry.get(company) ?? new Set<string>();
+    if (division) {
+      target.add(division);
+    }
+    registry.set(company, target);
+  });
+
+  return Array.from(registry.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+    .reduce<Record<string, string[]>>((acc, [company, divisions]) => {
+      acc[company] = Array.from(divisions).sort((a, b) => a.localeCompare(b, 'ru'));
+      return acc;
+    }, {});
+}
+
+function buildLibraryRegistry(modules: ModuleNode[]): Record<string, string[]> {
+  const registry = new Map<string, Set<string>>();
+
+  modules.forEach((module) => {
+    module.libraries.forEach((library) => {
+      const name = library.name.trim();
+      if (!name) {
+        return;
+      }
+
+      const version = library.version.trim();
+      const target = registry.get(name) ?? new Set<string>();
+      if (version) {
+        target.add(version);
+      }
+      registry.set(name, target);
+    });
+  });
+
+  return Array.from(registry.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+    .reduce<Record<string, string[]>>((acc, [library, versions]) => {
+      acc[library] = Array.from(versions).sort((a, b) => a.localeCompare(b, 'ru'));
+      return acc;
+    }, {});
+}
+
+function buildArtifactDataTypes(artifacts: ArtifactNode[]): string[] {
+  const types = new Set<string>();
+
+  artifacts.forEach((artifact) => {
+    const normalized = artifact.dataType.trim();
+    if (normalized) {
+      types.add(normalized);
+    }
+  });
+
+  return Array.from(types).sort((a, b) => a.localeCompare(b, 'ru'));
+}

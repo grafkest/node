@@ -7,6 +7,8 @@ export type DomainNode = {
    * Корневые домены используются как группирующие папки и не попадают в граф или статистику.
    */
   isCatalogRoot?: boolean;
+  experts?: string[];
+  meetupLink?: string;
 };
 
 export type ModuleStatus = 'in-dev' | 'production' | 'deprecated';
@@ -30,7 +32,9 @@ export type TeamRole =
   | 'Backend'
   | 'Frontend'
   | 'Архитектор'
-  | 'Тестировщик';
+  | 'Тестировщик'
+  | 'Руководитель проекта'
+  | 'UX';
 
 export type TeamMember = {
   id: string;
@@ -75,7 +79,7 @@ export type ModuleNode = {
   name: string;
   description: string;
   domains: string[];
-  team: string;
+  creatorCompany: string;
   productName: string;
   projectTeam: TeamMember[];
   technologyStack: string[];
@@ -105,72 +109,181 @@ export type ModuleNode = {
 
 export const domainTree: DomainNode[] = [
   {
-    id: 'infrastructure-planning',
-    name: 'Инфраструктурное планирование',
+    id: 'upstream',
+    name: 'Добыча',
     description:
-      'Концептуальное проектирование и реинжиниринг наземной инфраструктуры месторождений',
+      'Сквозная производственная вертикаль от геологоразведки до подготовки сырья к транспортировке.',
+    isCatalogRoot: true,
     children: [
       {
-        id: 'data-preparation',
-        name: 'Подготовка исходных данных',
-        description:
-          'Сбор и нормализация исходных данных для моделирования схем обустройства'
+        id: 'upstream-strategy',
+        name: 'Стратегия разработки месторождений',
+        description: 'Портфельное планирование и оценка ресурсной базы по всей группе активов.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'resource-evaluation',
+            name: 'Оценка запасов и ресурсов',
+            description: 'Классификация запасов, баланс и сценарный анализ прироста ресурсов.',
+            experts: ['Галина Михайлова', 'Егор Устинов'],
+            meetupLink: 'https://meetups.nedra.digital/resources'
+          },
+          {
+            id: 'seismic-interpretation',
+            name: 'Сейсмическая интерпретация',
+            description: 'Комплексная интерпретация сейсморазведочных данных и построение структурных карт.',
+            experts: ['Наталья Родина', 'Владимир Гуляев'],
+            meetupLink: 'https://meetups.nedra.digital/seismic'
+          },
+          {
+            id: 'development-scenarios',
+            name: 'Сценарии разработки',
+            description: 'Формирование долгосрочных программ разработки месторождений и технико-экономическая оценка.',
+            experts: ['Александр Трофимов', 'Полина Данилова'],
+            meetupLink: 'https://meetups.nedra.digital/scenario'
+          }
+        ]
       },
       {
-        id: 'layout-optimization',
-        name: 'Оптимизация размещения',
-        description:
-          'Автоматическое размещение объектов с учётом технологических и топографических ограничений'
+        id: 'upstream-engineering',
+        name: 'Инженерия промысла',
+        description: 'Проектирование наземной инфраструктуры, фонда скважин и логистических маршрутов.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'data-preparation',
+            name: 'Подготовка исходных данных',
+            description:
+              'Сбор и нормализация исходных данных для моделирования схем обустройства',
+            experts: ['Ирина Соколова', 'Павел Ефимов'],
+            meetupLink: 'https://meetups.nedra.digital/infraplan-data'
+          },
+          {
+            id: 'layout-optimization',
+            name: 'Оптимизация размещения',
+            description:
+              'Автоматическое размещение объектов с учётом технологических и топографических ограничений',
+            experts: ['Антон Чернышёв', 'Дарья Гончарова'],
+            meetupLink: 'https://meetups.nedra.digital/layout'
+          },
+          {
+            id: 'economic-evaluation',
+            name: 'Экономическая оценка',
+            description:
+              'Формирование экономических показателей и подготовка досье по варианту инфраструктуры',
+            experts: ['Михаил Якушев', 'Алина Коваль'],
+            meetupLink: 'https://meetups.nedra.digital/economics'
+          },
+          {
+            id: 'surface-readiness',
+            name: 'Промысловая подготовка площадок',
+            description:
+              'Контроль готовности кустовых площадок, коммуникаций и систем энергообеспечения к вводу.',
+            experts: ['Сергей Минаев', 'Екатерина Левина'],
+            meetupLink: 'https://meetups.nedra.digital/surface'
+          }
+        ]
       },
       {
-        id: 'economic-evaluation',
-        name: 'Экономическая оценка',
-        description:
-          'Формирование экономических показателей и подготовка досье по варианту инфраструктуры'
-      }
-    ]
-  },
-  {
-    id: 'digital-operations',
-    name: 'Цифровое управление добычей',
-    description: 'Мониторинг, оптимизация и дистанционное управление объектами добычи',
-    children: [
-      {
-        id: 'real-time-monitoring',
-        name: 'Онлайн-мониторинг',
-        description: 'Сбор и визуализация телеметрии наземной инфраструктуры в реальном времени'
+        id: 'upstream-production-operations',
+        name: 'Операционное управление добычей',
+        description: 'Мониторинг, оптимизация и оперативное управление добывающими активами.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'production-operations-hub',
+            name: 'Ситуационные центры',
+            description: 'Объединённый мониторинг производственных показателей и управление KPI.',
+            experts: ['Алексей Богомолов', 'Жанна Литвинова'],
+            meetupLink: 'https://meetups.nedra.digital/ops-hub'
+          },
+          {
+            id: 'real-time-monitoring',
+            name: 'Онлайн-мониторинг',
+            description: 'Сбор и визуализация телеметрии наземной инфраструктуры в реальном времени',
+            experts: ['Александр Романов', 'Дарья Климова'],
+            meetupLink: 'https://meetups.nedra.digital/digital-operations'
+          },
+          {
+            id: 'production-optimization',
+            name: 'Оптимизация режимов',
+            description: 'Рекомендации по повышению эффективности работы фонда',
+            experts: ['Елена Соболева', 'Максим Корнеев'],
+            meetupLink: 'https://meetups.nedra.digital/production-optimization'
+          },
+          {
+            id: 'remote-control',
+            name: 'Дистанционное управление',
+            description: 'Удалённое управление производственными узлами и интеграция с АСУТП',
+            experts: ['Игорь Чернецов', 'Людмила Киселёва'],
+            meetupLink: 'https://meetups.nedra.digital/remote-control'
+          }
+        ]
       },
       {
-        id: 'production-optimization',
-        name: 'Оптимизация режимов',
-        description: 'Рекомендации по повышению эффективности работы фонда'
+        id: 'upstream-well-operations',
+        name: 'Внутрискважинные операции',
+        description: 'Планирование, контроль и аналитика работ по ремонту и стимулированию скважин.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'workover-program-design',
+            name: 'Проектирование ГТМ',
+            description: 'Подбор технологий стимулирования и расчёт ожидаемого прироста добычи.',
+            experts: ['Максим Орлов', 'Марина Гольцова'],
+            meetupLink: 'https://meetups.nedra.digital/workover-design'
+          },
+          {
+            id: 'workover-planning',
+            name: 'Планирование ГТМ и ТКРС',
+            description: 'Формирование и согласование программ работ по скважинам',
+            experts: ['Илья Юрьев', 'Ольга Шаталова'],
+            meetupLink: 'https://meetups.nedra.digital/workover'
+          },
+          {
+            id: 'field-execution',
+            name: 'Исполнение в поле',
+            description: 'Контроль исполнения ремонтов и взаимодействие с подрядчиками',
+            experts: ['Роман Баранов', 'Анастасия Мошкина'],
+            meetupLink: 'https://meetups.nedra.digital/field-execution'
+          },
+          {
+            id: 'quality-analytics',
+            name: 'Аналитика качества работ',
+            description: 'Оценка эффективности ремонтов и выявление узких мест процессов',
+            experts: ['Виталий Сергеев', 'Олеся Рябцева'],
+            meetupLink: 'https://meetups.nedra.digital/workover-analytics'
+          }
+        ]
       },
       {
-        id: 'remote-control',
-        name: 'Дистанционное управление',
-        description: 'Удалённое управление производственными узлами и интеграция с АСУТП'
-      }
-    ]
-  },
-  {
-    id: 'workover-operations',
-    name: 'Внутрискважинные операции',
-    description: 'Планирование, контроль и аналитика работ по ремонту скважин',
-    children: [
-      {
-        id: 'workover-planning',
-        name: 'Планирование ГТМ и ТКРС',
-        description: 'Формирование и согласование программ работ по скважинам'
-      },
-      {
-        id: 'field-execution',
-        name: 'Исполнение в поле',
-        description: 'Контроль исполнения ремонтов и взаимодействие с подрядчиками'
-      },
-      {
-        id: 'quality-analytics',
-        name: 'Аналитика качества работ',
-        description: 'Оценка эффективности ремонтов и выявление узких мест процессов'
+        id: 'upstream-flow-assurance',
+        name: 'Подготовка и транспорт продукции',
+        description: 'Наземные системы сбора, подготовки и транспортировки углеводородов.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'gathering-systems',
+            name: 'Системы сбора продукции',
+            description: 'Моделирование и оптимизация схем сбора с фонтанных, газлифтных и насосных скважин.',
+            experts: ['Руслан Ибрагимов', 'Тамара Зайцева'],
+            meetupLink: 'https://meetups.nedra.digital/gathering'
+          },
+          {
+            id: 'oil-treatment',
+            name: 'Подготовка нефти и газа',
+            description: 'Контроль обезвоживания, стабилизации и подготовки продукции к сдаче.',
+            experts: ['Андрей Лаврентьев', 'Наталия Брыкина'],
+            meetupLink: 'https://meetups.nedra.digital/treatment'
+          },
+          {
+            id: 'pipeline-monitoring',
+            name: 'Мониторинг трубопроводов',
+            description: 'Диагностика герметичности, мониторинг коррозии и управление рисками утечек.',
+            experts: ['Пётр Якубов', 'Инна Асташова'],
+            meetupLink: 'https://meetups.nedra.digital/pipeline'
+          }
+        ]
       }
     ]
   }
@@ -199,7 +312,7 @@ export const modules: ModuleNode[] = [
     description:
       'Консолидирует инженерные и производственные данные, нормализует их и подготавливает к инфраструктурному моделированию.',
     domains: ['data-preparation'],
-    team: 'INFRAPLAN Data Services',
+    creatorCompany: 'INFRAPLAN Data Services',
     productName: 'Nedra.Production INFRAPLAN',
     projectTeam: [
       { id: 'infraplan-owner', fullName: 'Алексей Сорокин', role: 'Владелец продукта' },
@@ -283,7 +396,7 @@ export const modules: ModuleNode[] = [
     description:
       'Автоматизирует подбор вариантов размещения объектов обустройства с учётом рельефа, технологических и экологических ограничений.',
     domains: ['layout-optimization'],
-    team: 'INFRAPLAN Modeling',
+    creatorCompany: 'INFRAPLAN Modeling',
     productName: 'Nedra.Production INFRAPLAN',
     projectTeam: [
       { id: 'layout-owner', fullName: 'Надежда Малахова', role: 'Владелец продукта' },
@@ -363,7 +476,7 @@ export const modules: ModuleNode[] = [
     description:
       'Расчитывает экономическую эффективность вариантов обустройства и формирует инвестиционные досье.',
     domains: ['economic-evaluation'],
-    team: 'INFRAPLAN Economics',
+    creatorCompany: 'INFRAPLAN Economics',
     productName: 'Nedra.Production INFRAPLAN',
     projectTeam: [
       { id: 'econ-owner', fullName: 'Светлана Дорофеева', role: 'Владелец продукта' },
@@ -445,7 +558,7 @@ export const modules: ModuleNode[] = [
     description:
       'Собирает телеметрию наземной инфраструктуры в реальном времени и формирует интегрированное хранилище цифрового двойника.',
     domains: ['real-time-monitoring'],
-    team: 'Digital Twin Telemetry',
+    creatorCompany: 'Digital Twin Telemetry',
     productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
       { id: 'dtwin-mon-owner', fullName: 'Егор Панин', role: 'Владелец продукта' },
@@ -530,7 +643,7 @@ export const modules: ModuleNode[] = [
     description:
       'Генерирует рекомендации по управлению режимами объектов и прогнозирует эффект от внедрения цифрового двойника.',
     domains: ['production-optimization'],
-    team: 'Digital Twin Orchestration',
+    creatorCompany: 'Digital Twin Orchestration',
     productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
       { id: 'dtwin-opt-owner', fullName: 'Тимур Алиев', role: 'Владелец продукта' },
@@ -616,7 +729,7 @@ export const modules: ModuleNode[] = [
     description:
       'Обеспечивает дистанционное управление производственными узлами и обратную связь по выполнению команд.',
     domains: ['remote-control'],
-    team: 'Digital Twin Remote Ops',
+    creatorCompany: 'Digital Twin Remote Ops',
     productName: 'Nedra.Production DIGITAL TWIN',
     projectTeam: [
       { id: 'dtwin-remote-owner', fullName: 'Оксана Кривцова', role: 'Владелец продукта' },
@@ -696,7 +809,7 @@ export const modules: ModuleNode[] = [
     description:
       'Формирует и согласует программы ремонтно-изоляционных и капитальных работ по скважинам.',
     domains: ['workover-planning'],
-    team: 'WWO Planning Office',
+    creatorCompany: 'WWO Planning Office',
     productName: 'Nedra.Production WWO',
     projectTeam: [
       { id: 'wwo-plan-owner', fullName: 'Галина Кручина', role: 'Владелец продукта' },
@@ -777,7 +890,7 @@ export const modules: ModuleNode[] = [
     description:
       'Контролирует выполнение ремонтных и изоляционных работ, собирает фактические параметры и фотоотчёты с площадки.',
     domains: ['field-execution'],
-    team: 'WWO Field Operations',
+    creatorCompany: 'WWO Field Operations',
     productName: 'Nedra.Production WWO',
     projectTeam: [
       { id: 'wwo-exec-owner', fullName: 'Фарид Мансуров', role: 'Владелец продукта' },
@@ -857,7 +970,7 @@ export const modules: ModuleNode[] = [
     description:
       'Анализирует эффективность ремонтов, выявляет отклонения и поддерживает управленческие решения по фонду скважин.',
     domains: ['quality-analytics'],
-    team: 'WWO Analytics Lab',
+    creatorCompany: 'WWO Analytics Lab',
     productName: 'Nedra.Production WWO',
     projectTeam: [
       { id: 'wwo-analytics-owner', fullName: 'Ольга Вершинина', role: 'Владелец продукта' },
@@ -941,7 +1054,7 @@ export const modules: ModuleNode[] = [
     description:
       'Площадка для быстрых продуктовых экспериментов, собирающая телеметрию и мгновенно распространяющая результаты в продуктовые команды.',
     domains: ['real-time-monitoring', 'production-optimization'],
-    team: 'Лаборатория цифровых испытаний',
+    creatorCompany: 'Лаборатория цифровых испытаний',
     productName: 'Digital Operations Suite',
     projectTeam: [
       { id: 'lab-owner', fullName: 'Кира Левина', role: 'Владелец продукта' },
@@ -1041,7 +1154,7 @@ export const artifacts: ArtifactNode[] = [
       'module-infraplan-economics',
       'module-dtwin-optimizer'
     ],
-    dataType: 'Инженерные данные',
+    dataType: 'Excel',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-source-pack.zip'
   },
   {
@@ -1052,7 +1165,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'layout-optimization',
     producedBy: 'module-infraplan-layout',
     consumerIds: ['module-infraplan-economics'],
-    dataType: 'Геомодели',
+    dataType: 'LAS',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-layout.json'
   },
   {
@@ -1063,7 +1176,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'economic-evaluation',
     producedBy: 'module-infraplan-economics',
     consumerIds: [],
-    dataType: 'Финансовая аналитика',
+    dataType: 'PDF',
     sampleUrl: 'https://storage.nedra.digital/samples/infraplan-economics.pdf'
   },
   {
@@ -1074,7 +1187,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'real-time-monitoring',
     producedBy: 'module-dtwin-monitoring',
     consumerIds: ['module-dtwin-optimizer'],
-    dataType: 'Потоковые данные',
+    dataType: 'Parquet',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-telemetry.parquet'
   },
   {
@@ -1085,7 +1198,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'production-optimization',
     producedBy: 'module-dtwin-optimizer',
     consumerIds: ['module-dtwin-remote-control'],
-    dataType: 'Управляющие команды',
+    dataType: 'JSON',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-optimization-orders.json'
   },
   {
@@ -1096,7 +1209,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'remote-control',
     producedBy: 'module-dtwin-remote-control',
     consumerIds: [],
-    dataType: 'Управляющие сигналы',
+    dataType: 'Avro',
     sampleUrl: 'https://storage.nedra.digital/samples/dtwin-remote-commands.avro'
   },
   {
@@ -1107,7 +1220,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'workover-planning',
     producedBy: 'module-wwo-planner',
     consumerIds: ['module-wwo-execution', 'module-wwo-analytics'],
-    dataType: 'Производственный план',
+    dataType: 'XLSX',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-plan.xlsx'
   },
   {
@@ -1118,7 +1231,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'field-execution',
     producedBy: 'module-wwo-execution',
     consumerIds: ['module-wwo-analytics', 'module-wwo-planner'],
-    dataType: 'Операционные данные',
+    dataType: 'CSV',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-operations-log.csv'
   },
   {
@@ -1129,7 +1242,7 @@ export const artifacts: ArtifactNode[] = [
     domainId: 'quality-analytics',
     producedBy: 'module-wwo-analytics',
     consumerIds: [],
-    dataType: 'BI-отчёт',
+    dataType: 'Power BI',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-performance-dashboard.pdf'
   }
 ];

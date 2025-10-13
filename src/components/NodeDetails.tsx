@@ -88,6 +88,9 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
   }
 
   if (node.type === 'domain') {
+    const experts = (node.experts ?? []).filter((expert) => expert.trim().length > 0);
+    const meetupLink = node.meetupLink?.trim() ?? '';
+
     return (
       <div className={styles.container}>
         <header className={styles.header}>
@@ -96,9 +99,48 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
           </Text>
           <Button size="xs" label="Закрыть" view="ghost" onClick={onClose} />
         </header>
-        <Text size="s" view="secondary">
-          {node.description}
-        </Text>
+        <div className={styles.section}>
+          <Text size="s" view="secondary">
+            {node.description}
+          </Text>
+        </div>
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Эксперты
+          </Text>
+          {experts.length > 0 ? (
+            <ul className={styles.list}>
+              {experts.map((expert) => (
+                <li key={expert} className={styles.listItem}>
+                  <Text size="s">{expert}</Text>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Text size="xs" view="secondary">
+              Эксперты не указаны
+            </Text>
+          )}
+        </div>
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Ссылка на митап
+          </Text>
+          {meetupLink ? (
+            <a
+              href={meetupLink}
+              className={styles.link}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {meetupLink}
+            </a>
+          ) : (
+            <Text size="xs" view="secondary">
+              Ссылка не указана
+            </Text>
+          )}
+        </div>
       </div>
     );
   }
@@ -236,8 +278,8 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
           <InfoRow label="Название продукта">
             <Text size="s">{node.productName}</Text>
           </InfoRow>
-          <InfoRow label="Команда">
-            <Text size="s">{node.team}</Text>
+          <InfoRow label="Компания создатель решения">
+            <Text size="s">{node.creatorCompany}</Text>
           </InfoRow>
           <InfoRow label="Владелец РИД">
             <>

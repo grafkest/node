@@ -147,9 +147,17 @@ function App() {
         });
       } catch (error) {
         console.error('Не удалось обновить список графов', error);
-        setGraphListError(
-          error instanceof Error ? error.message : 'Не удалось загрузить список графов.'
-        );
+        const fallbackMessage = 'Не удалось загрузить список графов.';
+        let message = fallbackMessage;
+
+        if (error instanceof TypeError) {
+          message =
+            'Не удалось подключиться к серверу графа. Запустите "npm run server" или используйте "npm run dev:full".';
+        } else if (error instanceof Error && error.message) {
+          message = error.message;
+        }
+
+        setGraphListError(message);
         setGraphs([]);
         setActiveGraphId(null);
         setIsSnapshotLoading(false);
@@ -638,6 +646,11 @@ function App() {
 
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domainData), [domainData]);
   const leafDomainIdSet = useMemo(() => new Set(leafDomainIds), [leafDomainIds]);
+  const catalogDomainIdSet = useMemo(() => new Set(collectCatalogDomainIds(domainData)), [domainData]);
+  const domainIdSet = useMemo(
+    () => new Set(flattenDomainTree(domainData).map((domain) => domain.id)),
+    [domainData]
+  );
   const displayableDomainIdSet = useMemo(
     () =>
       new Set(
@@ -1336,18 +1349,39 @@ function App() {
       const domainId = createEntityId('domain', draft.name, existingIds);
       const normalizedName = draft.name.trim() || `Новый домен ${existingIds.size + 1}`;
       const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
-      const parentId = draft.isCatalogRoot ? undefined : draft.parentId;
+      const rawParentId = draft.parentId ?? undefined;
+      const normalizedParentId = draft.isCatalogRoot
+        ? rawParentId && catalogDomainIdSet.has(rawParentId)
+          ? rawParentId
+          : undefined
+        : rawParentId && domainIdSet.has(rawParentId)
+          ? rawParentId
+          : undefined;
+
+      if (!draft.isCatalogRoot && !normalizedParentId) {
+        showAdminNotice(
+          'error',
+          'Не удалось создать домен: выберите родительскую область.'
+        );
+        return;
+      }
+
+      const experts = draft.experts.map((expert) => expert.trim()).filter((expert) => expert);
+      const meetupLink = draft.meetupLink.trim();
       const newDomain: DomainNode = {
         id: domainId,
         name: normalizedName,
         description: normalizedDescription,
-        isCatalogRoot: draft.isCatalogRoot
+        isCatalogRoot: draft.isCatalogRoot,
+        experts,
+        meetupLink: meetupLink || undefined
       };
 
-      const updatedDomains = addDomainToTree(domainData, parentId, newDomain);
+      const targetParentId = draft.isCatalogRoot ? normalizedParentId : normalizedParentId!;
+      const updatedDomains = addDomainToTree(domainData, targetParentId, newDomain);
       setDomainData(updatedDomains);
 
-      const moduleIds = parentId ? draft.moduleIds : [];
+      const moduleIds = !draft.isCatalogRoot && targetParentId ? draft.moduleIds : [];
       if (moduleIds.length > 0) {
         const moduleSet = new Set(moduleIds);
         setModuleDataState((prev) =>
@@ -1373,10 +1407,10 @@ function App() {
       setViewMode('graph');
       showAdminNotice(
         'success',
-        `${draft.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${normalizedName}» создан.`
+        `${draft.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${normalizedName}» создан.`
       );
     },
-    [domainData, showAdminNotice]
+    [catalogDomainIdSet, domainData, domainIdSet, showAdminNotice]
   );
 
   const handleUpdateDomain = useCallback(
@@ -1389,24 +1423,77 @@ function App() {
       const sanitizedName = draft.name.trim() || extracted.name;
       const sanitizedDescription =
         draft.description.trim() || extracted.description || 'Описание не заполнено';
+      const experts = draft.experts.map((expert) => expert.trim()).filter((expert) => expert);
+      const meetupLink = draft.meetupLink.trim();
 
       const updatedDomain: DomainNode = {
         ...extracted,
         name: sanitizedName,
         description: sanitizedDescription,
-        isCatalogRoot: draft.isCatalogRoot
+        isCatalogRoot: draft.isCatalogRoot,
+        experts,
+        meetupLink: meetupLink || undefined
       };
 
       const descendantIds = new Set(collectDomainIds(updatedDomain));
-      let targetParentId = draft.isCatalogRoot ? null : draft.parentId ?? null;
+      const rawParentId = draft.parentId ?? undefined;
+      let normalizedParentId = draft.isCatalogRoot
+        ? rawParentId && catalogDomainIdSet.has(rawParentId)
+          ? rawParentId
+          : undefined
+        : rawParentId && domainIdSet.has(rawParentId)
+          ? rawParentId
+          : undefined;
+
+      if (!draft.isCatalogRoot && !normalizedParentId) {
+        const restoredTree = addDomainToTree(
+          treeWithoutDomain,
+          previousParentId ?? undefined,
+          extracted
+        );
+        setDomainData(restoredTree);
+        showAdminNotice(
+          'error',
+          'Не удалось обновить домен: выберите родительскую область.'
+        );
+        return;
+      }
+
+      let targetParentId: string | null = normalizedParentId ?? null;
+
       if (targetParentId && (targetParentId === domainId || descendantIds.has(targetParentId))) {
-        targetParentId = previousParentId;
+        const fallbackParentId = previousParentId ?? null;
+        const fallbackIsValid =
+          fallbackParentId !== null &&
+          (draft.isCatalogRoot
+            ? catalogDomainIdSet.has(fallbackParentId)
+            : domainIdSet.has(fallbackParentId)) &&
+          !descendantIds.has(fallbackParentId) &&
+          fallbackParentId !== domainId;
+
+        targetParentId = fallbackIsValid ? fallbackParentId : null;
+      }
+
+      if (!draft.isCatalogRoot && !targetParentId) {
+        const restoredTree = addDomainToTree(
+          treeWithoutDomain,
+          previousParentId ?? undefined,
+          extracted
+        );
+        setDomainData(restoredTree);
+        showAdminNotice(
+          'error',
+          'Не удалось обновить домен: выберите родительскую область.'
+        );
+        return;
       }
 
       const rebuiltTree = addDomainToTree(treeWithoutDomain, targetParentId ?? undefined, updatedDomain);
       setDomainData(rebuiltTree);
 
-      const moduleSet = targetParentId ? new Set(draft.moduleIds) : new Set<string>();
+      const moduleSet = !draft.isCatalogRoot && targetParentId
+        ? new Set(draft.moduleIds)
+        : new Set<string>();
       setModuleDataState((prev) =>
         recalculateReuseScores(
           prev.map((module) => {
@@ -1430,10 +1517,10 @@ function App() {
       );
       showAdminNotice(
         'success',
-        `${updatedDomain.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${sanitizedName}» обновлён.`
+        `${updatedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${sanitizedName}» обновлён.`
       );
     },
-    [domainData, showAdminNotice]
+    [catalogDomainIdSet, domainData, domainIdSet, showAdminNotice]
   );
 
   const handleDeleteDomain = useCallback(
@@ -1470,7 +1557,7 @@ function App() {
       setSelectedNode((prev) => (prev && removedIds.has(prev.id) ? null : prev));
       showAdminNotice(
         'success',
-        `${removedDomain.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${removedDomain.name}» удалён.`
+        `${removedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${removedDomain.name}» удалён.`
       );
     },
     [domainData, showAdminNotice]
@@ -1772,6 +1859,15 @@ function App() {
       return;
     }
 
+    const normalizedName = trimmedName.toLowerCase();
+    const hasDuplicate = graphs.some(
+      (graph) => graph.name.trim().toLowerCase() === normalizedName
+    );
+    if (hasDuplicate) {
+      setGraphActionStatus({ type: 'error', message: 'Граф с таким названием уже существует.' });
+      return;
+    }
+
     const includeDomains = graphCopyOptions.has('domains');
     const includeModules = graphCopyOptions.has('modules');
     const includeArtifacts = graphCopyOptions.has('artifacts');
@@ -1815,7 +1911,8 @@ function App() {
     graphCopyOptions,
     isGraphActionInProgress,
     refreshGraphs,
-    showAdminNotice
+    showAdminNotice,
+    graphs
   ]);
 
   const handleDeleteGraph = useCallback(
@@ -2276,7 +2373,8 @@ function buildModuleFromDraft(
   const normalizedName = draft.name.trim() || options.fallbackName;
   const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
   const normalizedProduct = draft.productName.trim() || 'Новый продукт';
-  const normalizedTeam = draft.team.trim() || 'Команда не указана';
+  const normalizedCreatorCompany =
+    draft.creatorCompany.trim() || 'Компания создатель не указана';
 
   const uniqueDomains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
   const fallbackCandidates = deduplicateNonEmpty(fallbackDomains).filter((id) => allowedDomainIds.has(id));
@@ -2366,7 +2464,7 @@ function buildModuleFromDraft(
     name: normalizedName,
     description: normalizedDescription,
     domains: resolvedDomains,
-    team: normalizedTeam,
+    creatorCompany: normalizedCreatorCompany,
     productName: normalizedProduct,
     projectTeam: preparedTeam,
     technologyStack,
@@ -2798,6 +2896,12 @@ function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
 function collectLeafDomainIds(domains: DomainNode[]): string[] {
   return flattenDomainTree(domains)
     .filter((domain) => (!domain.children || domain.children.length === 0) && !domain.isCatalogRoot)
+    .map((domain) => domain.id);
+}
+
+function collectCatalogDomainIds(domains: DomainNode[]): string[] {
+  return flattenDomainTree(domains)
+    .filter((domain) => domain.isCatalogRoot)
     .map((domain) => domain.id);
 }
 

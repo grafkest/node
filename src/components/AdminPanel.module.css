@@ -111,6 +111,15 @@
   width: 100%;
 }
 
+.listItem .select {
+  width: 100%;
+}
+
+.listItem .field {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
 .textarea {
   min-height: 96px;
 }
@@ -146,6 +155,19 @@
 }
 
 .companyInlineButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.inlineForm {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.inlineButtons {
   display: flex;
   gap: 8px;
 }
