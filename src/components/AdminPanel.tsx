@@ -282,6 +282,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
   const catalogDomainIds = useMemo(() => collectCatalogDomainIds(domains), [domains]);
+  const parentDomainIds = useMemo(
+    () => flattenDomainTree(domains).map((domain) => domain.id),
+    [domains]
+  );
+  const domainDescendantMap = useMemo(() => buildDomainDescendantMap(domains), [domains]);
   const domainParentLabelMap = useMemo(
     () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой каталог', ...domainLabelMap }),
     [domainLabelMap]
@@ -290,6 +295,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
   const [selectedDomainId, setSelectedDomainId] = useState<string>('__new__');
   const [selectedArtifactId, setSelectedArtifactId] = useState<string>('__new__');
+
+  const forbiddenParentIds = useMemo(() => {
+    if (selectedDomainId === '__new__') {
+      return [] as string[];
+    }
+    const descendants = domainDescendantMap[selectedDomainId] ?? [];
+    return [selectedDomainId, ...descendants];
+  }, [domainDescendantMap, selectedDomainId]);
 
   const [moduleDraft, setModuleDraft] = useState<ModuleDraftPayload>(() => createDefaultModuleDraft());
   const [moduleStep, setModuleStep] = useState<number>(0);
@@ -623,6 +636,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             draft={domainDraft}
             step={domainStep}
             parentCatalogIds={catalogDomainIds}
+            parentDomainIds={parentDomainIds}
+            forbiddenParentIds={forbiddenParentIds}
             parentLabelMap={domainParentLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
@@ -2599,6 +2614,8 @@ type DomainFormProps = {
   draft: DomainDraftPayload;
   step: number;
   parentCatalogIds: string[];
+  parentDomainIds: string[];
+  forbiddenParentIds: string[];
   parentLabelMap: Record<string, string>;
   moduleItems: string[];
   moduleLabelMap: Record<string, string>;
@@ -2616,6 +2633,8 @@ const DomainForm: React.FC<DomainFormProps> = ({
   draft,
   step,
   parentCatalogIds,
+  parentDomainIds,
+  forbiddenParentIds,
   parentLabelMap,
   moduleItems,
   moduleLabelMap,
@@ -2631,22 +2650,36 @@ const DomainForm: React.FC<DomainFormProps> = ({
 
   const current = Math.min(Math.max(step, 0), domainSections.length - 1);
   const isRootDomain = draft.isCatalogRoot;
-  const allowedParentIds = parentCatalogIds.filter((id) => id !== currentDomainId);
+  const forbiddenParentSet = useMemo(
+    () => new Set(forbiddenParentIds.filter(Boolean)),
+    [forbiddenParentIds]
+  );
+  const allowedCatalogParentIds = parentCatalogIds.filter(
+    (id) => id !== currentDomainId && !forbiddenParentSet.has(id)
+  );
+  const allowedDomainParentIds = parentDomainIds.filter(
+    (id) => id !== currentDomainId && !forbiddenParentSet.has(id)
+  );
   const parentItems = isRootDomain
-    ? [ROOT_DOMAIN_OPTION, ...allowedParentIds]
-    : allowedParentIds;
+    ? [ROOT_DOMAIN_OPTION, ...allowedCatalogParentIds]
+    : allowedDomainParentIds;
   const parentValue = isRootDomain
-    ? draft.parentId ?? ROOT_DOMAIN_OPTION
-    : draft.parentId ?? null;
+    ? draft.parentId && allowedCatalogParentIds.includes(draft.parentId)
+      ? draft.parentId
+      : ROOT_DOMAIN_OPTION
+    : draft.parentId && allowedDomainParentIds.includes(draft.parentId)
+      ? draft.parentId
+      : null;
 
   const handleRootToggle = (checked: boolean) => {
     if (checked) {
       onChange({
         ...draft,
         isCatalogRoot: true,
-        parentId: draft.parentId && allowedParentIds.includes(draft.parentId)
-          ? draft.parentId
-          : undefined,
+        parentId:
+          draft.parentId && allowedCatalogParentIds.includes(draft.parentId)
+            ? draft.parentId
+            : undefined,
         moduleIds: []
       });
       return;
@@ -2655,9 +2688,10 @@ const DomainForm: React.FC<DomainFormProps> = ({
     onChange({
       ...draft,
       isCatalogRoot: false,
-      parentId: draft.parentId && allowedParentIds.includes(draft.parentId)
-        ? draft.parentId
-        : undefined
+      parentId:
+        draft.parentId && allowedDomainParentIds.includes(draft.parentId)
+          ? draft.parentId
+          : undefined
     });
   };
 
@@ -2668,7 +2702,7 @@ const DomainForm: React.FC<DomainFormProps> = ({
         return;
       }
 
-      if (allowedParentIds.includes(value)) {
+      if (allowedCatalogParentIds.includes(value)) {
         onChange({ ...draft, parentId: value });
       }
       return;
@@ -2679,7 +2713,7 @@ const DomainForm: React.FC<DomainFormProps> = ({
       return;
     }
 
-    if (allowedParentIds.includes(value)) {
+    if (allowedDomainParentIds.includes(value)) {
       onChange({ ...draft, parentId: value });
     }
   };
@@ -3337,6 +3371,22 @@ function buildArtifactLabelMap(artifacts: ArtifactNode[]): Record<string, string
 
 function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
   return domains.flatMap((domain) => [domain, ...(domain.children ? flattenDomainTree(domain.children) : [])]);
+}
+
+function buildDomainDescendantMap(domains: DomainNode[]): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+
+  const visit = (node: DomainNode): string[] => {
+    const descendants = (node.children ?? []).flatMap((child) => [child.id, ...visit(child)]);
+    map[node.id] = descendants;
+    return descendants;
+  };
+
+  domains.forEach((domain) => {
+    visit(domain);
+  });
+
+  return map;
 }
 
 function findDomainById(domains: DomainNode[], id: string): DomainNode | null {
