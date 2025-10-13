@@ -111,6 +111,15 @@
   width: 100%;
 }
 
+.listItem .select {
+  width: 100%;
+}
+
+.listItem .field {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
 .textarea {
   min-height: 96px;
 }

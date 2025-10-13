@@ -2326,6 +2326,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                           <li key={`library-${index}`} className={styles.listItem}>
                             <div className={styles.field}>
                               <Select<SelectItem<string>>
+                                className={styles.select}
                                 size="s"
                                 items={libraryNameItems}
                                 value={nameSelectValue}
@@ -2379,6 +2380,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
                             <div className={styles.field}>
                               {trimmedName ? (
                                 <Select<SelectItem<string>>
+                                  className={styles.select}
                                   size="s"
                                   items={versionItems}
                                   value={versionSelectValue}
