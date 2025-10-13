@@ -147,9 +147,17 @@ function App() {
         });
       } catch (error) {
         console.error('Не удалось обновить список графов', error);
-        setGraphListError(
-          error instanceof Error ? error.message : 'Не удалось загрузить список графов.'
-        );
+        const fallbackMessage = 'Не удалось загрузить список графов.';
+        let message = fallbackMessage;
+
+        if (error instanceof TypeError) {
+          message =
+            'Не удалось подключиться к серверу графа. Запустите "npm run server" или используйте "npm run dev:full".';
+        } else if (error instanceof Error && error.message) {
+          message = error.message;
+        }
+
+        setGraphListError(message);
         setGraphs([]);
         setActiveGraphId(null);
         setIsSnapshotLoading(false);
