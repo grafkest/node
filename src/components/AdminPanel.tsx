@@ -281,12 +281,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   }, [knownArtifactDataTypes]);
 
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
-  const domainParentItems = useMemo(
-    () => [ROOT_DOMAIN_OPTION, ...domainOptions.slice(1).map((item) => item.value)],
-    [domainOptions]
-  );
+  const catalogDomainIds = useMemo(() => collectCatalogDomainIds(domains), [domains]);
   const domainParentLabelMap = useMemo(
-    () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой домен', ...domainLabelMap }),
+    () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой каталог', ...domainLabelMap }),
     [domainLabelMap]
   );
 
@@ -625,10 +622,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedDomainId === '__new__' ? 'create' : 'edit'}
             draft={domainDraft}
             step={domainStep}
-            parentItems={domainParentItems}
+            parentCatalogIds={catalogDomainIds}
             parentLabelMap={domainParentLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
+            currentDomainId={selectedDomainId === '__new__' ? undefined : selectedDomainId}
             onChange={setDomainDraft}
             onStepChange={setDomainStep}
             onSubmit={handleDomainSubmit}
@@ -2600,10 +2598,11 @@ type DomainFormProps = {
   mode: 'create' | 'edit';
   draft: DomainDraftPayload;
   step: number;
-  parentItems: string[];
+  parentCatalogIds: string[];
   parentLabelMap: Record<string, string>;
   moduleItems: string[];
   moduleLabelMap: Record<string, string>;
+  currentDomainId?: string;
   onChange: (draft: DomainDraftPayload) => void;
   onStepChange: (step: number) => void;
   onSubmit: () => void;
@@ -2616,10 +2615,11 @@ const DomainForm: React.FC<DomainFormProps> = ({
   mode,
   draft,
   step,
-  parentItems,
+  parentCatalogIds,
   parentLabelMap,
   moduleItems,
   moduleLabelMap,
+  currentDomainId,
   onChange,
   onStepChange,
   onSubmit,
@@ -2630,21 +2630,58 @@ const DomainForm: React.FC<DomainFormProps> = ({
   };
 
   const current = Math.min(Math.max(step, 0), domainSections.length - 1);
-  const parentValue = draft.isCatalogRoot ? ROOT_DOMAIN_OPTION : draft.parentId ?? null;
   const isRootDomain = draft.isCatalogRoot;
+  const allowedParentIds = parentCatalogIds.filter((id) => id !== currentDomainId);
+  const parentItems = isRootDomain
+    ? [ROOT_DOMAIN_OPTION, ...allowedParentIds]
+    : allowedParentIds;
+  const parentValue = isRootDomain
+    ? draft.parentId ?? ROOT_DOMAIN_OPTION
+    : draft.parentId ?? null;
+
+  const handleRootToggle = (checked: boolean) => {
+    if (checked) {
+      onChange({
+        ...draft,
+        isCatalogRoot: true,
+        parentId: draft.parentId && allowedParentIds.includes(draft.parentId)
+          ? draft.parentId
+          : undefined,
+        moduleIds: []
+      });
+      return;
+    }
+
+    onChange({
+      ...draft,
+      isCatalogRoot: false,
+      parentId: draft.parentId && allowedParentIds.includes(draft.parentId)
+        ? draft.parentId
+        : undefined
+    });
+  };
 
   const handleParentChange = (value: string | null) => {
-    if (value === ROOT_DOMAIN_OPTION) {
-      onChange({ ...draft, parentId: undefined, moduleIds: [], isCatalogRoot: true });
+    if (isRootDomain) {
+      if (!value || value === ROOT_DOMAIN_OPTION) {
+        onChange({ ...draft, parentId: undefined });
+        return;
+      }
+
+      if (allowedParentIds.includes(value)) {
+        onChange({ ...draft, parentId: value });
+      }
       return;
     }
 
     if (!value) {
-      onChange({ ...draft, parentId: undefined, isCatalogRoot: false });
+      onChange({ ...draft, parentId: undefined });
       return;
     }
 
-    onChange({ ...draft, parentId: value, isCatalogRoot: false });
+    if (allowedParentIds.includes(value)) {
+      onChange({ ...draft, parentId: value });
+    }
   };
 
   const handleExpertChange = (index: number, value: string) => {
@@ -2713,6 +2750,19 @@ const DomainForm: React.FC<DomainFormProps> = ({
                     onChange={(event) => onChange({ ...draft, description: event.target.value })}
                   />
                 </label>
+                <div className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Корневой каталог
+                  </Text>
+                  <Switch
+                    size="s"
+                    checked={isRootDomain}
+                    onChange={(event) => handleRootToggle(event.target.checked)}
+                  />
+                  <Text size="2xs" view="secondary" className={styles.hint}>
+                    Корневые домены используются для структурирования справочника и не отображаются в графе.
+                  </Text>
+                </div>
                 <div className={styles.field}>
                   <Text size="xs" weight="semibold" className={styles.label}>
                     Перечень экспертов
@@ -3262,6 +3312,12 @@ function buildDomainLabelMap(domains: DomainNode[]): Record<string, string> {
 function collectLeafDomainIds(domains: DomainNode[]): string[] {
   return flattenDomainTree(domains)
     .filter((domain) => (!domain.children || domain.children.length === 0) && !domain.isCatalogRoot)
+    .map((domain) => domain.id);
+}
+
+function collectCatalogDomainIds(domains: DomainNode[]): string[] {
+  return flattenDomainTree(domains)
+    .filter((domain) => domain.isCatalogRoot)
     .map((domain) => domain.id);
 }
 

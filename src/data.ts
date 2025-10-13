@@ -109,78 +109,181 @@ export type ModuleNode = {
 
 export const domainTree: DomainNode[] = [
   {
-    id: 'infrastructure-planning',
-    name: 'Инфраструктурное планирование',
+    id: 'upstream',
+    name: 'Добыча',
     description:
-      'Концептуальное проектирование и реинжиниринг наземной инфраструктуры месторождений',
-    experts: ['Ирина Соколова', 'Павел Ефимов'],
-    meetupLink: 'https://meetups.nedra.digital/infraplan',
+      'Сквозная производственная вертикаль от геологоразведки до подготовки сырья к транспортировке.',
+    isCatalogRoot: true,
     children: [
       {
-        id: 'data-preparation',
-        name: 'Подготовка исходных данных',
-        description:
-          'Сбор и нормализация исходных данных для моделирования схем обустройства'
+        id: 'upstream-strategy',
+        name: 'Стратегия разработки месторождений',
+        description: 'Портфельное планирование и оценка ресурсной базы по всей группе активов.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'resource-evaluation',
+            name: 'Оценка запасов и ресурсов',
+            description: 'Классификация запасов, баланс и сценарный анализ прироста ресурсов.',
+            experts: ['Галина Михайлова', 'Егор Устинов'],
+            meetupLink: 'https://meetups.nedra.digital/resources'
+          },
+          {
+            id: 'seismic-interpretation',
+            name: 'Сейсмическая интерпретация',
+            description: 'Комплексная интерпретация сейсморазведочных данных и построение структурных карт.',
+            experts: ['Наталья Родина', 'Владимир Гуляев'],
+            meetupLink: 'https://meetups.nedra.digital/seismic'
+          },
+          {
+            id: 'development-scenarios',
+            name: 'Сценарии разработки',
+            description: 'Формирование долгосрочных программ разработки месторождений и технико-экономическая оценка.',
+            experts: ['Александр Трофимов', 'Полина Данилова'],
+            meetupLink: 'https://meetups.nedra.digital/scenario'
+          }
+        ]
       },
       {
-        id: 'layout-optimization',
-        name: 'Оптимизация размещения',
-        description:
-          'Автоматическое размещение объектов с учётом технологических и топографических ограничений'
+        id: 'upstream-engineering',
+        name: 'Инженерия промысла',
+        description: 'Проектирование наземной инфраструктуры, фонда скважин и логистических маршрутов.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'data-preparation',
+            name: 'Подготовка исходных данных',
+            description:
+              'Сбор и нормализация исходных данных для моделирования схем обустройства',
+            experts: ['Ирина Соколова', 'Павел Ефимов'],
+            meetupLink: 'https://meetups.nedra.digital/infraplan-data'
+          },
+          {
+            id: 'layout-optimization',
+            name: 'Оптимизация размещения',
+            description:
+              'Автоматическое размещение объектов с учётом технологических и топографических ограничений',
+            experts: ['Антон Чернышёв', 'Дарья Гончарова'],
+            meetupLink: 'https://meetups.nedra.digital/layout'
+          },
+          {
+            id: 'economic-evaluation',
+            name: 'Экономическая оценка',
+            description:
+              'Формирование экономических показателей и подготовка досье по варианту инфраструктуры',
+            experts: ['Михаил Якушев', 'Алина Коваль'],
+            meetupLink: 'https://meetups.nedra.digital/economics'
+          },
+          {
+            id: 'surface-readiness',
+            name: 'Промысловая подготовка площадок',
+            description:
+              'Контроль готовности кустовых площадок, коммуникаций и систем энергообеспечения к вводу.',
+            experts: ['Сергей Минаев', 'Екатерина Левина'],
+            meetupLink: 'https://meetups.nedra.digital/surface'
+          }
+        ]
       },
       {
-        id: 'economic-evaluation',
-        name: 'Экономическая оценка',
-        description:
-          'Формирование экономических показателей и подготовка досье по варианту инфраструктуры'
-      }
-    ]
-  },
-  {
-    id: 'digital-operations',
-    name: 'Цифровое управление добычей',
-    description: 'Мониторинг, оптимизация и дистанционное управление объектами добычи',
-    experts: ['Александр Романов', 'Дарья Климова'],
-    meetupLink: 'https://meetups.nedra.digital/digital-operations',
-    children: [
-      {
-        id: 'real-time-monitoring',
-        name: 'Онлайн-мониторинг',
-        description: 'Сбор и визуализация телеметрии наземной инфраструктуры в реальном времени'
+        id: 'upstream-production-operations',
+        name: 'Операционное управление добычей',
+        description: 'Мониторинг, оптимизация и оперативное управление добывающими активами.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'production-operations-hub',
+            name: 'Ситуационные центры',
+            description: 'Объединённый мониторинг производственных показателей и управление KPI.',
+            experts: ['Алексей Богомолов', 'Жанна Литвинова'],
+            meetupLink: 'https://meetups.nedra.digital/ops-hub'
+          },
+          {
+            id: 'real-time-monitoring',
+            name: 'Онлайн-мониторинг',
+            description: 'Сбор и визуализация телеметрии наземной инфраструктуры в реальном времени',
+            experts: ['Александр Романов', 'Дарья Климова'],
+            meetupLink: 'https://meetups.nedra.digital/digital-operations'
+          },
+          {
+            id: 'production-optimization',
+            name: 'Оптимизация режимов',
+            description: 'Рекомендации по повышению эффективности работы фонда',
+            experts: ['Елена Соболева', 'Максим Корнеев'],
+            meetupLink: 'https://meetups.nedra.digital/production-optimization'
+          },
+          {
+            id: 'remote-control',
+            name: 'Дистанционное управление',
+            description: 'Удалённое управление производственными узлами и интеграция с АСУТП',
+            experts: ['Игорь Чернецов', 'Людмила Киселёва'],
+            meetupLink: 'https://meetups.nedra.digital/remote-control'
+          }
+        ]
       },
       {
-        id: 'production-optimization',
-        name: 'Оптимизация режимов',
-        description: 'Рекомендации по повышению эффективности работы фонда'
+        id: 'upstream-well-operations',
+        name: 'Внутрискважинные операции',
+        description: 'Планирование, контроль и аналитика работ по ремонту и стимулированию скважин.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'workover-program-design',
+            name: 'Проектирование ГТМ',
+            description: 'Подбор технологий стимулирования и расчёт ожидаемого прироста добычи.',
+            experts: ['Максим Орлов', 'Марина Гольцова'],
+            meetupLink: 'https://meetups.nedra.digital/workover-design'
+          },
+          {
+            id: 'workover-planning',
+            name: 'Планирование ГТМ и ТКРС',
+            description: 'Формирование и согласование программ работ по скважинам',
+            experts: ['Илья Юрьев', 'Ольга Шаталова'],
+            meetupLink: 'https://meetups.nedra.digital/workover'
+          },
+          {
+            id: 'field-execution',
+            name: 'Исполнение в поле',
+            description: 'Контроль исполнения ремонтов и взаимодействие с подрядчиками',
+            experts: ['Роман Баранов', 'Анастасия Мошкина'],
+            meetupLink: 'https://meetups.nedra.digital/field-execution'
+          },
+          {
+            id: 'quality-analytics',
+            name: 'Аналитика качества работ',
+            description: 'Оценка эффективности ремонтов и выявление узких мест процессов',
+            experts: ['Виталий Сергеев', 'Олеся Рябцева'],
+            meetupLink: 'https://meetups.nedra.digital/workover-analytics'
+          }
+        ]
       },
       {
-        id: 'remote-control',
-        name: 'Дистанционное управление',
-        description: 'Удалённое управление производственными узлами и интеграция с АСУТП'
-      }
-    ]
-  },
-  {
-    id: 'workover-operations',
-    name: 'Внутрискважинные операции',
-    description: 'Планирование, контроль и аналитика работ по ремонту скважин',
-    experts: ['Максим Орлов', 'Ольга Шаталова'],
-    meetupLink: 'https://meetups.nedra.digital/workover',
-    children: [
-      {
-        id: 'workover-planning',
-        name: 'Планирование ГТМ и ТКРС',
-        description: 'Формирование и согласование программ работ по скважинам'
-      },
-      {
-        id: 'field-execution',
-        name: 'Исполнение в поле',
-        description: 'Контроль исполнения ремонтов и взаимодействие с подрядчиками'
-      },
-      {
-        id: 'quality-analytics',
-        name: 'Аналитика качества работ',
-        description: 'Оценка эффективности ремонтов и выявление узких мест процессов'
+        id: 'upstream-flow-assurance',
+        name: 'Подготовка и транспорт продукции',
+        description: 'Наземные системы сбора, подготовки и транспортировки углеводородов.',
+        isCatalogRoot: true,
+        children: [
+          {
+            id: 'gathering-systems',
+            name: 'Системы сбора продукции',
+            description: 'Моделирование и оптимизация схем сбора с фонтанных, газлифтных и насосных скважин.',
+            experts: ['Руслан Ибрагимов', 'Тамара Зайцева'],
+            meetupLink: 'https://meetups.nedra.digital/gathering'
+          },
+          {
+            id: 'oil-treatment',
+            name: 'Подготовка нефти и газа',
+            description: 'Контроль обезвоживания, стабилизации и подготовки продукции к сдаче.',
+            experts: ['Андрей Лаврентьев', 'Наталия Брыкина'],
+            meetupLink: 'https://meetups.nedra.digital/treatment'
+          },
+          {
+            id: 'pipeline-monitoring',
+            name: 'Мониторинг трубопроводов',
+            description: 'Диагностика герметичности, мониторинг коррозии и управление рисками утечек.',
+            experts: ['Пётр Якубов', 'Инна Асташова'],
+            meetupLink: 'https://meetups.nedra.digital/pipeline'
+          }
+        ]
       }
     ]
   }

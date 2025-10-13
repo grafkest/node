@@ -638,6 +638,7 @@ function App() {
 
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domainData), [domainData]);
   const leafDomainIdSet = useMemo(() => new Set(leafDomainIds), [leafDomainIds]);
+  const catalogDomainIdSet = useMemo(() => new Set(collectCatalogDomainIds(domainData)), [domainData]);
   const displayableDomainIdSet = useMemo(
     () =>
       new Set(
@@ -1336,7 +1337,17 @@ function App() {
       const domainId = createEntityId('domain', draft.name, existingIds);
       const normalizedName = draft.name.trim() || `Новый домен ${existingIds.size + 1}`;
       const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
-      const parentId = draft.isCatalogRoot ? undefined : draft.parentId;
+      const rawParentId = draft.parentId ?? undefined;
+      const normalizedParentId =
+        rawParentId && catalogDomainIdSet.has(rawParentId) ? rawParentId : undefined;
+      if (!draft.isCatalogRoot && !normalizedParentId) {
+        showAdminNotice(
+          'error',
+          'Не удалось создать домен: выберите родительский корневой каталог.'
+        );
+        return;
+      }
+
       const experts = draft.experts.map((expert) => expert.trim()).filter((expert) => expert);
       const meetupLink = draft.meetupLink.trim();
       const newDomain: DomainNode = {
@@ -1348,10 +1359,11 @@ function App() {
         meetupLink: meetupLink || undefined
       };
 
-      const updatedDomains = addDomainToTree(domainData, parentId, newDomain);
+      const targetParentId = draft.isCatalogRoot ? normalizedParentId : normalizedParentId!;
+      const updatedDomains = addDomainToTree(domainData, targetParentId, newDomain);
       setDomainData(updatedDomains);
 
-      const moduleIds = parentId ? draft.moduleIds : [];
+      const moduleIds = !draft.isCatalogRoot && targetParentId ? draft.moduleIds : [];
       if (moduleIds.length > 0) {
         const moduleSet = new Set(moduleIds);
         setModuleDataState((prev) =>
@@ -1377,10 +1389,10 @@ function App() {
       setViewMode('graph');
       showAdminNotice(
         'success',
-        `${draft.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${normalizedName}» создан.`
+        `${draft.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${normalizedName}» создан.`
       );
     },
-    [domainData, showAdminNotice]
+    [catalogDomainIdSet, domainData, showAdminNotice]
   );
 
   const handleUpdateDomain = useCallback(
@@ -1406,15 +1418,40 @@ function App() {
       };
 
       const descendantIds = new Set(collectDomainIds(updatedDomain));
-      let targetParentId = draft.isCatalogRoot ? null : draft.parentId ?? null;
+      const rawParentId = draft.parentId ?? undefined;
+      let normalizedParentId =
+        rawParentId && catalogDomainIdSet.has(rawParentId) ? rawParentId : undefined;
+
+      if (!draft.isCatalogRoot && !normalizedParentId) {
+        const restoredTree = addDomainToTree(
+          treeWithoutDomain,
+          previousParentId ?? undefined,
+          extracted
+        );
+        setDomainData(restoredTree);
+        showAdminNotice(
+          'error',
+          'Не удалось обновить домен: выберите родительский корневой каталог.'
+        );
+        return;
+      }
+
+      let targetParentId: string | null = draft.isCatalogRoot
+        ? normalizedParentId ?? null
+        : normalizedParentId ?? null;
+
       if (targetParentId && (targetParentId === domainId || descendantIds.has(targetParentId))) {
-        targetParentId = previousParentId;
+        targetParentId = previousParentId && catalogDomainIdSet.has(previousParentId)
+          ? previousParentId
+          : null;
       }
 
       const rebuiltTree = addDomainToTree(treeWithoutDomain, targetParentId ?? undefined, updatedDomain);
       setDomainData(rebuiltTree);
 
-      const moduleSet = targetParentId ? new Set(draft.moduleIds) : new Set<string>();
+      const moduleSet = !draft.isCatalogRoot && targetParentId
+        ? new Set(draft.moduleIds)
+        : new Set<string>();
       setModuleDataState((prev) =>
         recalculateReuseScores(
           prev.map((module) => {
@@ -1438,10 +1475,10 @@ function App() {
       );
       showAdminNotice(
         'success',
-        `${updatedDomain.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${sanitizedName}» обновлён.`
+        `${updatedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${sanitizedName}» обновлён.`
       );
     },
-    [domainData, showAdminNotice]
+    [catalogDomainIdSet, domainData, showAdminNotice]
   );
 
   const handleDeleteDomain = useCallback(
@@ -1478,7 +1515,7 @@ function App() {
       setSelectedNode((prev) => (prev && removedIds.has(prev.id) ? null : prev));
       showAdminNotice(
         'success',
-        `${removedDomain.isCatalogRoot ? 'Корневой домен' : 'Домен'} «${removedDomain.name}» удалён.`
+        `${removedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${removedDomain.name}» удалён.`
       );
     },
     [domainData, showAdminNotice]
@@ -2817,6 +2854,12 @@ function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
 function collectLeafDomainIds(domains: DomainNode[]): string[] {
   return flattenDomainTree(domains)
     .filter((domain) => (!domain.children || domain.children.length === 0) && !domain.isCatalogRoot)
+    .map((domain) => domain.id);
+}
+
+function collectCatalogDomainIds(domains: DomainNode[]): string[] {
+  return flattenDomainTree(domains)
+    .filter((domain) => domain.isCatalogRoot)
     .map((domain) => domain.id);
 }
 
