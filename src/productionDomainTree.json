@@ -1,453 +1,546 @@
 {
   "version": 1,
-  "exportedAt": "2024-01-01T00:00:00Z",
+  "exportedAt": "2025-10-13T23:28:53Z",
   "modules": [],
   "domains": [
     {
-      "id": "production",
+      "id": "domain-0001",
       "name": "Production",
+      "description": "Описание не заполнено",
       "isCatalogRoot": true,
       "children": [
         {
-          "id": "production-upstream-operations",
+          "id": "domain-0002",
           "name": "Добыча, инфраструктура и операционная деятельность",
-          "isCatalogRoot": true,
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "production-field-chemistry",
+              "id": "domain-0003",
               "name": "Нефтепромысловая химия",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "production-field-chemistry-transport",
-                  "name": "Борьба с осложнениями в добыче: транспорт"
+                  "id": "domain-0004",
+                  "name": "Борьба с осложнениями в добыче: транспорт",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-field-chemistry-wells",
-                  "name": "Борьба с осложнениями в добыче: скважины"
+                  "id": "domain-0005",
+                  "name": "Борьба с осложнениями в добыче: скважины",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-field-chemistry-corrosion",
-                  "name": "Борьба с осложнениями и коррозионными процессами"
+                  "id": "domain-0006",
+                  "name": "Борьба с осложнениями и коррозионными процессами",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-field-chemistry-preparation",
-                  "name": "Борьба с осложнениями в добыче: подготовка"
+                  "id": "domain-0007",
+                  "name": "Борьба с осложнениями в добыче: подготовка",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "production-operational-monitoring",
+              "id": "domain-0008",
               "name": "Оперативный мониторинг и анализ добычи",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "production-operational-monitoring-kpi",
-                  "name": "Координация выполнения производственных показателей добычи"
+                  "id": "domain-0009",
+                  "name": "Координация выполнения производственных показателей добычи",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-operational-monitoring-waterflood",
-                  "name": "Обеспечение производственного процесса ППД"
+                  "id": "domain-0010",
+                  "name": "Обеспечение производственного процесса ППД",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-operational-monitoring-infrastructure-load",
-                  "name": "Анализ загрузки объектов наземной инфраструктуры"
+                  "id": "domain-0011",
+                  "name": "Анализ загрузки объектов наземной инфраструктуры",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-operational-monitoring-downhole-equipment",
-                  "name": "Анализ работы внутрискважинного оборудования"
+                  "id": "domain-0012",
+                  "name": "Анализ работы внутрискважинного оборудования",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "production-oil-gas-extraction",
+              "id": "domain-0013",
               "name": "Добыча нефти и газа",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "production-oil-gas-extraction-process",
-                  "name": "Обеспечение производственного процесса по технологии добычи нефти"
+                  "id": "domain-0014",
+                  "name": "Обеспечение производственного процесса по технологии добычи нефти",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-oil-gas-extraction-espc",
-                  "name": "Технологии добычи и эксплуатация скважин: УЭЦН"
+                  "id": "domain-0015",
+                  "name": "Технологии добычи и эксплуатация скважин: УЭЦН",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-oil-gas-extraction-gaslift",
-                  "name": "Технологии добычи и эксплуатация скважин: Газлифт"
+                  "id": "domain-0016",
+                  "name": "Технологии добычи и эксплуатация скважин: Газлифт",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-oil-gas-extraction-fo",
-                  "name": "Технологии добычи и эксплуатация скважин: ФОН"
+                  "id": "domain-0017",
+                  "name": "Технологии добычи и эксплуатация скважин: ФОН",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-oil-gas-extraction-rodpump",
-                  "name": "Технологии добычи и эксплуатация скважин: ШГН"
+                  "id": "domain-0018",
+                  "name": "Технологии добычи и эксплуатация скважин: ШГН",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-oil-gas-extraction-gaswells",
-                  "name": "Технологии добычи и эксплуатация скважин: Газовые"
+                  "id": "domain-0019",
+                  "name": "Технологии добычи и эксплуатация скважин: Газовые",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-oil-gas-extraction-well-operations",
-                  "name": "Эксплуатация скважин"
+                  "id": "domain-0020",
+                  "name": "Эксплуатация скважин",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "production-gas-extraction",
+              "id": "domain-0021",
               "name": "Добыча газа",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "production-gas-extraction-optimization",
-                  "name": "Увеличение добычи газа и конденсата путём оптимизации инфраструктуры"
+                  "id": "domain-0022",
+                  "name": "Увеличение добычи газа и конденсата путём оптимизации инфраструктуры",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "production-oil-treatment",
+              "id": "domain-0023",
               "name": "Технологии подготовки и сдачи нефти",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "production-oil-treatment-operations",
-                  "name": "Эксплуатация объектов подготовки нефти"
+                  "id": "domain-0024",
+                  "name": "Эксплуатация объектов подготовки нефти",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "production-gas-processing",
+              "id": "domain-0025",
               "name": "Технология подготовки, компримирования и использования газа и газового конденсата",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "production-gas-processing-compressor",
-                  "name": "Эксплуатация компрессорных установок"
+                  "id": "domain-0026",
+                  "name": "Эксплуатация компрессорных установок",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "production-gas-processing-utilization",
-                  "name": "Эксплуатация объектов использования газа"
+                  "id": "domain-0027",
+                  "name": "Эксплуатация объектов использования газа",
+                  "description": "Описание не заполнено"
                 }
               ]
             }
           ]
         },
         {
-          "id": "field-development-operations",
+          "id": "domain-0028",
           "name": "Разработка и эксплуатация нефтяных месторождений",
-          "isCatalogRoot": true,
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "field-development-integrated-modeling",
+              "id": "domain-0029",
               "name": "Интегрированное моделирование актива",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "field-development-integrated-modeling-production-profile",
-                  "name": "Формирование профиля добычи актива"
+                  "id": "domain-0030",
+                  "name": "Формирование профиля добычи актива",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-integrated-modeling-pipeline-load",
-                  "name": "Расчёт загрузки трубопроводного транспорта и объектов подготовки"
+                  "id": "domain-0031",
+                  "name": "Расчёт загрузки трубопроводного транспорта и объектов подготовки",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-integrated-modeling-pvt",
-                  "name": "PVT-моделирование флюидов"
+                  "id": "domain-0032",
+                  "name": "PVT-моделирование флюидов",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-integrated-modeling-well-modeling",
-                  "name": "Моделирование скважин"
+                  "id": "domain-0033",
+                  "name": "Моделирование скважин",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-integrated-modeling-well-optimization",
-                  "name": "Групповая оптимизация режимов работы скважин"
+                  "id": "domain-0034",
+                  "name": "Групповая оптимизация режимов работы скважин",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "field-development-reservoir-modeling",
+              "id": "domain-0035",
               "name": "Моделирование пласта",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "field-development-reservoir-modeling-dynamic",
-                  "name": "Гидродинамическое моделирование"
+                  "id": "domain-0036",
+                  "name": "Гидродинамическое моделирование",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-reservoir-modeling-math",
-                  "name": "Математическая модель"
+                  "id": "domain-0037",
+                  "name": "Математическая модель",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-reservoir-modeling-simplified",
-                  "name": "Упрощённая модель пласта"
+                  "id": "domain-0038",
+                  "name": "Упрощённая модель пласта",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "field-development-reservoir-properties",
+              "id": "domain-0039",
               "name": "Физические характеристики пласта",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "field-development-reservoir-properties-fluid",
-                  "name": "Физические свойства флюидов (PVT)"
+                  "id": "domain-0040",
+                  "name": "Физические свойства флюидов (PVT)",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-reservoir-properties-rock",
-                  "name": "Физические свойства пласта"
+                  "id": "domain-0041",
+                  "name": "Физические свойства пласта",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "field-development-reservoir-properties-monitoring",
-                  "name": "Контроль рабочих параметров пласта"
+                  "id": "domain-0042",
+                  "name": "Контроль рабочих параметров пласта",
+                  "description": "Описание не заполнено"
                 }
               ]
             }
           ]
         },
         {
-          "id": "engineering-reengineering",
+          "id": "domain-0043",
           "name": "Инжиниринг и реинжиниринг",
-          "isCatalogRoot": true,
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "engineering-facility-design",
+              "id": "domain-0044",
               "name": "Инжиниринг объектов обустройства",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "engineering-facility-design-gis",
-                  "name": "ГИС для вариативного плана размещения объектов"
+                  "id": "domain-0045",
+                  "name": "ГИС для вариативного плана размещения объектов",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "engineering-facility-design-pad-design",
-                  "name": "Инжиниринг кустования скважин"
+                  "id": "domain-0046",
+                  "name": "Инжиниринг кустования скважин",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "engineering-facility-design-capacity-optimization",
-                  "name": "Оценка потенциалов и оптимизация мощностей наземной инфраструктуры"
+                  "id": "domain-0047",
+                  "name": "Оценка потенциалов и оптимизация мощностей наземной инфраструктуры",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "engineering-facility-design-capex-optimization",
-                  "name": "Оптимизация CAPEX и OPEX за счёт сокращения неэффективных мощностей"
+                  "id": "domain-0048",
+                  "name": "Оптимизация CAPEX и OPEX за счёт сокращения неэффективных мощностей",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "engineering-facility-design-drilling-schedule",
-                  "name": "Формирование графика бурения"
+                  "id": "domain-0049",
+                  "name": "Формирование графика бурения",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "engineering-field-pipelines",
+              "id": "domain-0050",
               "name": "Инжиниринг промысловых трубопроводов",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "engineering-field-pipelines-reliability",
-                  "name": "Повышение надёжности эксплуатации промысловых трубопроводов"
+                  "id": "domain-0051",
+                  "name": "Повышение надёжности эксплуатации промысловых трубопроводов",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "engineering-pipeline-transport",
+              "id": "domain-0052",
               "name": "Трубопроводный транспорт",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "engineering-pipeline-transport-optimization",
-                  "name": "Разработка решений по оптимизации систем трубопроводного транспорта"
+                  "id": "domain-0053",
+                  "name": "Разработка решений по оптимизации систем трубопроводного транспорта",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "engineering-pipeline-transport-pilot",
-                  "name": "Сопровождение опытно-промышленных испытаний технологий"
+                  "id": "domain-0054",
+                  "name": "Сопровождение опытно-промышленных испытаний технологий",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "engineering-pipeline-transport-project-support",
-                  "name": "Сопровождение проектирования и реализации проектов трубопроводов"
+                  "id": "domain-0055",
+                  "name": "Сопровождение проектирования и реализации проектов трубопроводов",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "engineering-processing-facilities",
+              "id": "domain-0056",
               "name": "Технологические объекты подготовки",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "engineering-processing-facilities-scheme-optimization",
-                  "name": "Оптимизация схемы объектов подготовки и сдачи для оценки капитальных затрат и производственной мощности"
+                  "id": "domain-0057",
+                  "name": "Оптимизация схемы объектов подготовки и сдачи для оценки капитальных затрат и производственной мощности",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "engineering-power-assets",
+              "id": "domain-0058",
               "name": "Объекты энергетики",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "engineering-power-assets-development",
-                  "name": "Разработка эффективного варианта обустройства"
+                  "id": "domain-0059",
+                  "name": "Разработка эффективного варианта обустройства",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "engineering-power-assets-modeling",
-                  "name": "Моделирование источников электроэнергии и линий электропередач"
+                  "id": "domain-0060",
+                  "name": "Моделирование источников электроэнергии и линий электропередач",
+                  "description": "Описание не заполнено"
                 }
               ]
             }
           ]
         },
         {
-          "id": "infield-operations",
+          "id": "domain-0061",
           "name": "Внутриплощадочные работы",
-          "isCatalogRoot": true,
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "infield-gas-operations",
+              "id": "domain-0062",
               "name": "Газовый промысел",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "infield-gas-operations-well-construction",
-                  "name": "Эффективность и планирование строительства и ремонта скважин"
+                  "id": "domain-0063",
+                  "name": "Эффективность и планирование строительства и ремонта скважин",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "infield-gas-operations-cost-planning",
-                  "name": "Эффективность и планирование стоимости строительства скважин"
+                  "id": "domain-0064",
+                  "name": "Эффективность и планирование стоимости строительства скважин",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "infield-gas-operations-equipment",
-                  "name": "Компрессорное и газотурбинное оборудование"
+                  "id": "domain-0065",
+                  "name": "Компрессорное и газотурбинное оборудование",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "infield-geology",
+              "id": "domain-0066",
               "name": "Геология и разработка",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "infield-geology-dynamic-modeling",
-                  "name": "Динамическое моделирование и исследование пласта"
+                  "id": "domain-0067",
+                  "name": "Динамическое моделирование и исследование пласта",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "infield-geology-reservoir-modeling",
-                  "name": "Гидродинамическое моделирование"
+                  "id": "domain-0068",
+                  "name": "Гидродинамическое моделирование",
+                  "description": "Описание не заполнено"
                 }
               ]
             },
             {
-              "id": "infield-capital-construction",
+              "id": "domain-0069",
               "name": "Капитальное строительство",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "infield-capital-construction-management",
-                  "name": "Организация и управление строительством"
+                  "id": "domain-0070",
+                  "name": "Организация и управление строительством",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "infield-capital-construction-materials",
-                  "name": "Комплектация и мониторинг МТР и КС"
+                  "id": "domain-0071",
+                  "name": "Комплектация и мониторинг МТР и КС",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "infield-capital-construction-costing",
-                  "name": "Ценообразование строительства"
+                  "id": "domain-0072",
+                  "name": "Ценообразование строительства",
+                  "description": "Описание не заполнено"
                 },
                 {
-                  "id": "infield-capital-construction-contracts",
-                  "name": "Договорное сопровождение строительства"
+                  "id": "domain-0073",
+                  "name": "Договорное сопровождение строительства",
+                  "description": "Описание не заполнено"
                 }
               ]
             }
           ]
         },
         {
-          "id": "oil-gas-water-processing",
+          "id": "domain-0074",
           "name": "Подготовка нефти, газа и воды",
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "oil-gas-water-processing-throughput",
-              "name": "Производительность аппаратов подготовки"
+              "id": "domain-0075",
+              "name": "Производительность аппаратов подготовки",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "oil-gas-water-processing-energy-efficiency",
-              "name": "Энергоэффективность наземных насосных агрегатов (ЦНС)"
+              "id": "domain-0076",
+              "name": "Энергоэффективность наземных насосных агрегатов (ЦНС)",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "oil-gas-water-processing-mobile-facilities",
-              "name": "Мобильные объекты подготовки"
+              "id": "domain-0077",
+              "name": "Мобильные объекты подготовки",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "oil-gas-water-processing-incident-analysis",
-              "name": "Анализ причин нарушения технологического режима объектов подготовки"
+              "id": "domain-0078",
+              "name": "Анализ причин нарушения технологического режима объектов подготовки",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "oil-gas-water-processing-accounting",
-              "name": "Процесс учёта нефти и газа"
+              "id": "domain-0079",
+              "name": "Процесс учёта нефти и газа",
+              "description": "Описание не заполнено"
             }
           ]
         },
         {
-          "id": "conceptual-design",
+          "id": "domain-0080",
           "name": "Концептуальное проектирование",
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "conceptual-design-new-areas",
-              "name": "Проработка вариантов поверхностного обустройства новых лицензионных участков"
+              "id": "domain-0081",
+              "name": "Проработка вариантов поверхностного обустройства новых лицензионных участков",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "conceptual-design-automatic-infrastructure",
-              "name": "Автопостроение объектов наземной инфраструктуры"
+              "id": "domain-0082",
+              "name": "Автопостроение объектов наземной инфраструктуры",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "conceptual-design-fin-modeling",
-              "name": "Финансово-экономическое моделирование"
+              "id": "domain-0083",
+              "name": "Финансово-экономическое моделирование",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "conceptual-design-feasibility",
-              "name": "Формирование ТЭО по существующим активам"
+              "id": "domain-0084",
+              "name": "Формирование ТЭО по существующим активам",
+              "description": "Описание не заполнено"
             }
           ]
         },
         {
-          "id": "energy-management",
+          "id": "domain-0085",
           "name": "Энергетика",
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "energy-management-audit",
-              "name": "Аудит бизнес-процессов энергетики"
+              "id": "domain-0086",
+              "name": "Аудит бизнес-процессов энергетики",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-balance-modeling",
-              "name": "Формирование, моделирование и прогнозирование балансов топливно-энергетических ресурсов предприятия"
+              "id": "domain-0087",
+              "name": "Формирование, моделирование и прогнозирование балансов топливно-энергетических ресурсов предприятия",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-generation-modeling",
-              "name": "Моделирование объектов генерации электроэнергии"
+              "id": "domain-0088",
+              "name": "Моделирование объектов генерации электроэнергии",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-grid-modes",
-              "name": "Моделирование режимов работы электросетевого оборудования"
+              "id": "domain-0089",
+              "name": "Моделирование режимов работы электросетевого оборудования",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-mechanized-fund-efficiency",
-              "name": "Энергоэффективность механизированного фонда"
+              "id": "domain-0090",
+              "name": "Энергоэффективность механизированного фонда",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-infrastructure-efficiency",
-              "name": "Энергоэффективность объектов наземной инфраструктуры"
+              "id": "domain-0091",
+              "name": "Энергоэффективность объектов наземной инфраструктуры",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-equipment-optimization",
-              "name": "Оптимизация режимов работы энергооборудования"
+              "id": "domain-0092",
+              "name": "Оптимизация режимов работы энергооборудования",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-savings-modeling",
-              "name": "Расчёт и моделирование потенциалов энергосбережения и энергоэффективности энергооборудования"
+              "id": "domain-0093",
+              "name": "Расчёт и моделирование потенциалов энергосбережения и энергоэффективности энергооборудования",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-systems",
-              "name": "Системы энергетического менеджмента предприятия"
+              "id": "domain-0094",
+              "name": "Системы энергетического менеджмента предприятия",
+              "description": "Описание не заполнено"
             },
             {
-              "id": "energy-management-accounting",
-              "name": "Система учёта и процессного использования ТЭР"
+              "id": "domain-0095",
+              "name": "Система учёта и процессного использования ТЭР",
+              "description": "Описание не заполнено"
             }
           ]
         },
         {
-          "id": "exploration-production-project-management",
+          "id": "domain-0096",
           "name": "Управление проектами разведки и добычи",
-          "isCatalogRoot": true,
+          "description": "Описание не заполнено",
           "children": [
             {
-              "id": "exploration-production-project-support",
+              "id": "domain-0097",
               "name": "Проектная поддержка",
+              "description": "Описание не заполнено",
               "children": [
                 {
-                  "id": "exploration-production-project-support-scheduling",
-                  "name": "Календарно-сетевое планирование РиД"
+                  "id": "domain-0098",
+                  "name": "Календарно-сетевое планирование РиД",
+                  "description": "Описание не заполнено"
                 }
               ]
             }
@@ -456,5 +549,8 @@
       ]
     }
   ],
-  "artifacts": []
+  "artifacts": [],
+  "layout": {
+    "nodes": {}
+  }
 }
