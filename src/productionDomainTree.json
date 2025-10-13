@@ -1,0 +1,454 @@
+[
+  {
+    "id": "production",
+    "name": "Production",
+    "isCatalogRoot": true,
+    "children": [
+      {
+        "id": "production-upstream-operations",
+        "name": "Добыча, инфраструктура и операционная деятельность",
+        "isCatalogRoot": true,
+        "children": [
+          {
+            "id": "production-field-chemistry",
+            "name": "Нефтепромысловая химия",
+            "children": [
+              {
+                "id": "production-field-chemistry-transport",
+                "name": "Борьба с осложнениями в добыче: транспорт"
+              },
+              {
+                "id": "production-field-chemistry-wells",
+                "name": "Борьба с осложнениями в добыче: скважины"
+              },
+              {
+                "id": "production-field-chemistry-corrosion",
+                "name": "Борьба с осложнениями и коррозионными процессами"
+              },
+              {
+                "id": "production-field-chemistry-preparation",
+                "name": "Борьба с осложнениями в добыче: подготовка"
+              }
+            ]
+          },
+          {
+            "id": "production-operational-monitoring",
+            "name": "Оперативный мониторинг и анализ добычи",
+            "children": [
+              {
+                "id": "production-operational-monitoring-kpi",
+                "name": "Координация выполнения производственных показателей добычи"
+              },
+              {
+                "id": "production-operational-monitoring-waterflood",
+                "name": "Обеспечение производственного процесса ППД"
+              },
+              {
+                "id": "production-operational-monitoring-infrastructure-load",
+                "name": "Анализ загрузки объектов наземной инфраструктуры"
+              },
+              {
+                "id": "production-operational-monitoring-downhole-equipment",
+                "name": "Анализ работы внутрискважинного оборудования"
+              }
+            ]
+          },
+          {
+            "id": "production-oil-gas-extraction",
+            "name": "Добыча нефти и газа",
+            "children": [
+              {
+                "id": "production-oil-gas-extraction-process",
+                "name": "Обеспечение производственного процесса по технологии добычи нефти"
+              },
+              {
+                "id": "production-oil-gas-extraction-espc",
+                "name": "Технологии добычи и эксплуатация скважин: УЭЦН"
+              },
+              {
+                "id": "production-oil-gas-extraction-gaslift",
+                "name": "Технологии добычи и эксплуатация скважин: Газлифт"
+              },
+              {
+                "id": "production-oil-gas-extraction-fo",
+                "name": "Технологии добычи и эксплуатация скважин: ФОН"
+              },
+              {
+                "id": "production-oil-gas-extraction-rodpump",
+                "name": "Технологии добычи и эксплуатация скважин: ШГН"
+              },
+              {
+                "id": "production-oil-gas-extraction-gaswells",
+                "name": "Технологии добычи и эксплуатация скважин: Газовые"
+              },
+              {
+                "id": "production-oil-gas-extraction-well-operations",
+                "name": "Эксплуатация скважин"
+              }
+            ]
+          },
+          {
+            "id": "production-gas-extraction",
+            "name": "Добыча газа",
+            "children": [
+              {
+                "id": "production-gas-extraction-optimization",
+                "name": "Увеличение добычи газа и конденсата путём оптимизации инфраструктуры"
+              }
+            ]
+          },
+          {
+            "id": "production-oil-treatment",
+            "name": "Технологии подготовки и сдачи нефти",
+            "children": [
+              {
+                "id": "production-oil-treatment-operations",
+                "name": "Эксплуатация объектов подготовки нефти"
+              }
+            ]
+          },
+          {
+            "id": "production-gas-processing",
+            "name": "Технология подготовки, компримирования и использования газа и газового конденсата",
+            "children": [
+              {
+                "id": "production-gas-processing-compressor",
+                "name": "Эксплуатация компрессорных установок"
+              },
+              {
+                "id": "production-gas-processing-utilization",
+                "name": "Эксплуатация объектов использования газа"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "field-development-operations",
+        "name": "Разработка и эксплуатация нефтяных месторождений",
+        "isCatalogRoot": true,
+        "children": [
+          {
+            "id": "field-development-integrated-modeling",
+            "name": "Интегрированное моделирование актива",
+            "children": [
+              {
+                "id": "field-development-integrated-modeling-production-profile",
+                "name": "Формирование профиля добычи актива"
+              },
+              {
+                "id": "field-development-integrated-modeling-pipeline-load",
+                "name": "Расчёт загрузки трубопроводного транспорта и объектов подготовки"
+              },
+              {
+                "id": "field-development-integrated-modeling-pvt",
+                "name": "PVT-моделирование флюидов"
+              },
+              {
+                "id": "field-development-integrated-modeling-well-modeling",
+                "name": "Моделирование скважин"
+              },
+              {
+                "id": "field-development-integrated-modeling-well-optimization",
+                "name": "Групповая оптимизация режимов работы скважин"
+              }
+            ]
+          },
+          {
+            "id": "field-development-reservoir-modeling",
+            "name": "Моделирование пласта",
+            "children": [
+              {
+                "id": "field-development-reservoir-modeling-dynamic",
+                "name": "Гидродинамическое моделирование"
+              },
+              {
+                "id": "field-development-reservoir-modeling-math",
+                "name": "Математическая модель"
+              },
+              {
+                "id": "field-development-reservoir-modeling-simplified",
+                "name": "Упрощённая модель пласта"
+              }
+            ]
+          },
+          {
+            "id": "field-development-reservoir-properties",
+            "name": "Физические характеристики пласта",
+            "children": [
+              {
+                "id": "field-development-reservoir-properties-fluid",
+                "name": "Физические свойства флюидов (PVT)"
+              },
+              {
+                "id": "field-development-reservoir-properties-rock",
+                "name": "Физические свойства пласта"
+              },
+              {
+                "id": "field-development-reservoir-properties-monitoring",
+                "name": "Контроль рабочих параметров пласта"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "engineering-reengineering",
+        "name": "Инжиниринг и реинжиниринг",
+        "isCatalogRoot": true,
+        "children": [
+          {
+            "id": "engineering-facility-design",
+            "name": "Инжиниринг объектов обустройства",
+            "children": [
+              {
+                "id": "engineering-facility-design-gis",
+                "name": "ГИС для вариативного плана размещения объектов"
+              },
+              {
+                "id": "engineering-facility-design-pad-design",
+                "name": "Инжиниринг кустования скважин"
+              },
+              {
+                "id": "engineering-facility-design-capacity-optimization",
+                "name": "Оценка потенциалов и оптимизация мощностей наземной инфраструктуры"
+              },
+              {
+                "id": "engineering-facility-design-capex-optimization",
+                "name": "Оптимизация CAPEX и OPEX за счёт сокращения неэффективных мощностей"
+              },
+              {
+                "id": "engineering-facility-design-drilling-schedule",
+                "name": "Формирование графика бурения"
+              }
+            ]
+          },
+          {
+            "id": "engineering-field-pipelines",
+            "name": "Инжиниринг промысловых трубопроводов",
+            "children": [
+              {
+                "id": "engineering-field-pipelines-reliability",
+                "name": "Повышение надёжности эксплуатации промысловых трубопроводов"
+              }
+            ]
+          },
+          {
+            "id": "engineering-pipeline-transport",
+            "name": "Трубопроводный транспорт",
+            "children": [
+              {
+                "id": "engineering-pipeline-transport-optimization",
+                "name": "Разработка решений по оптимизации систем трубопроводного транспорта"
+              },
+              {
+                "id": "engineering-pipeline-transport-pilot",
+                "name": "Сопровождение опытно-промышленных испытаний технологий"
+              },
+              {
+                "id": "engineering-pipeline-transport-project-support",
+                "name": "Сопровождение проектирования и реализации проектов трубопроводов"
+              }
+            ]
+          },
+          {
+            "id": "engineering-processing-facilities",
+            "name": "Технологические объекты подготовки",
+            "children": [
+              {
+                "id": "engineering-processing-facilities-scheme-optimization",
+                "name": "Оптимизация схемы объектов подготовки и сдачи для оценки капитальных затрат и производственной мощности"
+              }
+            ]
+          },
+          {
+            "id": "engineering-power-assets",
+            "name": "Объекты энергетики",
+            "children": [
+              {
+                "id": "engineering-power-assets-development",
+                "name": "Разработка эффективного варианта обустройства"
+              },
+              {
+                "id": "engineering-power-assets-modeling",
+                "name": "Моделирование источников электроэнергии и линий электропередач"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "infield-operations",
+        "name": "Внутриплощадочные работы",
+        "isCatalogRoot": true,
+        "children": [
+          {
+            "id": "infield-gas-operations",
+            "name": "Газовый промысел",
+            "children": [
+              {
+                "id": "infield-gas-operations-well-construction",
+                "name": "Эффективность и планирование строительства и ремонта скважин"
+              },
+              {
+                "id": "infield-gas-operations-cost-planning",
+                "name": "Эффективность и планирование стоимости строительства скважин"
+              },
+              {
+                "id": "infield-gas-operations-equipment",
+                "name": "Компрессорное и газотурбинное оборудование"
+              }
+            ]
+          },
+          {
+            "id": "infield-geology",
+            "name": "Геология и разработка",
+            "children": [
+              {
+                "id": "infield-geology-dynamic-modeling",
+                "name": "Динамическое моделирование и исследование пласта"
+              },
+              {
+                "id": "infield-geology-reservoir-modeling",
+                "name": "Гидродинамическое моделирование"
+              }
+            ]
+          },
+          {
+            "id": "infield-capital-construction",
+            "name": "Капитальное строительство",
+            "children": [
+              {
+                "id": "infield-capital-construction-management",
+                "name": "Организация и управление строительством"
+              },
+              {
+                "id": "infield-capital-construction-materials",
+                "name": "Комплектация и мониторинг МТР и КС"
+              },
+              {
+                "id": "infield-capital-construction-costing",
+                "name": "Ценообразование строительства"
+              },
+              {
+                "id": "infield-capital-construction-contracts",
+                "name": "Договорное сопровождение строительства"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "oil-gas-water-processing",
+        "name": "Подготовка нефти, газа и воды",
+        "children": [
+          {
+            "id": "oil-gas-water-processing-throughput",
+            "name": "Производительность аппаратов подготовки"
+          },
+          {
+            "id": "oil-gas-water-processing-energy-efficiency",
+            "name": "Энергоэффективность наземных насосных агрегатов (ЦНС)"
+          },
+          {
+            "id": "oil-gas-water-processing-mobile-facilities",
+            "name": "Мобильные объекты подготовки"
+          },
+          {
+            "id": "oil-gas-water-processing-incident-analysis",
+            "name": "Анализ причин нарушения технологического режима объектов подготовки"
+          },
+          {
+            "id": "oil-gas-water-processing-accounting",
+            "name": "Процесс учёта нефти и газа"
+          }
+        ]
+      },
+      {
+        "id": "conceptual-design",
+        "name": "Концептуальное проектирование",
+        "children": [
+          {
+            "id": "conceptual-design-new-areas",
+            "name": "Проработка вариантов поверхностного обустройства новых лицензионных участков"
+          },
+          {
+            "id": "conceptual-design-automatic-infrastructure",
+            "name": "Автопостроение объектов наземной инфраструктуры"
+          },
+          {
+            "id": "conceptual-design-fin-modeling",
+            "name": "Финансово-экономическое моделирование"
+          },
+          {
+            "id": "conceptual-design-feasibility",
+            "name": "Формирование ТЭО по существующим активам"
+          }
+        ]
+      },
+      {
+        "id": "energy-management",
+        "name": "Энергетика",
+        "children": [
+          {
+            "id": "energy-management-audit",
+            "name": "Аудит бизнес-процессов энергетики"
+          },
+          {
+            "id": "energy-management-balance-modeling",
+            "name": "Формирование, моделирование и прогнозирование балансов топливно-энергетических ресурсов предприятия"
+          },
+          {
+            "id": "energy-management-generation-modeling",
+            "name": "Моделирование объектов генерации электроэнергии"
+          },
+          {
+            "id": "energy-management-grid-modes",
+            "name": "Моделирование режимов работы электросетевого оборудования"
+          },
+          {
+            "id": "energy-management-mechanized-fund-efficiency",
+            "name": "Энергоэффективность механизированного фонда"
+          },
+          {
+            "id": "energy-management-infrastructure-efficiency",
+            "name": "Энергоэффективность объектов наземной инфраструктуры"
+          },
+          {
+            "id": "energy-management-equipment-optimization",
+            "name": "Оптимизация режимов работы энергооборудования"
+          },
+          {
+            "id": "energy-management-savings-modeling",
+            "name": "Расчёт и моделирование потенциалов энергосбережения и энергоэффективности энергооборудования"
+          },
+          {
+            "id": "energy-management-systems",
+            "name": "Системы энергетического менеджмента предприятия"
+          },
+          {
+            "id": "energy-management-accounting",
+            "name": "Система учёта и процессного использования ТЭР"
+          }
+        ]
+      },
+      {
+        "id": "exploration-production-project-management",
+        "name": "Управление проектами разведки и добычи",
+        "isCatalogRoot": true,
+        "children": [
+          {
+            "id": "exploration-production-project-support",
+            "name": "Проектная поддержка",
+            "children": [
+              {
+                "id": "exploration-production-project-support-scheduling",
+                "name": "Календарно-сетевое планирование РиД"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
