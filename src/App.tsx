@@ -2253,38 +2253,40 @@ function App() {
                 className={styles.filtersCollapse}
               >
                 <div className={styles.filtersCollapseContent}>
-                  <FiltersPanel
-                    search={search}
-                    onSearchChange={setSearch}
-                    statuses={allStatuses}
-                    activeStatuses={statusFilters}
-                    onToggleStatus={(status) => {
-                      setSelectedNode(null);
-                      setStatusFilters((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(status)) {
-                          next.delete(status);
-                        } else {
-                          next.add(status);
-                        }
-                        return next;
-                      });
-                    }}
-                    products={products}
-                    productFilter={productFilter}
-                    onProductChange={(nextProducts) => {
-                      setSelectedNode(null);
-                      setProductFilter(nextProducts);
-                    }}
-                    companies={companies}
-                    companyFilter={companyFilter}
-                    onCompanyChange={(nextCompany) => {
-                      setSelectedNode(null);
-                      setCompanyFilter(nextCompany);
-                    }}
-                    showAllConnections={showAllConnections}
-                    onToggleConnections={(value) => setShowAllConnections(value)}
-                  />
+                  {areFiltersOpen ? (
+                    <FiltersPanel
+                      search={search}
+                      onSearchChange={setSearch}
+                      statuses={allStatuses}
+                      activeStatuses={statusFilters}
+                      onToggleStatus={(status) => {
+                        setSelectedNode(null);
+                        setStatusFilters((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(status)) {
+                            next.delete(status);
+                          } else {
+                            next.add(status);
+                          }
+                          return next;
+                        });
+                      }}
+                      products={products}
+                      productFilter={productFilter}
+                      onProductChange={(nextProducts) => {
+                        setSelectedNode(null);
+                        setProductFilter(nextProducts);
+                      }}
+                      companies={companies}
+                      companyFilter={companyFilter}
+                      onCompanyChange={(nextCompany) => {
+                        setSelectedNode(null);
+                        setCompanyFilter(nextCompany);
+                      }}
+                      showAllConnections={showAllConnections}
+                      onToggleConnections={(value) => setShowAllConnections(value)}
+                    />
+                  ) : null}
                 </div>
               </Collapse>
             </div>
