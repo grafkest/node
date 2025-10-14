@@ -21,7 +21,7 @@ type TreeItemProps = {
 };
 
 const TreeItem: React.FC<TreeItemProps> = ({ node, selected, descendants, onToggle, depth = 0 }) => {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const hasChildren = node.children && node.children.length > 0;
   const paddingLeft = useMemo(() => depth * 16, [depth]);
   const cascade = useMemo(() => descendants.get(node.id) ?? [node.id], [descendants, node.id]);

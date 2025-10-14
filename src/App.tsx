@@ -1,13 +1,24 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
+import { Collapse } from '@consta/uikit/Collapse';
 import { Layout } from '@consta/uikit/Layout';
 import { Loader } from '@consta/uikit/Loader';
 import { Select } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
+import type { CSSProperties } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
 import AdminPanel, {
@@ -91,6 +102,10 @@ function App() {
   const [showAllConnections, setShowAllConnections] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
+  const [isDomainTreeOpen, setIsDomainTreeOpen] = useState(false);
+  const [areFiltersOpen, setAreFiltersOpen] = useState(true);
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
+  const [sidebarBaseHeight, setSidebarBaseHeight] = useState<number | null>(null);
   const [adminNotice, setAdminNotice] = useState<AdminNotice | null>(null);
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
   const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
@@ -111,6 +126,10 @@ function App() {
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
   );
+  const sidebarMaxHeight = useMemo(
+    () => (sidebarBaseHeight ? sidebarBaseHeight * 2 : null),
+    [sidebarBaseHeight]
+  );
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
@@ -121,6 +140,55 @@ function App() {
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
+  useLayoutEffect(() => {
+    const element = sidebarRef.current;
+    if (!element) {
+      return;
+    }
+
+    const measure = () => {
+      const target = sidebarRef.current;
+      if (!target) {
+        return;
+      }
+
+      if (isDomainTreeOpen) {
+        return;
+      }
+
+      if (!areFiltersOpen) {
+        return;
+      }
+
+      const height = Math.max(target.getBoundingClientRect().height, 0);
+      if (height < 1) {
+        return;
+      }
+      setSidebarBaseHeight((prev) => {
+        if (prev === null || Math.abs(prev - height) > 0.5) {
+          return height;
+        }
+
+        return prev;
+      });
+    };
+
+    measure();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      measure();
+    });
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [areFiltersOpen, isDomainTreeOpen]);
   const refreshGraphs = useCallback(
     async (
       preferredGraphId?: string | null,
@@ -2229,51 +2297,83 @@ function App() {
         aria-hidden={!isGraphActive}
         style={{ display: isGraphActive ? undefined : 'none' }}
       >
-          <aside className={styles.sidebar}>
-            <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-              Домены
-            </Text>
-            <DomainTree
-              tree={domainData}
-              selected={selectedDomains}
-              onToggle={handleDomainToggle}
-              descendants={domainDescendants}
-            />
-            <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-              Фильтры
-            </Text>
-            <FiltersPanel
-              search={search}
-              onSearchChange={setSearch}
-              statuses={allStatuses}
-              activeStatuses={statusFilters}
-              onToggleStatus={(status) => {
-                setSelectedNode(null);
-                setStatusFilters((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(status)) {
-                    next.delete(status);
-                  } else {
-                    next.add(status);
-                  }
-                  return next;
-                });
-              }}
-              products={products}
-              productFilter={productFilter}
-              onProductChange={(nextProducts) => {
-                setSelectedNode(null);
-                setProductFilter(nextProducts);
-              }}
-              companies={companies}
-              companyFilter={companyFilter}
-              onCompanyChange={(nextCompany) => {
-                setSelectedNode(null);
-                setCompanyFilter(nextCompany);
-              }}
-              showAllConnections={showAllConnections}
-              onToggleConnections={(value) => setShowAllConnections(value)}
-            />
+          <aside
+            ref={sidebarRef}
+            className={styles.sidebar}
+            style={
+              sidebarMaxHeight
+                ? ({ '--sidebar-max-height': `${sidebarMaxHeight}px` } as CSSProperties)
+                : undefined
+            }
+          >
+            <div className={styles.sidebarScrollArea}>
+              <Collapse
+                label={
+                  <Text size="s" weight="semibold">
+                    Домены
+                  </Text>
+                }
+                isOpen={isDomainTreeOpen}
+                onClick={() => setIsDomainTreeOpen((prev) => !prev)}
+                className={styles.domainCollapse}
+              >
+                <div className={styles.domainCollapseContent}>
+                  {isDomainTreeOpen ? (
+                    <DomainTree
+                      tree={domainData}
+                      selected={selectedDomains}
+                      onToggle={handleDomainToggle}
+                      descendants={domainDescendants}
+                    />
+                  ) : null}
+                </div>
+              </Collapse>
+              <Collapse
+                label={
+                  <Text size="s" weight="semibold">
+                    Фильтры
+                  </Text>
+                }
+                isOpen={areFiltersOpen}
+                onClick={() => setAreFiltersOpen((prev) => !prev)}
+                className={styles.filtersCollapse}
+              >
+                <div className={styles.filtersCollapseContent}>
+                  <FiltersPanel
+                    search={search}
+                    onSearchChange={setSearch}
+                    statuses={allStatuses}
+                    activeStatuses={statusFilters}
+                    onToggleStatus={(status) => {
+                      setSelectedNode(null);
+                      setStatusFilters((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(status)) {
+                          next.delete(status);
+                        } else {
+                          next.add(status);
+                        }
+                        return next;
+                      });
+                    }}
+                    products={products}
+                    productFilter={productFilter}
+                    onProductChange={(nextProducts) => {
+                      setSelectedNode(null);
+                      setProductFilter(nextProducts);
+                    }}
+                    companies={companies}
+                    companyFilter={companyFilter}
+                    onCompanyChange={(nextCompany) => {
+                      setSelectedNode(null);
+                      setCompanyFilter(nextCompany);
+                    }}
+                    showAllConnections={showAllConnections}
+                    onToggleConnections={(value) => setShowAllConnections(value)}
+                  />
+                </div>
+              </Collapse>
+            </div>
           </aside>
           <section className={styles.graphSection}>
             <div className={styles.graphContainer}>
