@@ -114,7 +114,6 @@ function App() {
   const [syncStatus, setSyncStatus] = useState<GraphSyncStatus | null>(null);
   const [isSyncAvailable, setIsSyncAvailable] = useState(false);
   const [isReloadingSnapshot, setIsReloadingSnapshot] = useState(false);
-  const [snapshotRetryAttempt, setSnapshotRetryAttempt] = useState(0);
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
@@ -308,7 +307,6 @@ function App() {
         loadedGraphsRef.current.add(graphId);
         skipNextSyncRef.current = true;
         setSnapshotError(null);
-        setSnapshotRetryAttempt(0);
         setIsSyncAvailable(true);
         setSyncStatus({
           state: 'idle',
@@ -326,7 +324,6 @@ function App() {
             ? `Не удалось загрузить данные графа (${detail}). Используются локальные данные.`
             : 'Не удалось загрузить данные графа. Используются локальные данные.'
         );
-        setSnapshotRetryAttempt((attempt) => attempt + 1);
         setIsSyncAvailable(false);
         const syncErrorMessage = detail
           ? `Нет связи с сервером (${detail}). Изменения не сохранятся.`
@@ -362,7 +359,6 @@ function App() {
     setIsSyncAvailable(false);
     setSyncStatus(null);
     setSnapshotError(null);
-    setSnapshotRetryAttempt(0);
     setIsReloadingSnapshot(false);
     setIsSnapshotLoading(true);
     void loadSnapshot(activeGraphId, { withOverlay: true });
@@ -377,26 +373,14 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!snapshotError || snapshotRetryAttempt === 0 || typeof window === 'undefined') {
+  const handleRetryLoadSnapshot = useCallback(() => {
+    const graphId = activeGraphIdRef.current;
+    if (!graphId) {
       return;
     }
 
-    if (isReloadingSnapshot) {
-      return;
-    }
-
-    const backoffDelay = Math.min(30000, 2000 * 2 ** (snapshotRetryAttempt - 1));
-    const timer = window.setTimeout(() => {
-      if (activeGraphIdRef.current) {
-        void loadSnapshot(activeGraphIdRef.current, { withOverlay: false });
-      }
-    }, backoffDelay);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [snapshotError, snapshotRetryAttempt, isReloadingSnapshot, loadSnapshot]);
+    void loadSnapshot(graphId, { withOverlay: false });
+  }, [loadSnapshot]);
 
   useEffect(() => {
     setProductFilter((prev) => {
@@ -2086,9 +2070,7 @@ function App() {
               label={isReloadingSnapshot ? 'Повторяем попытку...' : 'Повторить попытку'}
               loading={isReloadingSnapshot}
               disabled={isReloadingSnapshot}
-              onClick={() => {
-                void loadSnapshot({ withOverlay: false });
-              }}
+              onClick={handleRetryLoadSnapshot}
             />
           </div>
         </div>
