@@ -51,6 +51,7 @@ const GraphView: React.FC<GraphViewProps> = ({
     center: null,
     zoom: 1
   });
+  const cameraTransformRef = useRef<ZoomTransform>({ k: 1, x: 0, y: 0 });
   const pendingCameraRestoreRef = useRef(false);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
@@ -159,10 +160,19 @@ const GraphView: React.FC<GraphViewProps> = ({
       const center = graph.centerAt();
       const zoom = graph.zoom();
       if (center && typeof center.x === 'number' && typeof center.y === 'number') {
+        const resolvedZoom = typeof zoom === 'number' && Number.isFinite(zoom) ? zoom : 1;
         cameraStateRef.current = {
           center,
-          zoom: typeof zoom === 'number' && Number.isFinite(zoom) ? zoom : 1
+          zoom: resolvedZoom
         };
+
+        if (dimensions.width > 0 && dimensions.height > 0) {
+          cameraTransformRef.current = {
+            k: resolvedZoom,
+            x: dimensions.width / 2 - center.x * resolvedZoom,
+            y: dimensions.height / 2 - center.y * resolvedZoom
+          };
+        }
       }
     }
   }, [dimensions]);
@@ -227,11 +237,27 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     const graph = graphRef.current;
     const { center, zoom } = cameraStateRef.current;
-    if (center && typeof graph.centerAt === 'function') {
-      graph.centerAt(center.x, center.y, 0);
-    }
+    const transform = cameraTransformRef.current;
+
     if (typeof zoom === 'number' && typeof graph.zoom === 'function') {
       graph.zoom(zoom, 0);
+    }
+
+    const hasTransform =
+      typeof transform?.x === 'number' &&
+      typeof transform?.y === 'number' &&
+      Number.isFinite(transform.k) &&
+      dimensions.width > 0 &&
+      dimensions.height > 0;
+
+    if (hasTransform && typeof graph.centerAt === 'function') {
+      const derivedCenter = {
+        x: (dimensions.width / 2 - transform.x) / (transform.k || 1),
+        y: (dimensions.height / 2 - transform.y) / (transform.k || 1)
+      };
+      graph.centerAt(derivedCenter.x, derivedCenter.y, 0);
+    } else if (center && typeof graph.centerAt === 'function') {
+      graph.centerAt(center.x, center.y, 0);
     }
 
     pendingCameraRestoreRef.current = false;
@@ -243,19 +269,20 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
 
     const graph = graphRef.current;
-    const linkForce = graph.d3Force?.('link');
-    if (linkForce && typeof (linkForce as { distance?: (fn: (link: ForceLink) => number) => void }).distance === 'function') {
-      (linkForce as { distance: (fn: (link: ForceLink) => number) => void }).distance((link: ForceLink) => {
-        switch (link.type) {
-          case 'domain':
-            return 70;
-          case 'produces':
-          case 'consumes':
-            return 85;
-          default:
-            return 90;
+    const chargeForce = graph.d3Force?.('charge') as
+      | {
+          strength?: (value?: number) => unknown;
+          distanceMax?: (value?: number) => unknown;
         }
-      });
+      | undefined;
+
+    if (chargeForce) {
+      if (typeof chargeForce.strength === 'function') {
+        chargeForce.strength(-20);
+      }
+      if (typeof chargeForce.distanceMax === 'function') {
+        chargeForce.distanceMax(400);
+      }
       graph.d3ReheatSimulation?.();
     }
   }, [graphData]);
@@ -279,12 +306,20 @@ const GraphView: React.FC<GraphViewProps> = ({
           x: (dimensions.width / 2 - transform.x) / zoomValue,
           y: (dimensions.height / 2 - transform.y) / zoomValue
         };
+        cameraTransformRef.current = transform;
       }
 
       if ((!center || Number.isNaN(center.x) || Number.isNaN(center.y)) && typeof graph.centerAt === 'function') {
         const currentCenter = graph.centerAt();
         if (currentCenter && typeof currentCenter.x === 'number' && typeof currentCenter.y === 'number') {
           center = currentCenter;
+          if (dimensions.width > 0 && dimensions.height > 0) {
+            cameraTransformRef.current = {
+              k: zoomValue,
+              x: dimensions.width / 2 - currentCenter.x * zoomValue,
+              y: dimensions.height / 2 - currentCenter.y * zoomValue
+            };
+          }
         }
       }
 
@@ -313,11 +348,11 @@ const GraphView: React.FC<GraphViewProps> = ({
       const currentZoom = (graph.zoom?.() as number) ?? 1;
       const desiredZoom = currentZoom < 2.2 ? 2.2 : currentZoom;
 
-      if (typeof graph.centerAt === 'function') {
-        graph.centerAt(node.x, node.y, 400);
-      }
       if (typeof graph.zoom === 'function') {
         graph.zoom(Math.min(desiredZoom, 4), 400);
+      }
+      if (typeof graph.centerAt === 'function') {
+        graph.centerAt(node.x, node.y, 400);
       }
     },
     []
