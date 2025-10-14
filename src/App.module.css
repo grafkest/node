@@ -139,10 +139,20 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
   padding-right: 8px;
-  overflow-y: auto;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebarScrollArea {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 4px;
 }
 
 .sidebarTitle {

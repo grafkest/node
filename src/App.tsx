@@ -2230,50 +2230,52 @@ function App() {
         style={{ display: isGraphActive ? undefined : 'none' }}
       >
           <aside className={styles.sidebar}>
-            <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-              Домены
-            </Text>
-            <DomainTree
-              tree={domainData}
-              selected={selectedDomains}
-              onToggle={handleDomainToggle}
-              descendants={domainDescendants}
-            />
-            <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-              Фильтры
-            </Text>
-            <FiltersPanel
-              search={search}
-              onSearchChange={setSearch}
-              statuses={allStatuses}
-              activeStatuses={statusFilters}
-              onToggleStatus={(status) => {
-                setSelectedNode(null);
-                setStatusFilters((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(status)) {
-                    next.delete(status);
-                  } else {
-                    next.add(status);
-                  }
-                  return next;
-                });
-              }}
-              products={products}
-              productFilter={productFilter}
-              onProductChange={(nextProducts) => {
-                setSelectedNode(null);
-                setProductFilter(nextProducts);
-              }}
-              companies={companies}
-              companyFilter={companyFilter}
-              onCompanyChange={(nextCompany) => {
-                setSelectedNode(null);
-                setCompanyFilter(nextCompany);
-              }}
-              showAllConnections={showAllConnections}
-              onToggleConnections={(value) => setShowAllConnections(value)}
-            />
+            <div className={styles.sidebarScrollArea}>
+              <Text size="s" weight="semibold" className={styles.sidebarTitle}>
+                Домены
+              </Text>
+              <DomainTree
+                tree={domainData}
+                selected={selectedDomains}
+                onToggle={handleDomainToggle}
+                descendants={domainDescendants}
+              />
+              <Text size="s" weight="semibold" className={styles.sidebarTitle}>
+                Фильтры
+              </Text>
+              <FiltersPanel
+                search={search}
+                onSearchChange={setSearch}
+                statuses={allStatuses}
+                activeStatuses={statusFilters}
+                onToggleStatus={(status) => {
+                  setSelectedNode(null);
+                  setStatusFilters((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(status)) {
+                      next.delete(status);
+                    } else {
+                      next.add(status);
+                    }
+                    return next;
+                  });
+                }}
+                products={products}
+                productFilter={productFilter}
+                onProductChange={(nextProducts) => {
+                  setSelectedNode(null);
+                  setProductFilter(nextProducts);
+                }}
+                companies={companies}
+                companyFilter={companyFilter}
+                onCompanyChange={(nextCompany) => {
+                  setSelectedNode(null);
+                  setCompanyFilter(nextCompany);
+                }}
+                showAllConnections={showAllConnections}
+                onToggleConnections={(value) => setShowAllConnections(value)}
+              />
+            </div>
           </aside>
           <section className={styles.graphSection}>
             <div className={styles.graphContainer}>
