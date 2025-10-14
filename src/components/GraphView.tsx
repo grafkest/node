@@ -26,6 +26,7 @@ type GraphViewProps = {
 
 type ForceNode = NodeObject & GraphNode;
 type ForceLink = LinkObject & GraphLink;
+type ZoomTransform = { k: number; x: number; y: number };
 
 const GraphView: React.FC<GraphViewProps> = ({
   modules,
@@ -46,7 +47,13 @@ const GraphView: React.FC<GraphViewProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeCacheRef = useRef<Map<string, ForceNode>>(new Map());
   const lastReportedLayoutRef = useRef<string>('');
+  const cameraStateRef = useRef<{ center: { x: number; y: number } | null; zoom: number }>({
+    center: null,
+    zoom: 1
+  });
+  const pendingCameraRestoreRef = useRef(false);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [isFocusedView, setIsFocusedView] = useState(false);
 
   useEffect(() => {
     lastReportedLayoutRef.current = JSON.stringify(layoutPositions ?? {});
@@ -143,23 +150,53 @@ const GraphView: React.FC<GraphViewProps> = ({
   const linkCount = links.length;
 
   useEffect(() => {
-    if (!highlightedNode || !graphRef.current) {
-      return;
-    }
-
-    const target = (graphData.nodes as ForceNode[]).find((node) => node.id === highlightedNode);
-    if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
+    if (!graphRef.current) {
       return;
     }
 
     const graph = graphRef.current;
-    graph.centerAt(target.x, target.y, 400);
-    if (typeof graph.zoom === 'function') {
-      const currentZoom = graph.zoom() as number;
-      const desiredZoom = currentZoom < 1.8 ? 1.8 : currentZoom;
-      graph.zoom(desiredZoom, 400);
+    if (typeof graph.centerAt === 'function' && typeof graph.zoom === 'function') {
+      const center = graph.centerAt();
+      const zoom = graph.zoom();
+      if (center && typeof center.x === 'number' && typeof center.y === 'number') {
+        cameraStateRef.current = {
+          center,
+          zoom: typeof zoom === 'number' && Number.isFinite(zoom) ? zoom : 1
+        };
+      }
     }
-  }, [highlightedNode, graphData]);
+  }, [dimensions]);
+
+  useEffect(() => {
+    if (!highlightedNode || !graphRef.current || !dimensions.width || !dimensions.height) {
+      return;
+    }
+
+    const cachedNode = nodeCacheRef.current.get(highlightedNode);
+    if (!cachedNode || typeof cachedNode.x !== 'number' || typeof cachedNode.y !== 'number') {
+      return;
+    }
+
+    const graph = graphRef.current;
+
+    if (typeof graph.graph2ScreenCoords !== 'function' || typeof graph.centerAt !== 'function') {
+      return;
+    }
+
+    const { x: screenX, y: screenY } = graph.graph2ScreenCoords(cachedNode.x, cachedNode.y);
+    const margin = 48;
+    const needsPan =
+      screenX < margin ||
+      screenX > dimensions.width - margin ||
+      screenY < margin ||
+      screenY > dimensions.height - margin;
+
+    if (!needsPan) {
+      return;
+    }
+
+    graph.centerAt(cachedNode.x, cachedNode.y, 400);
+  }, [highlightedNode, dimensions]);
 
   useEffect(() => {
     if (import.meta.env.DEV && typeof window !== 'undefined' && graphRef.current) {
@@ -179,7 +216,158 @@ const GraphView: React.FC<GraphViewProps> = ({
     if (typeof reheat === 'function') {
       reheat();
     }
+
+    pendingCameraRestoreRef.current = true;
   }, [nodeCount, linkCount]);
+
+  useEffect(() => {
+    if (!pendingCameraRestoreRef.current || !graphRef.current) {
+      return;
+    }
+
+    const graph = graphRef.current;
+    const { center, zoom } = cameraStateRef.current;
+    if (center && typeof graph.centerAt === 'function') {
+      graph.centerAt(center.x, center.y, 0);
+    }
+    if (typeof zoom === 'number' && typeof graph.zoom === 'function') {
+      graph.zoom(zoom, 0);
+    }
+
+    pendingCameraRestoreRef.current = false;
+  }, [dimensions, graphData]);
+
+  useEffect(() => {
+    if (!graphRef.current) {
+      return;
+    }
+
+    const graph = graphRef.current;
+    const linkForce = graph.d3Force?.('link');
+    if (linkForce && typeof (linkForce as { distance?: (fn: (link: ForceLink) => number) => void }).distance === 'function') {
+      (linkForce as { distance: (fn: (link: ForceLink) => number) => void }).distance((link: ForceLink) => {
+        switch (link.type) {
+          case 'domain':
+            return 70;
+          case 'produces':
+          case 'consumes':
+            return 85;
+          default:
+            return 90;
+        }
+      });
+      graph.d3ReheatSimulation?.();
+    }
+  }, [graphData]);
+
+  useEffect(() => {
+    setIsFocusedView(false);
+  }, [highlightedNode]);
+
+  const updateCameraState = useCallback(
+    (transform?: ZoomTransform) => {
+      if (!graphRef.current) {
+        return;
+      }
+
+      const graph = graphRef.current;
+      const zoomValue = transform?.k ?? ((graph.zoom?.() as number) ?? 1);
+      let center: { x: number; y: number } | null = null;
+
+      if (transform && dimensions.width > 0 && dimensions.height > 0) {
+        center = {
+          x: (dimensions.width / 2 - transform.x) / zoomValue,
+          y: (dimensions.height / 2 - transform.y) / zoomValue
+        };
+      }
+
+      if ((!center || Number.isNaN(center.x) || Number.isNaN(center.y)) && typeof graph.centerAt === 'function') {
+        const currentCenter = graph.centerAt();
+        if (currentCenter && typeof currentCenter.x === 'number' && typeof currentCenter.y === 'number') {
+          center = currentCenter;
+        }
+      }
+
+      if (center) {
+        cameraStateRef.current = {
+          center,
+          zoom: Number.isFinite(zoomValue) ? zoomValue : 1
+        };
+      }
+    },
+    [dimensions]
+  );
+
+  const focusOnNode = useCallback(
+    (node: ForceNode) => {
+      if (!graphRef.current) {
+        return;
+      }
+
+      const graph = graphRef.current;
+      if (typeof node.x !== 'number' || typeof node.y !== 'number') {
+        graph.zoomToFit?.(400, 40);
+        return;
+      }
+
+      const currentZoom = (graph.zoom?.() as number) ?? 1;
+      const desiredZoom = currentZoom < 2.2 ? 2.2 : currentZoom;
+
+      if (typeof graph.centerAt === 'function') {
+        graph.centerAt(node.x, node.y, 400);
+      }
+      if (typeof graph.zoom === 'function') {
+        graph.zoom(Math.min(desiredZoom, 4), 400);
+      }
+    },
+    []
+  );
+
+  const showEntireGraph = useCallback(() => {
+    if (!graphRef.current) {
+      return;
+    }
+
+    const graph = graphRef.current;
+    if (typeof graph.zoomToFit === 'function') {
+      graph.zoomToFit(400, 40);
+    }
+  }, []);
+
+  const handleDoubleClick = useCallback(
+    (node: ForceNode) => {
+      onSelect(node);
+
+      if (isFocusedView) {
+        showEntireGraph();
+        setIsFocusedView(false);
+        return;
+      }
+
+      focusOnNode(node);
+      setIsFocusedView(true);
+    },
+    [focusOnNode, isFocusedView, onSelect, showEntireGraph]
+  );
+
+  const handleFocusButton = useCallback(() => {
+    if (!highlightedNode) {
+      return;
+    }
+
+    const node = nodeCacheRef.current.get(highlightedNode);
+    if (!node) {
+      return;
+    }
+
+    focusOnNode(node);
+    setIsFocusedView(true);
+  }, [focusOnNode, highlightedNode]);
+
+  const handleShowAllButton = useCallback(() => {
+    showEntireGraph();
+    setIsFocusedView(false);
+  }, [showEntireGraph]);
 
   const emitLayoutUpdate = useCallback(() => {
     if (!onLayoutChange) {
@@ -283,6 +471,26 @@ const GraphView: React.FC<GraphViewProps> = ({
         <Badge label="Домен" size="s" view="filled" status="system" />
         <Badge label="Артефакт" size="s" view="filled" status="success" />
       </div>
+      {highlightedNode ? (
+        <div className={styles.viewControls}>
+          <button
+            type="button"
+            className={styles.controlButton}
+            onClick={handleFocusButton}
+            title="Двойное нажатие по модулю, домену или артефакту приближает граф"
+          >
+            Приблизить
+          </button>
+          <button
+            type="button"
+            className={styles.controlButton}
+            onClick={handleShowAllButton}
+            title="Двойное нажатие повторно показывает весь граф"
+          >
+            Показать все
+          </button>
+        </div>
+      ) : null}
       <React.Suspense fallback={<Loader size="m" />}>
         <ForceGraph2D
           ref={graphRef}
@@ -298,8 +506,13 @@ const GraphView: React.FC<GraphViewProps> = ({
           onNodeClick={(node) => {
             onSelect(node as ForceNode);
           }}
+          onNodeDoubleClick={(node) => {
+            handleDoubleClick(node as ForceNode);
+          }}
           onNodeDragEnd={handleNodeDragEnd}
           onEngineStop={handleEngineStop}
+          onZoom={updateCameraState}
+          onZoomEnd={updateCameraState}
         />
       </React.Suspense>
     </div>
