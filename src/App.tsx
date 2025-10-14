@@ -188,59 +188,6 @@ function App() {
       observer.disconnect();
     };
   }, [areFiltersOpen, isDomainTreeOpen]);
-  const refreshGraphs = useCallback(
-    async (
-      preferredGraphId?: string | null,
-      options: { preserveSelection?: boolean } = {}
-    ) => {
-      const { preserveSelection = true } = options;
-      setIsGraphsLoading(true);
-      try {
-        const list = await fetchGraphSummaries();
-        setGraphs(list);
-        setGraphListError(null);
-        loadedGraphsRef.current = new Set(
-          [...loadedGraphsRef.current].filter((id) => list.some((graph) => graph.id === id))
-        );
-        setActiveGraphId((prev) => {
-          if (preferredGraphId && list.some((graph) => graph.id === preferredGraphId)) {
-            return preferredGraphId;
-          }
-          if (preserveSelection && prev && list.some((graph) => graph.id === prev)) {
-            return prev;
-          }
-          const fallback = list.find((graph) => graph.isDefault) ?? list[0] ?? null;
-          return fallback ? fallback.id : null;
-        });
-      } catch (error) {
-        console.error('Не удалось обновить список графов', error);
-        const fallbackMessage = 'Не удалось загрузить список графов.';
-        let message = fallbackMessage;
-
-        if (error instanceof TypeError) {
-          message =
-            'Не удалось подключиться к серверу графа. Запустите "npm run server" или используйте "npm run dev:full".';
-        } else if (error instanceof Error && error.message) {
-          message = error.message;
-        }
-
-        setGraphListError(message);
-        setGraphs([]);
-        setActiveGraphId(null);
-        setIsSnapshotLoading(false);
-        setIsReloadingSnapshot(false);
-        hasLoadedSnapshotRef.current = false;
-      } finally {
-        setIsGraphsLoading(false);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    void refreshGraphs(null, { preserveSelection: false });
-  }, [refreshGraphs]);
-
   useEffect(() => {
     activeGraphIdRef.current = activeGraphId;
   }, [activeGraphId]);
@@ -351,18 +298,105 @@ function App() {
     [applySnapshot]
   );
 
+  const updateActiveGraph = useCallback(
+    (graphId: string | null, options: { loadSnapshot?: boolean } = {}) => {
+      const { loadSnapshot: shouldLoadSnapshot = graphId !== null } = options;
+      const previousGraphId = activeGraphIdRef.current;
+
+      if (graphId === null) {
+        activeGraphIdRef.current = null;
+        setActiveGraphId(null);
+        activeSnapshotControllerRef.current?.abort();
+        activeSnapshotControllerRef.current = null;
+        hasLoadedSnapshotRef.current = false;
+        setIsSyncAvailable(false);
+        setSyncStatus(null);
+        setSnapshotError(null);
+        setIsReloadingSnapshot(false);
+        setIsSnapshotLoading(false);
+        return;
+      }
+
+      if (previousGraphId === graphId) {
+        return;
+      }
+
+      activeGraphIdRef.current = graphId;
+      setActiveGraphId(graphId);
+
+      hasLoadedSnapshotRef.current = false;
+      setIsSyncAvailable(false);
+      setSyncStatus(null);
+      setSnapshotError(null);
+      setIsReloadingSnapshot(false);
+
+      if (shouldLoadSnapshot) {
+        setIsSnapshotLoading(true);
+        void loadSnapshot(graphId, { withOverlay: true });
+      } else {
+        setIsSnapshotLoading(false);
+      }
+    },
+    [loadSnapshot]
+  );
+
+  const refreshGraphs = useCallback(
+    async (
+      preferredGraphId?: string | null,
+      options: { preserveSelection?: boolean } = {}
+    ) => {
+      const { preserveSelection = true } = options;
+      setIsGraphsLoading(true);
+      try {
+        const list = await fetchGraphSummaries();
+        setGraphs(list);
+        setGraphListError(null);
+        loadedGraphsRef.current = new Set(
+          [...loadedGraphsRef.current].filter((id) => list.some((graph) => graph.id === id))
+        );
+
+        const currentActiveId = activeGraphIdRef.current;
+        const nextActiveId = (() => {
+          if (preferredGraphId && list.some((graph) => graph.id === preferredGraphId)) {
+            return preferredGraphId;
+          }
+          if (preserveSelection && currentActiveId && list.some((graph) => graph.id === currentActiveId)) {
+            return currentActiveId;
+          }
+          const fallback = list.find((graph) => graph.isDefault) ?? list[0] ?? null;
+          return fallback ? fallback.id : null;
+        })();
+
+        if (nextActiveId) {
+          updateActiveGraph(nextActiveId);
+        } else {
+          updateActiveGraph(null, { loadSnapshot: false });
+        }
+      } catch (error) {
+        console.error('Не удалось обновить список графов', error);
+        const fallbackMessage = 'Не удалось загрузить список графов.';
+        let message = fallbackMessage;
+
+        if (error instanceof TypeError) {
+          message =
+            'Не удалось подключиться к серверу графа. Запустите "npm run server" или используйте "npm run dev:full".';
+        } else if (error instanceof Error && error.message) {
+          message = error.message;
+        }
+
+        setGraphListError(message);
+        setGraphs([]);
+        updateActiveGraph(null, { loadSnapshot: false });
+      } finally {
+        setIsGraphsLoading(false);
+      }
+    },
+    [updateActiveGraph]
+  );
+
   useEffect(() => {
-    if (!activeGraphId) {
-      return;
-    }
-    hasLoadedSnapshotRef.current = false;
-    setIsSyncAvailable(false);
-    setSyncStatus(null);
-    setSnapshotError(null);
-    setIsReloadingSnapshot(false);
-    setIsSnapshotLoading(true);
-    void loadSnapshot(activeGraphId, { withOverlay: true });
-  }, [activeGraphId, loadSnapshot]);
+    void refreshGraphs(null, { preserveSelection: false });
+  }, [refreshGraphs]);
 
   useEffect(() => {
     return () => {
@@ -1894,11 +1928,14 @@ function App() {
     [applySnapshot, showAdminNotice]
   );
 
-  const handleSelectGraph = useCallback((graphId: string) => {
-    setGraphActionStatus(null);
-    setIsCreatePanelOpen(false);
-    setActiveGraphId(graphId);
-  }, []);
+  const handleSelectGraph = useCallback(
+    (graphId: string) => {
+      setGraphActionStatus(null);
+      setIsCreatePanelOpen(false);
+      updateActiveGraph(graphId);
+    },
+    [updateActiveGraph]
+  );
 
   const handleSubmitCreateGraph = useCallback(async () => {
     if (isGraphActionInProgress) {
