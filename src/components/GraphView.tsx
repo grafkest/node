@@ -58,12 +58,28 @@ const GraphView: React.FC<GraphViewProps> = ({
   const cameraStateRef = useRef<CameraState | null>(null);
   const captureTimeoutRef = useRef<number | null>(null);
   const lastFocusedNodeRef = useRef<string | null>(null);
+  const viewportSizeRef = useRef({ width: 0, height: 0 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
 
   useEffect(() => {
     lastReportedLayoutRef.current = JSON.stringify(layoutPositions ?? {});
   }, [layoutPositions]);
+
+  const updateViewportSize = useCallback((width: number, height: number) => {
+    const normalizedWidth = Math.max(0, Math.round(width));
+    const normalizedHeight = Math.max(0, Math.round(height));
+    const current = viewportSizeRef.current;
+    if (current.width === normalizedWidth && current.height === normalizedHeight) {
+      return;
+    }
+    viewportSizeRef.current = { width: normalizedWidth, height: normalizedHeight };
+    setDimensions((prev) =>
+      prev.width === normalizedWidth && prev.height === normalizedHeight
+        ? prev
+        : { width: normalizedWidth, height: normalizedHeight }
+    );
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.ResizeObserver === 'undefined') {
@@ -82,15 +98,43 @@ const GraphView: React.FC<GraphViewProps> = ({
       }
 
       const { width, height } = entry.contentRect;
-      setDimensions((prev) =>
-        prev.width === width && prev.height === height ? prev : { width, height }
-      );
+      updateViewportSize(width, height);
     });
 
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, []);
+  }, [updateViewportSize]);
+
+  useEffect(() => {
+    if (!containerRef.current) {
+      return;
+    }
+
+    const { clientWidth, clientHeight } = containerRef.current;
+    if (clientWidth > 0 && clientHeight > 0) {
+      updateViewportSize(clientWidth, clientHeight);
+    }
+  }, [updateViewportSize]);
+
+  const getViewportSize = useCallback(() => {
+    const current = viewportSizeRef.current;
+    if (current.width > 0 && current.height > 0) {
+      return current;
+    }
+
+    const element = containerRef.current;
+    if (element) {
+      const width = element.clientWidth;
+      const height = element.clientHeight;
+      if (width > 0 && height > 0) {
+        updateViewportSize(width, height);
+        return viewportSizeRef.current;
+      }
+    }
+
+    return current;
+  }, [updateViewportSize]);
 
   const domainNodes = useMemo(() => {
     const flatDomains = flattenDomains(domains, visibleDomainIds);
@@ -185,7 +229,8 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, []);
 
   const captureCameraState = useCallback(() => {
-    if (!graphRef.current || dimensions.width <= 0 || dimensions.height <= 0) {
+    const { width, height } = getViewportSize();
+    if (!graphRef.current || width <= 0 || height <= 0) {
       return;
     }
 
@@ -196,7 +241,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       return;
     }
 
-    const center = graph.screen2GraphCoords?.(dimensions.width / 2, dimensions.height / 2);
+    const center = graph.screen2GraphCoords?.(width / 2, height / 2);
     if (
       center &&
       typeof center.x === 'number' &&
@@ -209,7 +254,7 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: zoomValue
       };
     }
-  }, [dimensions.height, dimensions.width]);
+  }, [getViewportSize]);
 
   const scheduleCameraCapture = useCallback(
     (delay = 0) => {
@@ -237,7 +282,8 @@ const GraphView: React.FC<GraphViewProps> = ({
   );
 
   const restoreCamera = useCallback(() => {
-    if (!graphRef.current || dimensions.width <= 0 || dimensions.height <= 0) {
+    const { width, height } = getViewportSize();
+    if (!graphRef.current || width <= 0 || height <= 0) {
       return;
     }
 
@@ -254,11 +300,11 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     graph.zoomToFit?.(0, 60);
     scheduleCameraCapture(80);
-  }, [dimensions.height, dimensions.width, scheduleCameraCapture]);
+  }, [getViewportSize, scheduleCameraCapture]);
 
   useEffect(() => {
     restoreCamera();
-  }, [graphData, dimensions.height, dimensions.width, restoreCamera]);
+  }, [graphData, restoreCamera]);
 
   useEffect(() => {
     if (!highlightedNode) {
@@ -271,7 +317,8 @@ const GraphView: React.FC<GraphViewProps> = ({
       setIsFocusedView(false);
     }
 
-    if (!graphRef.current || dimensions.width <= 0 || dimensions.height <= 0) {
+    const { width, height } = getViewportSize();
+    if (!graphRef.current || width <= 0 || height <= 0) {
       return;
     }
 
@@ -289,9 +336,9 @@ const GraphView: React.FC<GraphViewProps> = ({
     const margin = 48;
     const needsPan =
       screenCoords.x < margin ||
-      screenCoords.x > dimensions.width - margin ||
+      screenCoords.x > width - margin ||
       screenCoords.y < margin ||
-      screenCoords.y > dimensions.height - margin;
+      screenCoords.y > height - margin;
 
     if (needsPan) {
       graph.centerAt(target.x, target.y, 400);
@@ -303,7 +350,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       };
       scheduleCameraCapture(420);
     }
-  }, [highlightedNode, dimensions.height, dimensions.width, scheduleCameraCapture]);
+  }, [getViewportSize, highlightedNode, scheduleCameraCapture]);
 
   const focusOnNode = useCallback(
     (node: ForceNode): boolean => {
@@ -313,9 +360,9 @@ const GraphView: React.FC<GraphViewProps> = ({
 
       const graph = graphRef.current;
       const label = node.name ?? node.id;
-      const targetZoom = computeFocusZoom(dimensions, label);
+      const viewport = getViewportSize();
+      const targetZoom = computeFocusZoom(viewport, label);
 
-      graph.centerAt(node.x, node.y, 0);
       if (typeof graph.zoom === 'function') {
         graph.zoom(targetZoom, 400);
       }
@@ -329,7 +376,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       scheduleCameraCapture(420);
       return true;
     },
-    [dimensions, scheduleCameraCapture]
+    [getViewportSize, scheduleCameraCapture]
   );
 
   const showEntireGraph = useCallback(() => {
@@ -385,7 +432,8 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   const handleZoomTransform = useCallback(
     (transform?: { k: number; x: number; y: number }) => {
-      if (!transform || dimensions.width <= 0 || dimensions.height <= 0) {
+      const { width, height } = getViewportSize();
+      if (!transform || width <= 0 || height <= 0) {
         return;
       }
 
@@ -396,13 +444,13 @@ const GraphView: React.FC<GraphViewProps> = ({
 
       cameraStateRef.current = {
         center: {
-          x: (dimensions.width / 2 - x) / k,
-          y: (dimensions.height / 2 - y) / k
+          x: (width / 2 - x) / k,
+          y: (height / 2 - y) / k
         },
         zoom: k
       };
     },
-    [dimensions.height, dimensions.width]
+    [getViewportSize]
   );
 
   const handleZoomEnd = useCallback(() => {

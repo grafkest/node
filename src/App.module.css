@@ -133,6 +133,7 @@
   padding: 24px;
   height: calc(100% - 92px);
   box-sizing: border-box;
+  min-height: 0;
 }
 
 .sidebar {
@@ -141,6 +142,7 @@
   gap: 16px;
   padding-right: 8px;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .sidebarTitle {
@@ -149,12 +151,16 @@
 
 .graphSection {
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
 }
 
 .graphContainer {
-  min-height: 420px;
+  height: 100%;
+  min-height: 0;
+  display: flex;
 }
 
 .analytics {
@@ -169,6 +175,7 @@
   border-radius: 12px;
   box-shadow: var(--shadow-layer);
   overflow: auto;
+  min-height: 0;
 }
 
 .statsMain {
