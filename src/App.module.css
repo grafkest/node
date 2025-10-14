@@ -147,6 +147,7 @@
   padding-right: 8px;
   min-height: 0;
   height: 100%;
+  max-height: max(0px, calc(100% - 48px));
   overflow: hidden;
 }
 
@@ -162,6 +163,14 @@
 
 .sidebarTitle {
   margin-top: 8px;
+}
+
+.filtersCollapse {
+  margin-top: 8px;
+}
+
+.filtersCollapseContent {
+  padding-top: 12px;
 }
 
 .graphSection {

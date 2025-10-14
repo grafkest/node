@@ -1,6 +1,7 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
+import { Collapse } from '@consta/uikit/Collapse';
 import { Layout } from '@consta/uikit/Layout';
 import { Loader } from '@consta/uikit/Loader';
 import { Select } from '@consta/uikit/Select';
@@ -91,6 +92,7 @@ function App() {
   const [showAllConnections, setShowAllConnections] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
+  const [areFiltersOpen, setAreFiltersOpen] = useState(false);
   const [adminNotice, setAdminNotice] = useState<AdminNotice | null>(null);
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
   const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
@@ -2240,41 +2242,51 @@ function App() {
                 onToggle={handleDomainToggle}
                 descendants={domainDescendants}
               />
-              <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-                Фильтры
-              </Text>
-              <FiltersPanel
-                search={search}
-                onSearchChange={setSearch}
-                statuses={allStatuses}
-                activeStatuses={statusFilters}
-                onToggleStatus={(status) => {
-                  setSelectedNode(null);
-                  setStatusFilters((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(status)) {
-                      next.delete(status);
-                    } else {
-                      next.add(status);
-                    }
-                    return next;
-                  });
-                }}
-                products={products}
-                productFilter={productFilter}
-                onProductChange={(nextProducts) => {
-                  setSelectedNode(null);
-                  setProductFilter(nextProducts);
-                }}
-                companies={companies}
-                companyFilter={companyFilter}
-                onCompanyChange={(nextCompany) => {
-                  setSelectedNode(null);
-                  setCompanyFilter(nextCompany);
-                }}
-                showAllConnections={showAllConnections}
-                onToggleConnections={(value) => setShowAllConnections(value)}
-              />
+              <Collapse
+                label={
+                  <Text size="s" weight="semibold">
+                    Фильтры
+                  </Text>
+                }
+                isOpen={areFiltersOpen}
+                onClick={() => setAreFiltersOpen((prev) => !prev)}
+                className={styles.filtersCollapse}
+              >
+                <div className={styles.filtersCollapseContent}>
+                  <FiltersPanel
+                    search={search}
+                    onSearchChange={setSearch}
+                    statuses={allStatuses}
+                    activeStatuses={statusFilters}
+                    onToggleStatus={(status) => {
+                      setSelectedNode(null);
+                      setStatusFilters((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(status)) {
+                          next.delete(status);
+                        } else {
+                          next.add(status);
+                        }
+                        return next;
+                      });
+                    }}
+                    products={products}
+                    productFilter={productFilter}
+                    onProductChange={(nextProducts) => {
+                      setSelectedNode(null);
+                      setProductFilter(nextProducts);
+                    }}
+                    companies={companies}
+                    companyFilter={companyFilter}
+                    onCompanyChange={(nextCompany) => {
+                      setSelectedNode(null);
+                      setCompanyFilter(nextCompany);
+                    }}
+                    showAllConnections={showAllConnections}
+                    onToggleConnections={(value) => setShowAllConnections(value)}
+                  />
+                </div>
+              </Collapse>
             </div>
           </aside>
           <section className={styles.graphSection}>
