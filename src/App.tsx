@@ -421,8 +421,11 @@ function App() {
   }, [loadSnapshot]);
 
   const markGraphDirty = useCallback(() => {
+    if (viewMode !== 'admin') {
+      return;
+    }
     hasPendingPersistRef.current = true;
-  }, []);
+  }, [viewMode]);
 
   useEffect(() => {
     setProductFilter((prev) => {
