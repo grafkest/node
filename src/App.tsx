@@ -92,7 +92,8 @@ function App() {
   const [showAllConnections, setShowAllConnections] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
-  const [areFiltersOpen, setAreFiltersOpen] = useState(false);
+  const [isDomainTreeOpen, setIsDomainTreeOpen] = useState(false);
+  const [areFiltersOpen, setAreFiltersOpen] = useState(true);
   const [adminNotice, setAdminNotice] = useState<AdminNotice | null>(null);
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
   const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
@@ -2233,15 +2234,27 @@ function App() {
       >
           <aside className={styles.sidebar}>
             <div className={styles.sidebarScrollArea}>
-              <Text size="s" weight="semibold" className={styles.sidebarTitle}>
-                Домены
-              </Text>
-              <DomainTree
-                tree={domainData}
-                selected={selectedDomains}
-                onToggle={handleDomainToggle}
-                descendants={domainDescendants}
-              />
+              <Collapse
+                label={
+                  <Text size="s" weight="semibold">
+                    Домены
+                  </Text>
+                }
+                isOpen={isDomainTreeOpen}
+                onClick={() => setIsDomainTreeOpen((prev) => !prev)}
+                className={styles.domainCollapse}
+              >
+                <div className={styles.domainCollapseContent}>
+                  {isDomainTreeOpen ? (
+                    <DomainTree
+                      tree={domainData}
+                      selected={selectedDomains}
+                      onToggle={handleDomainToggle}
+                      descendants={domainDescendants}
+                    />
+                  ) : null}
+                </div>
+              </Collapse>
               <Collapse
                 label={
                   <Text size="s" weight="semibold">
@@ -2253,40 +2266,38 @@ function App() {
                 className={styles.filtersCollapse}
               >
                 <div className={styles.filtersCollapseContent}>
-                  {areFiltersOpen ? (
-                    <FiltersPanel
-                      search={search}
-                      onSearchChange={setSearch}
-                      statuses={allStatuses}
-                      activeStatuses={statusFilters}
-                      onToggleStatus={(status) => {
-                        setSelectedNode(null);
-                        setStatusFilters((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(status)) {
-                            next.delete(status);
-                          } else {
-                            next.add(status);
-                          }
-                          return next;
-                        });
-                      }}
-                      products={products}
-                      productFilter={productFilter}
-                      onProductChange={(nextProducts) => {
-                        setSelectedNode(null);
-                        setProductFilter(nextProducts);
-                      }}
-                      companies={companies}
-                      companyFilter={companyFilter}
-                      onCompanyChange={(nextCompany) => {
-                        setSelectedNode(null);
-                        setCompanyFilter(nextCompany);
-                      }}
-                      showAllConnections={showAllConnections}
-                      onToggleConnections={(value) => setShowAllConnections(value)}
-                    />
-                  ) : null}
+                  <FiltersPanel
+                    search={search}
+                    onSearchChange={setSearch}
+                    statuses={allStatuses}
+                    activeStatuses={statusFilters}
+                    onToggleStatus={(status) => {
+                      setSelectedNode(null);
+                      setStatusFilters((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(status)) {
+                          next.delete(status);
+                        } else {
+                          next.add(status);
+                        }
+                        return next;
+                      });
+                    }}
+                    products={products}
+                    productFilter={productFilter}
+                    onProductChange={(nextProducts) => {
+                      setSelectedNode(null);
+                      setProductFilter(nextProducts);
+                    }}
+                    companies={companies}
+                    companyFilter={companyFilter}
+                    onCompanyChange={(nextCompany) => {
+                      setSelectedNode(null);
+                      setCompanyFilter(nextCompany);
+                    }}
+                    showAllConnections={showAllConnections}
+                    onToggleConnections={(value) => setShowAllConnections(value)}
+                  />
                 </div>
               </Collapse>
             </div>
