@@ -116,6 +116,7 @@ function App() {
   const [isReloadingSnapshot, setIsReloadingSnapshot] = useState(false);
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
+  const hasPendingPersistRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
   const activeGraphIdRef = useRef<string | null>(null);
   const loadedGraphsRef = useRef(new Set<string>());
@@ -228,6 +229,7 @@ function App() {
       );
       setLayoutPositions(snapshot.layout?.nodes ?? {});
       hasLoadedSnapshotRef.current = true;
+      hasPendingPersistRef.current = false;
     },
     []
   );
@@ -309,6 +311,7 @@ function App() {
         activeSnapshotControllerRef.current?.abort();
         activeSnapshotControllerRef.current = null;
         hasLoadedSnapshotRef.current = false;
+        hasPendingPersistRef.current = false;
         setIsSyncAvailable(false);
         setSyncStatus(null);
         setSnapshotError(null);
@@ -325,6 +328,7 @@ function App() {
       setActiveGraphId(graphId);
 
       hasLoadedSnapshotRef.current = false;
+      hasPendingPersistRef.current = false;
       setIsSyncAvailable(false);
       setSyncStatus(null);
       setSnapshotError(null);
@@ -415,6 +419,10 @@ function App() {
 
     void loadSnapshot(graphId, { withOverlay: false });
   }, [loadSnapshot]);
+
+  const markGraphDirty = useCallback(() => {
+    hasPendingPersistRef.current = true;
+  }, []);
 
   useEffect(() => {
     setProductFilter((prev) => {
@@ -546,15 +554,19 @@ function App() {
       return;
     }
 
-    const controller = new AbortController();
-    let cancelled = false;
-
     if (skipNextSyncRef.current) {
       skipNextSyncRef.current = false;
-      return () => {
-        controller.abort();
-      };
+      return;
     }
+
+    if (!hasPendingPersistRef.current) {
+      return;
+    }
+
+    hasPendingPersistRef.current = false;
+
+    const controller = new AbortController();
+    let cancelled = false;
 
     setSyncStatus((prev) => {
       if (prev?.state === 'error') {
@@ -597,6 +609,7 @@ function App() {
           return;
         }
         console.error('Не удалось сохранить граф', error);
+        hasPendingPersistRef.current = true;
         setSyncStatus({
           state: 'error',
           message:
@@ -1195,16 +1208,25 @@ function App() {
   }, [artifactData, domainData, moduleData]);
 
   const handleLayoutChange = useCallback(
-    (positions: Record<string, GraphLayoutNodePosition>) => {
+    (positions: Record<string, GraphLayoutNodePosition>, reason: 'drag' | 'engine') => {
+      let didChange = false;
       setLayoutPositions((prev) => {
         const merged = mergeLayoutPositions(prev, positions);
         const ensuredActiveIds = new Set(activeNodeIds);
         Object.keys(positions).forEach((id) => ensuredActiveIds.add(id));
         const pruned = pruneLayoutPositions(merged, ensuredActiveIds);
-        return layoutsEqual(prev, pruned) ? prev : pruned;
+        if (layoutsEqual(prev, pruned)) {
+          return prev;
+        }
+        didChange = true;
+        return pruned;
       });
+
+      if (didChange && reason === 'drag') {
+        markGraphDirty();
+      }
     },
-    [activeNodeIds]
+    [activeNodeIds, markGraphDirty]
   );
 
   useEffect(() => {
@@ -1241,6 +1263,7 @@ function App() {
       }
 
       const { module: newModule, consumedArtifactIds } = result;
+      markGraphDirty();
       const recalculatedModules = recalculateReuseScores([...moduleData, newModule]);
       const createdModule = recalculatedModules.find((module) => module.id === moduleId);
       setModuleDataState(recalculatedModules);
@@ -1290,7 +1313,14 @@ function App() {
         showAdminNotice('success', `Модуль «${createdModule.name}» создан.`);
       }
     },
-    [defaultDomainId, leafDomainIdSet, moduleData, selectedNode, showAdminNotice]
+    [
+      defaultDomainId,
+      leafDomainIdSet,
+      markGraphDirty,
+      moduleData,
+      selectedNode,
+      showAdminNotice
+    ]
   );
 
   const handleUpdateModule = useCallback(
@@ -1322,6 +1352,7 @@ function App() {
       }
 
       const { module: updatedModule, consumedArtifactIds } = result;
+      markGraphDirty();
       const recalculatedModules = recalculateReuseScores(
         moduleData.map((module) => (module.id === moduleId ? updatedModule : module))
       );
@@ -1366,12 +1397,16 @@ function App() {
         showAdminNotice('success', `Модуль «${recalculatedModule.name}» обновлён.`);
       }
     },
-    [defaultDomainId, leafDomainIdSet, moduleData, showAdminNotice]
+    [defaultDomainId, leafDomainIdSet, markGraphDirty, moduleData, showAdminNotice]
   );
 
   const handleDeleteModule = useCallback(
     (moduleId: string) => {
       const removedModule = moduleData.find((module) => module.id === moduleId);
+      if (!removedModule) {
+        return;
+      }
+      markGraphDirty();
       const producedArtifacts = artifactData
         .filter((artifact) => artifact.producedBy === moduleId)
         .map((artifact) => artifact.id);
@@ -1421,11 +1456,9 @@ function App() {
         }
         return prev;
       });
-      if (removedModule) {
-        showAdminNotice('success', `Модуль «${removedModule.name}» удалён.`);
-      }
+      showAdminNotice('success', `Модуль «${removedModule.name}» удалён.`);
     },
-    [artifactData, moduleData, showAdminNotice]
+    [artifactData, markGraphDirty, moduleData, showAdminNotice]
   );
 
   const handleCreateDomain = useCallback(
@@ -1465,6 +1498,7 @@ function App() {
 
       const targetParentId = draft.isCatalogRoot ? normalizedParentId : normalizedParentId!;
       const updatedDomains = addDomainToTree(domainData, targetParentId, newDomain);
+      markGraphDirty();
       setDomainData(updatedDomains);
 
       const moduleIds = !draft.isCatalogRoot && targetParentId ? draft.moduleIds : [];
@@ -1496,7 +1530,7 @@ function App() {
         `${draft.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${normalizedName}» создан.`
       );
     },
-    [catalogDomainIdSet, domainData, domainIdSet, showAdminNotice]
+    [catalogDomainIdSet, domainData, domainIdSet, markGraphDirty, showAdminNotice]
   );
 
   const handleUpdateDomain = useCallback(
@@ -1575,6 +1609,7 @@ function App() {
       }
 
       const rebuiltTree = addDomainToTree(treeWithoutDomain, targetParentId ?? undefined, updatedDomain);
+      markGraphDirty();
       setDomainData(rebuiltTree);
 
       const moduleSet = !draft.isCatalogRoot && targetParentId
@@ -1606,7 +1641,7 @@ function App() {
         `${updatedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${sanitizedName}» обновлён.`
       );
     },
-    [catalogDomainIdSet, domainData, domainIdSet, showAdminNotice]
+    [catalogDomainIdSet, domainData, domainIdSet, markGraphDirty, showAdminNotice]
   );
 
   const handleDeleteDomain = useCallback(
@@ -1618,6 +1653,7 @@ function App() {
 
       const removedIds = new Set(collectDomainIds(removedDomain));
 
+      markGraphDirty();
       setDomainData(nextTree);
       setModuleDataState((prev) =>
         recalculateReuseScores(
@@ -1646,7 +1682,7 @@ function App() {
         `${removedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${removedDomain.name}» удалён.`
       );
     },
-    [domainData, showAdminNotice]
+    [domainData, markGraphDirty, showAdminNotice]
   );
 
   const handleCreateArtifact = useCallback(
@@ -1679,6 +1715,7 @@ function App() {
         sampleUrl: normalizedSampleUrl
       };
 
+      markGraphDirty();
       setArtifactData([...artifactData, newArtifact]);
 
       setModuleDataState((prev) =>
@@ -1736,7 +1773,14 @@ function App() {
       setViewMode('graph');
       showAdminNotice('success', `Артефакт «${normalizedName}» создан.`);
     },
-    [artifactData, defaultDomainId, leafDomainIdSet, moduleById, showAdminNotice]
+    [
+      artifactData,
+      defaultDomainId,
+      leafDomainIdSet,
+      markGraphDirty,
+      moduleById,
+      showAdminNotice
+    ]
   );
 
   const handleUpdateArtifact = useCallback(
@@ -1770,6 +1814,7 @@ function App() {
         sampleUrl: normalizedSampleUrl
       };
 
+      markGraphDirty();
       setArtifactData((prev) =>
         prev.map((artifact) => (artifact.id === artifactId ? updatedArtifact : artifact))
       );
@@ -1858,7 +1903,7 @@ function App() {
       );
       showAdminNotice('success', `Артефакт «${normalizedName}» обновлён.`);
     },
-    [artifactData, leafDomainIdSet, showAdminNotice]
+    [artifactData, leafDomainIdSet, markGraphDirty, showAdminNotice]
   );
 
   const handleDeleteArtifact = useCallback(
@@ -1868,6 +1913,7 @@ function App() {
         return;
       }
 
+      markGraphDirty();
       setArtifactData((prev) => prev.filter((artifact) => artifact.id !== artifactId));
 
       setModuleDataState((prev) =>
@@ -1890,15 +1936,16 @@ function App() {
       setSelectedNode((prev) => (prev && prev.id === artifactId ? null : prev));
       showAdminNotice('success', `Артефакт «${existing.name}» удалён.`);
     },
-    [artifactData, showAdminNotice]
+    [artifactData, markGraphDirty, showAdminNotice]
   );
 
   const handleImportGraph = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
+      markGraphDirty();
       skipNextSyncRef.current = true;
     },
-    [applySnapshot]
+    [applySnapshot, markGraphDirty]
   );
 
   const handleImportFromExistingGraph = useCallback(
@@ -1913,6 +1960,7 @@ function App() {
         applySnapshot(snapshot);
         skipNextSyncRef.current = true;
         setIsSyncAvailable(true);
+        markGraphDirty();
         return {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
@@ -1925,7 +1973,7 @@ function App() {
         throw error instanceof Error ? error : new Error(message);
       }
     },
-    [applySnapshot, showAdminNotice]
+    [applySnapshot, markGraphDirty, showAdminNotice]
   );
 
   const handleSelectGraph = useCallback(

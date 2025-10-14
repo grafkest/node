@@ -16,6 +16,8 @@ type GraphNode =
   | ({ type: 'domain' } & DomainNode)
   | ({ type: 'artifact'; reuseScore?: number } & ArtifactNode);
 
+type LayoutChangeReason = 'drag' | 'engine';
+
 type GraphViewProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
@@ -25,7 +27,10 @@ type GraphViewProps = {
   highlightedNode: string | null;
   visibleDomainIds: Set<string>;
   layoutPositions: Record<string, GraphLayoutNodePosition>;
-  onLayoutChange?: (positions: Record<string, GraphLayoutNodePosition>) => void;
+  onLayoutChange?: (
+    positions: Record<string, GraphLayoutNodePosition>,
+    reason: LayoutChangeReason
+  ) => void;
 };
 
 type ForceNode = NodeObject & GraphNode;
@@ -457,12 +462,13 @@ const GraphView: React.FC<GraphViewProps> = ({
     scheduleCameraCapture(0);
   }, [scheduleCameraCapture]);
 
-  const emitLayoutUpdate = useCallback(() => {
-    if (!onLayoutChange) {
-      return;
-    }
+  const emitLayoutUpdate = useCallback(
+    (reason: LayoutChangeReason) => {
+      if (!onLayoutChange) {
+        return;
+      }
 
-    const entries: Array<[string, GraphLayoutNodePosition]> = [];
+      const entries: Array<[string, GraphLayoutNodePosition]> = [];
     nodeCacheRef.current.forEach((node, id) => {
       if (
         typeof node.x !== 'number' ||
@@ -495,7 +501,7 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
 
     lastReportedLayoutRef.current = serialized;
-    onLayoutChange(Object.fromEntries(entries));
+    onLayoutChange(Object.fromEntries(entries), reason);
   }, [onLayoutChange]);
 
   const handleNodeDragEnd = useCallback(
@@ -548,13 +554,13 @@ const GraphView: React.FC<GraphViewProps> = ({
         nodeCacheRef.current.set(node.id, node);
       }
 
-      emitLayoutUpdate();
+      emitLayoutUpdate('drag');
     },
     [emitLayoutUpdate, layoutPositions]
   );
 
   const handleEngineStop = useCallback(() => {
-    emitLayoutUpdate();
+    emitLayoutUpdate('engine');
   }, [emitLayoutUpdate]);
 
   return (
