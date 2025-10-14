@@ -2,8 +2,12 @@ import { Badge } from '@consta/uikit/Badge';
 import { Loader } from '@consta/uikit/Loader';
 import { useTheme } from '@consta/uikit/Theme';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ForceGraph2D, { LinkObject, NodeObject, ForceGraphMethods } from 'react-force-graph-2d';
-import type { DomainNode, ModuleNode, ArtifactNode, GraphLink } from '../data';
+import ForceGraph2D, {
+  ForceGraphMethods,
+  LinkObject,
+  NodeObject
+} from 'react-force-graph-2d';
+import type { ArtifactNode, DomainNode, GraphLink, ModuleNode } from '../data';
 import type { GraphLayoutNodePosition } from '../types/graph';
 import styles from './GraphView.module.css';
 
@@ -27,6 +31,11 @@ type GraphViewProps = {
 type ForceNode = NodeObject & GraphNode;
 type ForceLink = LinkObject & GraphLink;
 
+type CameraState = {
+  center: { x: number; y: number };
+  zoom: number;
+};
+
 const GraphView: React.FC<GraphViewProps> = ({
   modules,
   domains,
@@ -46,12 +55,9 @@ const GraphView: React.FC<GraphViewProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeCacheRef = useRef<Map<string, ForceNode>>(new Map());
   const lastReportedLayoutRef = useRef<string>('');
-  const cameraStateRef = useRef<{ center: { x: number; y: number } | null; zoom: number }>({
-    center: null,
-    zoom: 1
-  });
-  const lastFocusedNodeRef = useRef<string | null>(null);
+  const cameraStateRef = useRef<CameraState | null>(null);
   const captureTimeoutRef = useRef<number | null>(null);
+  const lastFocusedNodeRef = useRef<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
 
@@ -151,7 +157,8 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   useEffect(() => {
     if (import.meta.env.DEV && typeof window !== 'undefined' && graphRef.current) {
-      (window as typeof window & { __forceGraphRef?: ForceGraphMethods }).__forceGraphRef = graphRef.current;
+      (window as typeof window & { __forceGraphRef?: ForceGraphMethods }).__forceGraphRef =
+        graphRef.current;
     }
   }, [graphData]);
 
@@ -183,10 +190,9 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
 
     const graph = graphRef.current;
-    const zoomValue =
-      typeof graph.zoom === 'function' ? (graph.zoom() as number) : cameraStateRef.current.zoom;
+    const zoomValue = typeof graph.zoom === 'function' ? (graph.zoom() as number) : undefined;
 
-    if (!Number.isFinite(zoomValue) || zoomValue <= 0) {
+    if (!Number.isFinite(zoomValue) || !zoomValue || zoomValue <= 0) {
       return;
     }
 
@@ -200,11 +206,6 @@ const GraphView: React.FC<GraphViewProps> = ({
     ) {
       cameraStateRef.current = {
         center: { x: center.x, y: center.y },
-        zoom: zoomValue
-      };
-    } else {
-      cameraStateRef.current = {
-        center: cameraStateRef.current.center,
         zoom: zoomValue
       };
     }
@@ -241,48 +242,19 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
 
     const graph = graphRef.current;
-    const { center, zoom } = cameraStateRef.current;
+    const saved = cameraStateRef.current;
 
-    if (center) {
+    if (saved) {
       if (typeof graph.zoom === 'function') {
-        graph.zoom(zoom, 0);
+        graph.zoom(saved.zoom, 0);
       }
-      graph.centerAt(center.x, center.y, 0);
-      scheduleCameraCapture(0);
+      graph.centerAt(saved.center.x, saved.center.y, 0);
       return;
     }
 
-    if (typeof graph.zoomToFit === 'function') {
-      graph.zoomToFit(0, 40);
-      scheduleCameraCapture(60);
-    }
+    graph.zoomToFit?.(0, 60);
+    scheduleCameraCapture(80);
   }, [dimensions.height, dimensions.width, scheduleCameraCapture]);
-
-  const handleZoomTransform = useCallback(
-    (transform?: { k: number; x: number; y: number }) => {
-      if (!transform || dimensions.width <= 0 || dimensions.height <= 0) {
-        return;
-      }
-
-      const { k, x, y } = transform;
-      if (!Number.isFinite(k) || k <= 0) {
-        return;
-      }
-
-      cameraStateRef.current = {
-        center: {
-          x: (dimensions.width / 2 - x) / k,
-          y: (dimensions.height / 2 - y) / k
-        },
-        zoom: k
-      };
-    },
-    [dimensions.height, dimensions.width]
-  );
-
-  const handleZoomEnd = useCallback(() => {
-    scheduleCameraCapture(0);
-  }, [scheduleCameraCapture]);
 
   useEffect(() => {
     restoreCamera();
@@ -297,17 +269,9 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     if (lastFocusedNodeRef.current && highlightedNode !== lastFocusedNodeRef.current) {
       setIsFocusedView(false);
-      lastFocusedNodeRef.current = null;
     }
-  }, [highlightedNode]);
 
-  useEffect(() => {
-    if (
-      !highlightedNode ||
-      !graphRef.current ||
-      dimensions.width <= 0 ||
-      dimensions.height <= 0
-    ) {
+    if (!graphRef.current || dimensions.width <= 0 || dimensions.height <= 0) {
       return;
     }
 
@@ -331,6 +295,12 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     if (needsPan) {
       graph.centerAt(target.x, target.y, 400);
+      const zoomValue =
+        typeof graph.zoom === 'function' ? (graph.zoom() as number) : cameraStateRef.current?.zoom ?? 1;
+      cameraStateRef.current = {
+        center: { x: target.x, y: target.y },
+        zoom: zoomValue
+      };
       scheduleCameraCapture(420);
     }
   }, [highlightedNode, dimensions.height, dimensions.width, scheduleCameraCapture]);
@@ -342,24 +312,24 @@ const GraphView: React.FC<GraphViewProps> = ({
       }
 
       const graph = graphRef.current;
-      const currentZoom =
-        typeof graph.zoom === 'function' ? (graph.zoom() as number) : cameraStateRef.current.zoom;
-      const targetZoom = Math.min(currentZoom < 2 ? 2 : currentZoom, 4);
+      const label = node.name ?? node.id;
+      const targetZoom = computeFocusZoom(dimensions, label);
 
-      graph.centerAt(node.x, node.y, 400);
+      graph.centerAt(node.x, node.y, 0);
       if (typeof graph.zoom === 'function') {
         graph.zoom(targetZoom, 400);
       }
+      graph.centerAt(node.x, node.y, 400);
 
       cameraStateRef.current = {
         center: { x: node.x, y: node.y },
         zoom: targetZoom
       };
       lastFocusedNodeRef.current = node.id;
-      scheduleCameraCapture(450);
+      scheduleCameraCapture(420);
       return true;
     },
-    [scheduleCameraCapture]
+    [dimensions, scheduleCameraCapture]
   );
 
   const showEntireGraph = useCallback(() => {
@@ -367,11 +337,12 @@ const GraphView: React.FC<GraphViewProps> = ({
       return;
     }
 
+    const graph = graphRef.current;
     lastFocusedNodeRef.current = null;
     setIsFocusedView(false);
-    cameraStateRef.current = { center: null, zoom: 1 };
-    graphRef.current.zoomToFit?.(400, 40);
-    scheduleCameraCapture(460);
+    cameraStateRef.current = null;
+    graph.zoomToFit?.(400, 80);
+    scheduleCameraCapture(450);
   }, [scheduleCameraCapture]);
 
   const handleNodeDoubleClick = useCallback(
@@ -412,6 +383,32 @@ const GraphView: React.FC<GraphViewProps> = ({
     showEntireGraph();
   }, [showEntireGraph]);
 
+  const handleZoomTransform = useCallback(
+    (transform?: { k: number; x: number; y: number }) => {
+      if (!transform || dimensions.width <= 0 || dimensions.height <= 0) {
+        return;
+      }
+
+      const { k, x, y } = transform;
+      if (!Number.isFinite(k) || k <= 0) {
+        return;
+      }
+
+      cameraStateRef.current = {
+        center: {
+          x: (dimensions.width / 2 - x) / k,
+          y: (dimensions.height / 2 - y) / k
+        },
+        zoom: k
+      };
+    },
+    [dimensions.height, dimensions.width]
+  );
+
+  const handleZoomEnd = useCallback(() => {
+    scheduleCameraCapture(0);
+  }, [scheduleCameraCapture]);
+
   const emitLayoutUpdate = useCallback(() => {
     if (!onLayoutChange) {
       return;
@@ -419,7 +416,12 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     const entries: Array<[string, GraphLayoutNodePosition]> = [];
     nodeCacheRef.current.forEach((node, id) => {
-      if (typeof node.x !== 'number' || Number.isNaN(node.x) || typeof node.y !== 'number' || Number.isNaN(node.y)) {
+      if (
+        typeof node.x !== 'number' ||
+        Number.isNaN(node.x) ||
+        typeof node.y !== 'number' ||
+        Number.isNaN(node.y)
+      ) {
         return;
       }
 
@@ -562,7 +564,10 @@ const GraphView: React.FC<GraphViewProps> = ({
   );
 };
 
-function applyLayoutPosition(node: ForceNode, layoutPositions: Record<string, GraphLayoutNodePosition>) {
+function applyLayoutPosition(
+  node: ForceNode,
+  layoutPositions: Record<string, GraphLayoutNodePosition>
+) {
   const layout = layoutPositions[node.id];
   if (!layout) {
     return;
@@ -742,6 +747,22 @@ function resolvePalette(themeClassName?: string): GraphPalette {
     linkRelates: getVar('--color-bg-info', DEFAULT_PALETTE.linkRelates),
     linkConsumes: getVar('--color-bg-normal', DEFAULT_PALETTE.linkConsumes)
   };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function computeFocusZoom(
+  dimensions: { width: number; height: number },
+  label: string
+): number {
+  const minViewport = Math.min(dimensions.width || 0, dimensions.height || 0);
+  const boundedViewport = clamp(minViewport || 0, 360, 1440);
+  const viewportRatio = 1 - (boundedViewport - 360) / (1440 - 360);
+  const baseZoom = 2.4 + viewportRatio * 1.2; // 2.4 .. 3.6
+  const labelAdjustment = clamp(label.length / 24, 0, 0.6);
+  return clamp(baseZoom + labelAdjustment, 2.6, 4.2);
 }
 
 const DEFAULT_PALETTE: GraphPalette = {
