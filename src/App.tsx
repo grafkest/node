@@ -8,7 +8,17 @@ import { Select } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
+import type { CSSProperties } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
 import AdminPanel, {
@@ -94,6 +104,8 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const [isDomainTreeOpen, setIsDomainTreeOpen] = useState(false);
   const [areFiltersOpen, setAreFiltersOpen] = useState(true);
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
+  const [sidebarBaseHeight, setSidebarBaseHeight] = useState<number | null>(null);
   const [adminNotice, setAdminNotice] = useState<AdminNotice | null>(null);
   const highlightedDomainId = selectedNode?.type === 'domain' ? selectedNode.id : null;
   const [statsActivated, setStatsActivated] = useState(() => viewMode === 'stats');
@@ -114,6 +126,10 @@ function App() {
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
   );
+  const sidebarMaxHeight = useMemo(
+    () => (sidebarBaseHeight ? sidebarBaseHeight * 2 : null),
+    [sidebarBaseHeight]
+  );
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
@@ -124,6 +140,55 @@ function App() {
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
+  useLayoutEffect(() => {
+    const element = sidebarRef.current;
+    if (!element) {
+      return;
+    }
+
+    const measure = () => {
+      const target = sidebarRef.current;
+      if (!target) {
+        return;
+      }
+
+      if (isDomainTreeOpen) {
+        return;
+      }
+
+      if (!areFiltersOpen) {
+        return;
+      }
+
+      const height = Math.max(target.getBoundingClientRect().height, 0);
+      if (height < 1) {
+        return;
+      }
+      setSidebarBaseHeight((prev) => {
+        if (prev === null || Math.abs(prev - height) > 0.5) {
+          return height;
+        }
+
+        return prev;
+      });
+    };
+
+    measure();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      measure();
+    });
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [areFiltersOpen, isDomainTreeOpen]);
   const refreshGraphs = useCallback(
     async (
       preferredGraphId?: string | null,
@@ -2232,7 +2297,15 @@ function App() {
         aria-hidden={!isGraphActive}
         style={{ display: isGraphActive ? undefined : 'none' }}
       >
-          <aside className={styles.sidebar}>
+          <aside
+            ref={sidebarRef}
+            className={styles.sidebar}
+            style={
+              sidebarMaxHeight
+                ? ({ '--sidebar-max-height': `${sidebarMaxHeight}px` } as CSSProperties)
+                : undefined
+            }
+          >
             <div className={styles.sidebarScrollArea}>
               <Collapse
                 label={

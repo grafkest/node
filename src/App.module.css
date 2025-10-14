@@ -142,16 +142,14 @@
 }
 
 .sidebar {
-  --domain-header-reserve: 48px;
-  --filters-reserve: 72px;
-  --sidebar-reserve: calc(var(--domain-header-reserve) + 2 * var(--filters-reserve));
   display: flex;
   flex-direction: column;
   padding-right: 8px;
   min-height: 0;
   height: 100%;
-  max-height: max(0px, calc(100% - var(--sidebar-reserve)));
+  max-height: var(--sidebar-max-height, 100%);
   overflow: hidden;
+  align-self: start;
 }
 
 .sidebarScrollArea {
