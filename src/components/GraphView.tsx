@@ -51,7 +51,6 @@ const GraphView: React.FC<GraphViewProps> = ({
     center: null,
     zoom: 1
   });
-  const cameraTransformRef = useRef<ZoomTransform>({ k: 1, x: 0, y: 0 });
   const pendingCameraRestoreRef = useRef(false);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
@@ -168,12 +167,6 @@ const GraphView: React.FC<GraphViewProps> = ({
         center: centerPoint,
         zoom: resolvedZoom
       };
-
-      cameraTransformRef.current = {
-        k: resolvedZoom,
-        x: dimensions.width / 2 - centerPoint.x * resolvedZoom,
-        y: dimensions.height / 2 - centerPoint.y * resolvedZoom
-      };
     }
   }, [dimensions]);
 
@@ -237,31 +230,48 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     const graph = graphRef.current;
     const { center, zoom } = cameraStateRef.current;
-    const transform = cameraTransformRef.current;
 
-    if (typeof zoom === 'number' && typeof graph.zoom === 'function') {
+    if (!center) {
+      graph.zoomToFit?.(400, 40);
+
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          const api = graphRef.current;
+          if (!api) {
+            return;
+          }
+
+          const zoomValue = api.zoom?.();
+          const resolvedZoom =
+            typeof zoomValue === 'number' && Number.isFinite(zoomValue) ? zoomValue : 1;
+          const nextCenter = api.screen2GraphCoords?.(
+            dimensions.width / 2,
+            dimensions.height / 2
+          );
+
+          if (nextCenter && typeof nextCenter.x === 'number' && typeof nextCenter.y === 'number') {
+            cameraStateRef.current = {
+              center: nextCenter,
+              zoom: resolvedZoom
+            };
+          }
+        }, 420);
+      }
+
+      pendingCameraRestoreRef.current = false;
+      return;
+    }
+
+    if (typeof zoom === 'number' && Number.isFinite(zoom) && typeof graph.zoom === 'function') {
       graph.zoom(zoom, 0);
     }
 
-    const hasTransform =
-      typeof transform?.x === 'number' &&
-      typeof transform?.y === 'number' &&
-      Number.isFinite(transform.k) &&
-      dimensions.width > 0 &&
-      dimensions.height > 0;
-
-    if (hasTransform && typeof graph.centerAt === 'function') {
-      const derivedCenter = {
-        x: (dimensions.width / 2 - transform.x) / (transform.k || 1),
-        y: (dimensions.height / 2 - transform.y) / (transform.k || 1)
-      };
-      graph.centerAt(derivedCenter.x, derivedCenter.y, 0);
-    } else if (center && typeof graph.centerAt === 'function') {
+    if (typeof graph.centerAt === 'function') {
       graph.centerAt(center.x, center.y, 0);
     }
 
     pendingCameraRestoreRef.current = false;
-  }, [dimensions, graphData]);
+  }, [graphData, dimensions]);
 
   useEffect(() => {
     pendingCameraRestoreRef.current = true;
@@ -305,12 +315,11 @@ const GraphView: React.FC<GraphViewProps> = ({
       const zoomValue = transform?.k ?? ((graph.zoom?.() as number) ?? 1);
       let center: { x: number; y: number } | null = null;
 
-      if (transform) {
+      if (transform && Number.isFinite(transform.k)) {
         center = {
-          x: (dimensions.width / 2 - transform.x) / zoomValue,
-          y: (dimensions.height / 2 - transform.y) / zoomValue
+          x: (dimensions.width / 2 - transform.x) / transform.k,
+          y: (dimensions.height / 2 - transform.y) / transform.k
         };
-        cameraTransformRef.current = transform;
       }
 
       if (!center || Number.isNaN(center.x) || Number.isNaN(center.y)) {
@@ -321,11 +330,6 @@ const GraphView: React.FC<GraphViewProps> = ({
 
         if (screenCenter && typeof screenCenter.x === 'number' && typeof screenCenter.y === 'number') {
           center = screenCenter;
-          cameraTransformRef.current = {
-            k: zoomValue,
-            x: dimensions.width / 2 - screenCenter.x * zoomValue,
-            y: dimensions.height / 2 - screenCenter.y * zoomValue
-          };
         }
       }
 
@@ -369,11 +373,11 @@ const GraphView: React.FC<GraphViewProps> = ({
       const currentZoom = (graph.zoom?.() as number) ?? 1;
       const desiredZoom = currentZoom < 2.2 ? 2.2 : currentZoom;
 
-      if (typeof graph.zoom === 'function') {
-        graph.zoom(Math.min(desiredZoom, 4), 400);
-      }
       if (typeof graph.centerAt === 'function') {
         graph.centerAt(node.x, node.y, 400);
+      }
+      if (typeof graph.zoom === 'function') {
+        graph.zoom(Math.min(desiredZoom, 4), 400);
       }
       refreshCameraState(420);
     },
