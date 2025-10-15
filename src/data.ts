@@ -107,6 +107,33 @@ export type ModuleNode = {
   nonFunctional: NonFunctionalRequirements;
 };
 
+export type ExpertSkillCategory = 'core' | 'consulting';
+
+export type ExpertSkillLevel = 'base' | 'advanced' | 'expert';
+
+export type ExpertSkill = {
+  id: string;
+  name: string;
+  description: string;
+  category: ExpertSkillCategory;
+};
+
+export type ExpertProfileSkill = {
+  skillId: string;
+  level: ExpertSkillLevel;
+  focus?: string;
+};
+
+export type ExpertProfile = {
+  id: string;
+  fullName: string;
+  summary: string;
+  focusDomains: string[];
+  competencies: ExpertProfileSkill[];
+  consultingSkills: ExpertProfileSkill[];
+  highlights?: string[];
+};
+
 export const domainTree: DomainNode[] = [
   {
     id: 'upstream',
@@ -1121,6 +1148,332 @@ export const modules: ModuleNode[] = [
       resourceConsumption: '5 vCPU / 12 GB RAM',
       baselineUsers: 65
     }
+  }
+];
+
+export const expertSkillCatalog: ExpertSkill[] = [
+  {
+    id: 'data-standardization',
+    name: 'Стандартизация инженерных данных',
+    description:
+      'Методики нормализации исходных инженерных данных и управление качеством мастер-данных.',
+    category: 'core'
+  },
+  {
+    id: 'infrastructure-simulation',
+    name: 'Инфраструктурное моделирование',
+    description:
+      'Построение сценариев размещения объектов обустройства и оценка ограничений по рельефу.',
+    category: 'core'
+  },
+  {
+    id: 'economic-evaluation',
+    name: 'Экономическая оценка проектов',
+    description:
+      'Формирование финансово-экономических моделей, расчёт NPV, IRR и сценарного анализа.',
+    category: 'core'
+  },
+  {
+    id: 'telemetry-architecture',
+    name: 'Архитектура потоков телеметрии',
+    description:
+      'Проектирование высоконагруженных потоков телеметрии и интеграция с цифровыми двойниками.',
+    category: 'core'
+  },
+  {
+    id: 'optimization-scenarios',
+    name: 'Оптимизация сценариев управления',
+    description:
+      'Математические модели оптимизации режимов и расчёт управляющих воздействий.',
+    category: 'core'
+  },
+  {
+    id: 'remote-operations',
+    name: 'Удалённое управление объектами',
+    description:
+      'Организация дистанционных операций и контроль исполнения команд.',
+    category: 'core'
+  },
+  {
+    id: 'workover-programs',
+    name: 'Планирование внутрискважинных работ',
+    description:
+      'Портфельное планирование программ КРС и распределение ресурсов по фонду.',
+    category: 'core'
+  },
+  {
+    id: 'field-mobility',
+    name: 'Полевая мобилизация',
+    description:
+      'Сбор фактических данных с площадок и обеспечение мобильной работы бригад.',
+    category: 'core'
+  },
+  {
+    id: 'quality-analytics',
+    name: 'Аналитика качества ремонтов',
+    description:
+      'Анализ KPI внутрискважинных работ и построение аналитических витрин.',
+    category: 'core'
+  },
+  {
+    id: 'digital-twin-operations',
+    name: 'Операционное сопровождение цифровых двойников',
+    description:
+      'Настройка процессов эксплуатации цифровых двойников и интеграция с производством.',
+    category: 'core'
+  },
+  {
+    id: 'consulting-operating-model',
+    name: 'Проектирование операционных моделей',
+    description:
+      'Разработка целевых процессов управления данными, R&D и эксплуатацией решений.',
+    category: 'consulting'
+  },
+  {
+    id: 'consulting-portfolio-review',
+    name: 'Портфельный анализ проектов',
+    description:
+      'Оценка продуктового портфеля, приоритизация инициатив и формирование дорожных карт.',
+    category: 'consulting'
+  },
+  {
+    id: 'consulting-change-management',
+    name: 'Управление изменениями',
+    description:
+      'Построение программ внедрения и обучение рабочих групп заказчика.',
+    category: 'consulting'
+  },
+  {
+    id: 'consulting-risk-workshop',
+    name: 'Риск-сессии и фасилитация',
+    description:
+      'Фасилитация стратегических сессий, управление рисками и согласование решений.',
+    category: 'consulting'
+  },
+  {
+    id: 'consulting-cost-benchmark',
+    name: 'Бенчмаркинг затрат',
+    description:
+      'Сравнительный анализ CAPEX/OPEX и подготовка рекомендаций по экономии.',
+    category: 'consulting'
+  },
+  {
+    id: 'consulting-automation-roadmap',
+    name: 'Дорожные карты автоматизации',
+    description:
+      'Построение поэтапных программ цифровизации и автоматизации процессов.',
+    category: 'consulting'
+  }
+];
+
+export const expertProfiles: ExpertProfile[] = [
+  {
+    id: 'infraplan-rd',
+    fullName: 'Виктория Бережная',
+    summary:
+      'Отвечает за методологию нормализации инженерных данных и развитие экосистемы INFRAPLAN.',
+    focusDomains: ['data-preparation', 'layout-optimization'],
+    competencies: [
+      {
+        skillId: 'data-standardization',
+        level: 'expert',
+        focus: 'Единые мастер-данные для инфраструктурного проектирования'
+      },
+      {
+        skillId: 'infrastructure-simulation',
+        level: 'advanced',
+        focus: 'Сценарии интеграции с геомеханическими моделями'
+      },
+      { skillId: 'digital-twin-operations', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-operating-model', level: 'advanced' },
+      { skillId: 'consulting-automation-roadmap', level: 'advanced' }
+    ],
+    highlights: [
+      'Запустила единый каталог исходных данных для трёх добывающих активов.',
+      'Настроила витрину интеграции INFRAPLAN ↔ DIGITAL TWIN.'
+    ]
+  },
+  {
+    id: 'layout-rd',
+    fullName: 'Павел Колосов',
+    summary:
+      'Лидер предметной экспертизы по пространственному моделированию и оценке сценариев размещения.',
+    focusDomains: ['layout-optimization'],
+    competencies: [
+      {
+        skillId: 'infrastructure-simulation',
+        level: 'expert',
+        focus: 'Оптимизация схем обустройства и подбор площадок'
+      },
+      { skillId: 'data-standardization', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-risk-workshop', level: 'advanced' },
+      { skillId: 'consulting-automation-roadmap', level: 'base' }
+    ],
+    highlights: [
+      'Провёл серию фасилитационных сессий по выбору площадок для зелёных проектов.',
+      'Сформировал библиотеку типовых ограничений для проектирования.'
+    ]
+  },
+  {
+    id: 'econ-rd',
+    fullName: 'Антон Власов',
+    summary:
+      'Эксперт по инвестиционному анализу и моделированию экономических эффектов программ обустройства.',
+    focusDomains: ['economic-evaluation'],
+    competencies: [
+      {
+        skillId: 'economic-evaluation',
+        level: 'expert',
+        focus: 'Многофакторный анализ экономической эффективности'
+      },
+      { skillId: 'infrastructure-simulation', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-portfolio-review', level: 'expert' },
+      { skillId: 'consulting-cost-benchmark', level: 'advanced' }
+    ],
+    highlights: [
+      'Руководил аудитом инвестиционных моделей дочерних обществ на 250 млрд ₽.',
+      'Настроил единый шаблон инвестиционных досье для совета директоров.'
+    ]
+  },
+  {
+    id: 'dtwin-mon-rd',
+    fullName: 'Раиса Чистякова',
+    summary:
+      'Куратор потоков телеметрии и интеграции цифровых двойников с оперативными процессами.',
+    focusDomains: ['real-time-monitoring', 'digital-twin-operations'],
+    competencies: [
+      {
+        skillId: 'telemetry-architecture',
+        level: 'expert',
+        focus: 'Высоконагруженные конвейеры сбора SCADA-данных'
+      },
+      { skillId: 'digital-twin-operations', level: 'expert' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-change-management', level: 'advanced' },
+      { skillId: 'consulting-operating-model', level: 'base' }
+    ],
+    highlights: [
+      'Запустила мониторинговый центр для 12 промысловых площадок.',
+      'Организовала обучение оперативных диспетчеров работе с цифровым двойником.'
+    ]
+  },
+  {
+    id: 'dtwin-opt-rd',
+    fullName: 'Елизар Копылов',
+    summary:
+      'Специализируется на построении оптимизационных моделей и сценарном управлении производством.',
+    focusDomains: ['production-optimization'],
+    competencies: [
+      {
+        skillId: 'optimization-scenarios',
+        level: 'expert',
+        focus: 'Цифровые двойники с прогнозом технологического эффекта'
+      },
+      { skillId: 'digital-twin-operations', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-portfolio-review', level: 'advanced' },
+      { skillId: 'consulting-risk-workshop', level: 'base' }
+    ],
+    highlights: [
+      'Сократил цикл согласования режимов на 30% за счёт внедрения сценариев оптимизации.',
+      'Сформировал методику расчёта фактического эффекта по внедрённым рекомендациям.'
+    ]
+  },
+  {
+    id: 'dtwin-remote-rd',
+    fullName: 'Игорь Шамов',
+    summary:
+      'Эксперт по дистанционному управлению и безопасному выполнению удалённых операций.',
+    focusDomains: ['remote-control', 'digital-twin-operations'],
+    competencies: [
+      { skillId: 'remote-operations', level: 'expert' },
+      { skillId: 'telemetry-architecture', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-change-management', level: 'advanced' },
+      { skillId: 'consulting-risk-workshop', level: 'advanced' }
+    ],
+    highlights: [
+      'Организовал пилот дистанционного запуска насосных станций в Арктике.',
+      'Разработал регламенты безопасности для удалённых операций.'
+    ]
+  },
+  {
+    id: 'wwo-plan-rd',
+    fullName: 'Владимир Романов',
+    summary:
+      'Строит портфельные программы внутрискважинных работ и автоматизирует планирование ресурсов.',
+    focusDomains: ['workover-planning'],
+    competencies: [
+      {
+        skillId: 'workover-programs',
+        level: 'expert',
+        focus: 'Цикл планирования КРС и синхронизация с подрядчиками'
+      },
+      { skillId: 'data-standardization', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-operating-model', level: 'advanced' },
+      { skillId: 'consulting-automation-roadmap', level: 'base' }
+    ],
+    highlights: [
+      'Внедрил централизованное планирование WWO в трёх производственных кластерах.',
+      'Разработал KPI-панель по соблюдению графиков ремонтов.'
+    ]
+  },
+  {
+    id: 'wwo-exec-rd',
+    fullName: 'Маргарита Курганская',
+    summary:
+      'Куратор полевой мобильности и цифровых рабочих мест для ремонтных бригад.',
+    focusDomains: ['field-execution'],
+    competencies: [
+      {
+        skillId: 'field-mobility',
+        level: 'expert',
+        focus: 'Мобильные сценарии сбора данных и контроль качества работ'
+      },
+      { skillId: 'workover-programs', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-change-management', level: 'expert' },
+      { skillId: 'consulting-operating-model', level: 'base' }
+    ],
+    highlights: [
+      'Запустила программу по цифровым нарядам для подрядчиков WWO.',
+      'Организовала обучение 600 мастеров работе в мобильном приложении.'
+    ]
+  },
+  {
+    id: 'wwo-analytics-rd',
+    fullName: 'Денис Лаптев',
+    summary:
+      'Отвечает за аналитические витрины и показатели эффективности внутрискважинных работ.',
+    focusDomains: ['quality-analytics', 'workover-planning'],
+    competencies: [
+      {
+        skillId: 'quality-analytics',
+        level: 'expert',
+        focus: 'KPI и диагностические витрины для руководителей производства'
+      },
+      { skillId: 'field-mobility', level: 'advanced' }
+    ],
+    consultingSkills: [
+      { skillId: 'consulting-cost-benchmark', level: 'advanced' },
+      { skillId: 'consulting-portfolio-review', level: 'base' }
+    ],
+    highlights: [
+      'Сформировал методику расчёта KPI эффективности ремонтов.',
+      'Руководил консалтинговым проектом по бенчмарку затрат WWO.'
+    ]
   }
 ];
 

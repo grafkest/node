@@ -218,6 +218,14 @@
   overflow-y: auto;
 }
 
+.expertsMain {
+  padding: 24px;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .creationMain {
   padding: 24px;
   box-sizing: border-box;

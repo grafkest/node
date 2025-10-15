@@ -1,0 +1,242 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.viewTabs {
+  flex-shrink: 0;
+}
+
+.counterText {
+  white-space: nowrap;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-bg-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-layer);
+}
+
+.filtersCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--color-bg-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-layer);
+}
+
+.filtersGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.combobox {
+  min-width: 0;
+}
+
+.filtersFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comboboxOption {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.comboboxOptionHovered {
+  background: var(--color-bg-stripe);
+}
+
+.comboboxOptionActive {
+  background: var(--color-bg-secondary);
+}
+
+.comboboxCheckbox {
+  pointer-events: none;
+  width: 100%;
+}
+
+.cardsGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.expertCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--color-bg-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-layer);
+}
+
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.summaryText {
+  margin-top: 4px;
+  max-width: 520px;
+}
+
+.domainTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  margin-bottom: 4px;
+}
+
+.skillList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skillItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.skillFocus {
+  color: var(--color-typo-secondary);
+}
+
+.moduleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.moduleItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.moduleMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.highlightList {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.highlightItem {
+  list-style: disc;
+}
+
+.skillCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--color-bg-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-layer);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.skillCardHighlighted {
+  box-shadow: 0 0 0 1px var(--color-control-bg-primary-hover);
+}
+
+.skillCardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skillDescription {
+  color: var(--color-typo-secondary);
+}
+
+.skillCount {
+  margin-top: -4px;
+}
+
+.skillExperts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+  background: var(--color-bg-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-layer);
+}
+
+@media (max-width: 960px) {
+  .counterText {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 720px) {
+  .filtersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .cardsGrid {
+    grid-template-columns: 1fr;
+  }
+}
