@@ -114,9 +114,9 @@ function App() {
   const [syncStatus, setSyncStatus] = useState<GraphSyncStatus | null>(null);
   const [isSyncAvailable, setIsSyncAvailable] = useState(false);
   const [isReloadingSnapshot, setIsReloadingSnapshot] = useState(false);
-  const [snapshotRetryAttempt, setSnapshotRetryAttempt] = useState(0);
   const hasLoadedSnapshotRef = useRef(false);
   const skipNextSyncRef = useRef(false);
+  const hasPendingPersistRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
   const activeGraphIdRef = useRef<string | null>(null);
   const loadedGraphsRef = useRef(new Set<string>());
@@ -189,59 +189,6 @@ function App() {
       observer.disconnect();
     };
   }, [areFiltersOpen, isDomainTreeOpen]);
-  const refreshGraphs = useCallback(
-    async (
-      preferredGraphId?: string | null,
-      options: { preserveSelection?: boolean } = {}
-    ) => {
-      const { preserveSelection = true } = options;
-      setIsGraphsLoading(true);
-      try {
-        const list = await fetchGraphSummaries();
-        setGraphs(list);
-        setGraphListError(null);
-        loadedGraphsRef.current = new Set(
-          [...loadedGraphsRef.current].filter((id) => list.some((graph) => graph.id === id))
-        );
-        setActiveGraphId((prev) => {
-          if (preferredGraphId && list.some((graph) => graph.id === preferredGraphId)) {
-            return preferredGraphId;
-          }
-          if (preserveSelection && prev && list.some((graph) => graph.id === prev)) {
-            return prev;
-          }
-          const fallback = list.find((graph) => graph.isDefault) ?? list[0] ?? null;
-          return fallback ? fallback.id : null;
-        });
-      } catch (error) {
-        console.error('Не удалось обновить список графов', error);
-        const fallbackMessage = 'Не удалось загрузить список графов.';
-        let message = fallbackMessage;
-
-        if (error instanceof TypeError) {
-          message =
-            'Не удалось подключиться к серверу графа. Запустите "npm run server" или используйте "npm run dev:full".';
-        } else if (error instanceof Error && error.message) {
-          message = error.message;
-        }
-
-        setGraphListError(message);
-        setGraphs([]);
-        setActiveGraphId(null);
-        setIsSnapshotLoading(false);
-        setIsReloadingSnapshot(false);
-        hasLoadedSnapshotRef.current = false;
-      } finally {
-        setIsGraphsLoading(false);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    void refreshGraphs(null, { preserveSelection: false });
-  }, [refreshGraphs]);
-
   useEffect(() => {
     activeGraphIdRef.current = activeGraphId;
   }, [activeGraphId]);
@@ -269,6 +216,12 @@ function App() {
 
   const applySnapshot = useCallback(
     (snapshot: GraphSnapshotPayload) => {
+      const flattenedDomains = flattenDomainTree(snapshot.domains);
+      const domainIds = flattenedDomains.map((domain) => domain.id);
+      const activeNodeIds = new Set<string>([...domainIds]);
+      snapshot.modules.forEach((module) => activeNodeIds.add(module.id));
+      snapshot.artifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+
       setDomainData(snapshot.domains);
       setModuleDataState(recalculateReuseScores(snapshot.modules));
       setArtifactData(snapshot.artifacts);
@@ -277,11 +230,37 @@ function App() {
       setStatusFilters(new Set(allStatuses));
       setProductFilter(buildProductList(snapshot.modules));
       setCompanyFilter(null);
-      setSelectedDomains(
-        new Set(flattenDomainTree(snapshot.domains).map((domain) => domain.id))
-      );
-      setLayoutPositions(snapshot.layout?.nodes ?? {});
+      setSelectedDomains(new Set(domainIds));
+      setLayoutPositions((prev) => {
+        const serverPositions = snapshot.layout?.nodes ?? {};
+        const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
+        const hasExistingLayout = hasLoadedSnapshotRef.current && Object.keys(prev).length > 0;
+
+        if (!hasExistingLayout) {
+          if (layoutsEqual(prev, prunedServerPositions)) {
+            return prev;
+          }
+          return prunedServerPositions;
+        }
+
+        const merged: Record<string, GraphLayoutNodePosition> = {};
+        activeNodeIds.forEach((id) => {
+          const previousPosition = prev[id];
+          if (previousPosition) {
+            merged[id] = previousPosition;
+            return;
+          }
+
+          const serverPosition = prunedServerPositions[id];
+          if (serverPosition) {
+            merged[id] = serverPosition;
+          }
+        });
+
+        return layoutsEqual(prev, merged) ? prev : merged;
+      });
       hasLoadedSnapshotRef.current = true;
+      hasPendingPersistRef.current = false;
     },
     []
   );
@@ -308,7 +287,6 @@ function App() {
         loadedGraphsRef.current.add(graphId);
         skipNextSyncRef.current = true;
         setSnapshotError(null);
-        setSnapshotRetryAttempt(0);
         setIsSyncAvailable(true);
         setSyncStatus({
           state: 'idle',
@@ -326,7 +304,6 @@ function App() {
             ? `Не удалось загрузить данные графа (${detail}). Используются локальные данные.`
             : 'Не удалось загрузить данные графа. Используются локальные данные.'
         );
-        setSnapshotRetryAttempt((attempt) => attempt + 1);
         setIsSyncAvailable(false);
         const syncErrorMessage = detail
           ? `Нет связи с сервером (${detail}). Изменения не сохранятся.`
@@ -354,19 +331,107 @@ function App() {
     [applySnapshot]
   );
 
+  const updateActiveGraph = useCallback(
+    (graphId: string | null, options: { loadSnapshot?: boolean } = {}) => {
+      const { loadSnapshot: shouldLoadSnapshot = graphId !== null } = options;
+      const previousGraphId = activeGraphIdRef.current;
+
+      if (graphId === null) {
+        activeGraphIdRef.current = null;
+        setActiveGraphId(null);
+        activeSnapshotControllerRef.current?.abort();
+        activeSnapshotControllerRef.current = null;
+        hasLoadedSnapshotRef.current = false;
+        hasPendingPersistRef.current = false;
+        setIsSyncAvailable(false);
+        setSyncStatus(null);
+        setSnapshotError(null);
+        setIsReloadingSnapshot(false);
+        setIsSnapshotLoading(false);
+        return;
+      }
+
+      if (previousGraphId === graphId) {
+        return;
+      }
+
+      activeGraphIdRef.current = graphId;
+      setActiveGraphId(graphId);
+
+      hasLoadedSnapshotRef.current = false;
+      hasPendingPersistRef.current = false;
+      setIsSyncAvailable(false);
+      setSyncStatus(null);
+      setSnapshotError(null);
+      setIsReloadingSnapshot(false);
+
+      if (shouldLoadSnapshot) {
+        setIsSnapshotLoading(true);
+        void loadSnapshot(graphId, { withOverlay: true });
+      } else {
+        setIsSnapshotLoading(false);
+      }
+    },
+    [loadSnapshot]
+  );
+
+  const refreshGraphs = useCallback(
+    async (
+      preferredGraphId?: string | null,
+      options: { preserveSelection?: boolean } = {}
+    ) => {
+      const { preserveSelection = true } = options;
+      setIsGraphsLoading(true);
+      try {
+        const list = await fetchGraphSummaries();
+        setGraphs(list);
+        setGraphListError(null);
+        loadedGraphsRef.current = new Set(
+          [...loadedGraphsRef.current].filter((id) => list.some((graph) => graph.id === id))
+        );
+
+        const currentActiveId = activeGraphIdRef.current;
+        const nextActiveId = (() => {
+          if (preferredGraphId && list.some((graph) => graph.id === preferredGraphId)) {
+            return preferredGraphId;
+          }
+          if (preserveSelection && currentActiveId && list.some((graph) => graph.id === currentActiveId)) {
+            return currentActiveId;
+          }
+          const fallback = list.find((graph) => graph.isDefault) ?? list[0] ?? null;
+          return fallback ? fallback.id : null;
+        })();
+
+        if (nextActiveId) {
+          updateActiveGraph(nextActiveId);
+        } else {
+          updateActiveGraph(null, { loadSnapshot: false });
+        }
+      } catch (error) {
+        console.error('Не удалось обновить список графов', error);
+        const fallbackMessage = 'Не удалось загрузить список графов.';
+        let message = fallbackMessage;
+
+        if (error instanceof TypeError) {
+          message =
+            'Не удалось подключиться к серверу графа. Запустите "npm run server" или используйте "npm run dev:full".';
+        } else if (error instanceof Error && error.message) {
+          message = error.message;
+        }
+
+        setGraphListError(message);
+        setGraphs([]);
+        updateActiveGraph(null, { loadSnapshot: false });
+      } finally {
+        setIsGraphsLoading(false);
+      }
+    },
+    [updateActiveGraph]
+  );
+
   useEffect(() => {
-    if (!activeGraphId) {
-      return;
-    }
-    hasLoadedSnapshotRef.current = false;
-    setIsSyncAvailable(false);
-    setSyncStatus(null);
-    setSnapshotError(null);
-    setSnapshotRetryAttempt(0);
-    setIsReloadingSnapshot(false);
-    setIsSnapshotLoading(true);
-    void loadSnapshot(activeGraphId, { withOverlay: true });
-  }, [activeGraphId, loadSnapshot]);
+    void refreshGraphs(null, { preserveSelection: false });
+  }, [refreshGraphs]);
 
   useEffect(() => {
     return () => {
@@ -377,26 +442,21 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!snapshotError || snapshotRetryAttempt === 0 || typeof window === 'undefined') {
+  const handleRetryLoadSnapshot = useCallback(() => {
+    const graphId = activeGraphIdRef.current;
+    if (!graphId) {
       return;
     }
 
-    if (isReloadingSnapshot) {
+    void loadSnapshot(graphId, { withOverlay: false });
+  }, [loadSnapshot]);
+
+  const markGraphDirty = useCallback(() => {
+    if (viewMode !== 'admin') {
       return;
     }
-
-    const backoffDelay = Math.min(30000, 2000 * 2 ** (snapshotRetryAttempt - 1));
-    const timer = window.setTimeout(() => {
-      if (activeGraphIdRef.current) {
-        void loadSnapshot(activeGraphIdRef.current, { withOverlay: false });
-      }
-    }, backoffDelay);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [snapshotError, snapshotRetryAttempt, isReloadingSnapshot, loadSnapshot]);
+    hasPendingPersistRef.current = true;
+  }, [viewMode]);
 
   useEffect(() => {
     setProductFilter((prev) => {
@@ -528,15 +588,19 @@ function App() {
       return;
     }
 
-    const controller = new AbortController();
-    let cancelled = false;
-
     if (skipNextSyncRef.current) {
       skipNextSyncRef.current = false;
-      return () => {
-        controller.abort();
-      };
+      return;
     }
+
+    if (!hasPendingPersistRef.current) {
+      return;
+    }
+
+    hasPendingPersistRef.current = false;
+
+    const controller = new AbortController();
+    let cancelled = false;
 
     setSyncStatus((prev) => {
       if (prev?.state === 'error') {
@@ -579,6 +643,7 @@ function App() {
           return;
         }
         console.error('Не удалось сохранить граф', error);
+        hasPendingPersistRef.current = true;
         setSyncStatus({
           state: 'error',
           message:
@@ -1177,16 +1242,25 @@ function App() {
   }, [artifactData, domainData, moduleData]);
 
   const handleLayoutChange = useCallback(
-    (positions: Record<string, GraphLayoutNodePosition>) => {
+    (positions: Record<string, GraphLayoutNodePosition>, reason: 'drag' | 'engine') => {
+      let didChange = false;
       setLayoutPositions((prev) => {
         const merged = mergeLayoutPositions(prev, positions);
         const ensuredActiveIds = new Set(activeNodeIds);
         Object.keys(positions).forEach((id) => ensuredActiveIds.add(id));
         const pruned = pruneLayoutPositions(merged, ensuredActiveIds);
-        return layoutsEqual(prev, pruned) ? prev : pruned;
+        if (layoutsEqual(prev, pruned)) {
+          return prev;
+        }
+        didChange = true;
+        return pruned;
       });
+
+      if (didChange && reason === 'drag') {
+        markGraphDirty();
+      }
     },
-    [activeNodeIds]
+    [activeNodeIds, markGraphDirty]
   );
 
   useEffect(() => {
@@ -1223,6 +1297,7 @@ function App() {
       }
 
       const { module: newModule, consumedArtifactIds } = result;
+      markGraphDirty();
       const recalculatedModules = recalculateReuseScores([...moduleData, newModule]);
       const createdModule = recalculatedModules.find((module) => module.id === moduleId);
       setModuleDataState(recalculatedModules);
@@ -1272,7 +1347,14 @@ function App() {
         showAdminNotice('success', `Модуль «${createdModule.name}» создан.`);
       }
     },
-    [defaultDomainId, leafDomainIdSet, moduleData, selectedNode, showAdminNotice]
+    [
+      defaultDomainId,
+      leafDomainIdSet,
+      markGraphDirty,
+      moduleData,
+      selectedNode,
+      showAdminNotice
+    ]
   );
 
   const handleUpdateModule = useCallback(
@@ -1304,6 +1386,7 @@ function App() {
       }
 
       const { module: updatedModule, consumedArtifactIds } = result;
+      markGraphDirty();
       const recalculatedModules = recalculateReuseScores(
         moduleData.map((module) => (module.id === moduleId ? updatedModule : module))
       );
@@ -1348,12 +1431,16 @@ function App() {
         showAdminNotice('success', `Модуль «${recalculatedModule.name}» обновлён.`);
       }
     },
-    [defaultDomainId, leafDomainIdSet, moduleData, showAdminNotice]
+    [defaultDomainId, leafDomainIdSet, markGraphDirty, moduleData, showAdminNotice]
   );
 
   const handleDeleteModule = useCallback(
     (moduleId: string) => {
       const removedModule = moduleData.find((module) => module.id === moduleId);
+      if (!removedModule) {
+        return;
+      }
+      markGraphDirty();
       const producedArtifacts = artifactData
         .filter((artifact) => artifact.producedBy === moduleId)
         .map((artifact) => artifact.id);
@@ -1403,11 +1490,9 @@ function App() {
         }
         return prev;
       });
-      if (removedModule) {
-        showAdminNotice('success', `Модуль «${removedModule.name}» удалён.`);
-      }
+      showAdminNotice('success', `Модуль «${removedModule.name}» удалён.`);
     },
-    [artifactData, moduleData, showAdminNotice]
+    [artifactData, markGraphDirty, moduleData, showAdminNotice]
   );
 
   const handleCreateDomain = useCallback(
@@ -1447,6 +1532,7 @@ function App() {
 
       const targetParentId = draft.isCatalogRoot ? normalizedParentId : normalizedParentId!;
       const updatedDomains = addDomainToTree(domainData, targetParentId, newDomain);
+      markGraphDirty();
       setDomainData(updatedDomains);
 
       const moduleIds = !draft.isCatalogRoot && targetParentId ? draft.moduleIds : [];
@@ -1478,7 +1564,7 @@ function App() {
         `${draft.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${normalizedName}» создан.`
       );
     },
-    [catalogDomainIdSet, domainData, domainIdSet, showAdminNotice]
+    [catalogDomainIdSet, domainData, domainIdSet, markGraphDirty, showAdminNotice]
   );
 
   const handleUpdateDomain = useCallback(
@@ -1557,6 +1643,7 @@ function App() {
       }
 
       const rebuiltTree = addDomainToTree(treeWithoutDomain, targetParentId ?? undefined, updatedDomain);
+      markGraphDirty();
       setDomainData(rebuiltTree);
 
       const moduleSet = !draft.isCatalogRoot && targetParentId
@@ -1588,7 +1675,7 @@ function App() {
         `${updatedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${sanitizedName}» обновлён.`
       );
     },
-    [catalogDomainIdSet, domainData, domainIdSet, showAdminNotice]
+    [catalogDomainIdSet, domainData, domainIdSet, markGraphDirty, showAdminNotice]
   );
 
   const handleDeleteDomain = useCallback(
@@ -1600,6 +1687,7 @@ function App() {
 
       const removedIds = new Set(collectDomainIds(removedDomain));
 
+      markGraphDirty();
       setDomainData(nextTree);
       setModuleDataState((prev) =>
         recalculateReuseScores(
@@ -1628,7 +1716,7 @@ function App() {
         `${removedDomain.isCatalogRoot ? 'Корневой каталог' : 'Домен'} «${removedDomain.name}» удалён.`
       );
     },
-    [domainData, showAdminNotice]
+    [domainData, markGraphDirty, showAdminNotice]
   );
 
   const handleCreateArtifact = useCallback(
@@ -1661,6 +1749,7 @@ function App() {
         sampleUrl: normalizedSampleUrl
       };
 
+      markGraphDirty();
       setArtifactData([...artifactData, newArtifact]);
 
       setModuleDataState((prev) =>
@@ -1718,7 +1807,14 @@ function App() {
       setViewMode('graph');
       showAdminNotice('success', `Артефакт «${normalizedName}» создан.`);
     },
-    [artifactData, defaultDomainId, leafDomainIdSet, moduleById, showAdminNotice]
+    [
+      artifactData,
+      defaultDomainId,
+      leafDomainIdSet,
+      markGraphDirty,
+      moduleById,
+      showAdminNotice
+    ]
   );
 
   const handleUpdateArtifact = useCallback(
@@ -1752,6 +1848,7 @@ function App() {
         sampleUrl: normalizedSampleUrl
       };
 
+      markGraphDirty();
       setArtifactData((prev) =>
         prev.map((artifact) => (artifact.id === artifactId ? updatedArtifact : artifact))
       );
@@ -1840,7 +1937,7 @@ function App() {
       );
       showAdminNotice('success', `Артефакт «${normalizedName}» обновлён.`);
     },
-    [artifactData, leafDomainIdSet, showAdminNotice]
+    [artifactData, leafDomainIdSet, markGraphDirty, showAdminNotice]
   );
 
   const handleDeleteArtifact = useCallback(
@@ -1850,6 +1947,7 @@ function App() {
         return;
       }
 
+      markGraphDirty();
       setArtifactData((prev) => prev.filter((artifact) => artifact.id !== artifactId));
 
       setModuleDataState((prev) =>
@@ -1872,15 +1970,16 @@ function App() {
       setSelectedNode((prev) => (prev && prev.id === artifactId ? null : prev));
       showAdminNotice('success', `Артефакт «${existing.name}» удалён.`);
     },
-    [artifactData, showAdminNotice]
+    [artifactData, markGraphDirty, showAdminNotice]
   );
 
   const handleImportGraph = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
+      markGraphDirty();
       skipNextSyncRef.current = true;
     },
-    [applySnapshot]
+    [applySnapshot, markGraphDirty]
   );
 
   const handleImportFromExistingGraph = useCallback(
@@ -1895,6 +1994,7 @@ function App() {
         applySnapshot(snapshot);
         skipNextSyncRef.current = true;
         setIsSyncAvailable(true);
+        markGraphDirty();
         return {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
@@ -1907,14 +2007,17 @@ function App() {
         throw error instanceof Error ? error : new Error(message);
       }
     },
-    [applySnapshot, showAdminNotice]
+    [applySnapshot, markGraphDirty, showAdminNotice]
   );
 
-  const handleSelectGraph = useCallback((graphId: string) => {
-    setGraphActionStatus(null);
-    setIsCreatePanelOpen(false);
-    setActiveGraphId(graphId);
-  }, []);
+  const handleSelectGraph = useCallback(
+    (graphId: string) => {
+      setGraphActionStatus(null);
+      setIsCreatePanelOpen(false);
+      updateActiveGraph(graphId);
+    },
+    [updateActiveGraph]
+  );
 
   const handleSubmitCreateGraph = useCallback(async () => {
     if (isGraphActionInProgress) {
@@ -2086,9 +2189,7 @@ function App() {
               label={isReloadingSnapshot ? 'Повторяем попытку...' : 'Повторить попытку'}
               loading={isReloadingSnapshot}
               disabled={isReloadingSnapshot}
-              onClick={() => {
-                void loadSnapshot({ withOverlay: false });
-              }}
+              onClick={handleRetryLoadSnapshot}
             />
           </div>
         </div>
