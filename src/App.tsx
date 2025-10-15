@@ -21,6 +21,7 @@ import {
 import type { CSSProperties } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
+import ExpertExplorer from './components/ExpertExplorer';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
@@ -51,6 +52,7 @@ import {
   domainTree as initialDomainTree,
   modules as initialModules,
   reuseIndexHistory,
+  expertProfiles,
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
@@ -71,6 +73,7 @@ const StatsDashboard = lazy(async () => ({
 const viewTabs = [
   { label: 'Связи', value: 'graph' },
   { label: 'Статистика', value: 'stats' },
+  { label: 'Эксперты', value: 'experts' },
   { label: 'Администрирование', value: 'admin' }
 ] as const;
 
@@ -2148,6 +2151,7 @@ function App() {
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
   const isStatsActive = viewMode === 'stats';
+  const isExpertsActive = viewMode === 'experts';
   const isAdminActive = viewMode === 'admin';
 
   const headerTitle = (() => {
@@ -2156,6 +2160,9 @@ function App() {
     }
     if (isStatsActive) {
       return 'Статистика экосистемы решений';
+    }
+    if (isExpertsActive) {
+      return 'Экспертная панель R&D';
     }
     return 'Панель администрирования экосистемы';
   })();
@@ -2166,6 +2173,9 @@ function App() {
     }
     if (isStatsActive) {
       return 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+    }
+    if (isExpertsActive) {
+      return 'Изучайте экспертизу R&D-команды, их проектные достижения и консалтинговые навыки для подбора специалистов.';
     }
     return 'Управляйте данными графа: обновляйте карточки модулей, доменов и артефактов, а также удаляйте устаревшие связи.';
   })();
@@ -2522,6 +2532,14 @@ function App() {
           </Suspense>
         </main>
       )}
+      <main
+        className={styles.expertMain}
+        hidden={!isExpertsActive}
+        aria-hidden={!isExpertsActive}
+        style={{ display: isExpertsActive ? undefined : 'none' }}
+      >
+        <ExpertExplorer experts={expertProfiles} modules={moduleData} domains={domainData} />
+      </main>
       <main
         className={styles.creationMain}
         hidden={!isAdminActive}

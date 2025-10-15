@@ -42,6 +42,46 @@ export type TeamMember = {
   role: TeamRole;
 };
 
+export type ExpertCompetencyLevel = 'foundation' | 'advanced' | 'expert';
+
+export type ExpertCompetency = {
+  id: string;
+  name: string;
+  category: string;
+  level: ExpertCompetencyLevel;
+  description: string;
+  evidenceModules?: string[];
+};
+
+export type ExpertConsultingSkill = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export type ExpertProjectHighlight = {
+  moduleId: string;
+  contribution: string;
+  impact: string;
+};
+
+export type ExpertProfile = {
+  id: string;
+  fullName: string;
+  title: string;
+  summary: string;
+  experienceYears: number;
+  domainIds: string[];
+  moduleIds: string[];
+  competencies: ExpertCompetency[];
+  consultingSkills: ExpertConsultingSkill[];
+  focusAreas: string[];
+  availability: 'open' | 'limited' | 'booked';
+  projectHighlights: ExpertProjectHighlight[];
+  mentoringTopics: string[];
+  learningInterests: string[];
+};
+
 export type RidOwner = {
   company: string;
   division: string;
@@ -1129,6 +1169,426 @@ export const moduleNameById: Record<string, string> = modules.reduce((acc, modul
   acc[module.id] = module.name;
   return acc;
 }, {} as Record<string, string>);
+
+export const expertProfiles: ExpertProfile[] = [
+  {
+    id: 'expert-viktoria-berezhnaya',
+    fullName: 'Виктория Бережная',
+    title: 'Ведущий эксперт по инженерным данным',
+    summary:
+      '12 лет выстраивает конвейеры подготовки инженерных данных и отвечает за методологию обмена между проектными офисами и производственными площадками.',
+    experienceYears: 12,
+    domainIds: ['data-preparation', 'layout-optimization', 'resource-evaluation'],
+    moduleIds: ['module-infraplan-datahub', 'module-infraplan-layout', 'module-dtwin-optimizer'],
+    competencies: [
+      {
+        id: 'infra-data-normalization',
+        name: 'Нормализация инфраструктурных данных',
+        category: 'Инженерия данных',
+        level: 'expert',
+        description:
+          'Проектирует пайплайны очистки и семантического выравнивания инженерных атрибутов, внедряет автоматические проверки качества.',
+        evidenceModules: ['module-infraplan-datahub']
+      },
+      {
+        id: 'infrastructure-scenario-planning',
+        name: 'Сценарное моделирование обустройства',
+        category: 'Инфраструктурное моделирование',
+        level: 'advanced',
+        description:
+          'Настраивает совместную работу инструментов INFRAPLAN и DIGITAL TWIN для анализа вариантов размещения и режимов эксплуатации.',
+        evidenceModules: ['module-infraplan-layout', 'module-dtwin-optimizer']
+      },
+      {
+        id: 'data-governance-quality',
+        name: 'Управление качеством инженерных данных',
+        category: 'Data governance',
+        level: 'advanced',
+        description:
+          'Формирует контрольные точки качества и регламенты онбординга новых источников телеметрии.',
+        evidenceModules: ['module-infraplan-datahub']
+      }
+    ],
+    consultingSkills: [
+      {
+        id: 'consulting-data-governance',
+        name: 'Построение data governance',
+        description:
+          'Фасилитирует запуск советов по данным и выстраивает роли стюардов в функциональных заказчиках.'
+      },
+      {
+        id: 'consulting-discovery',
+        name: 'Дискавери промышленных проектов',
+        description:
+          'Проводит экспресс-обследования месторождений и формирует дорожные карты цифровизации по данным.'
+      }
+    ],
+    focusAreas: ['Онбординг телеметрии и геоданных', 'Каталоги инженерных метрик'],
+    availability: 'open',
+    projectHighlights: [
+      {
+        moduleId: 'module-infraplan-datahub',
+        contribution:
+          'Организовала единый словарь атрибутов и автоматизировала контроль порогов качества на этапе загрузки.',
+        impact: 'Время ввода нового актива сократилось с 4 недель до 9 дней.'
+      },
+      {
+        moduleId: 'module-infraplan-layout',
+        contribution:
+          'Настроила обмен с геомоделями и адаптировала пайплайны под сложный рельеф арктических месторождений.',
+        impact: 'Число итераций согласования схем снизилось на 35%.'
+      }
+    ],
+    mentoringTopics: ['Каталоги инженерных данных', 'Организация обмена между ЦОД и полем'],
+    learningInterests: ['Построение knowledge-graph для инжиниринга', 'Автоматическое обогащение IoT-данных']
+  },
+  {
+    id: 'expert-anton-vlasov',
+    fullName: 'Антон Власов',
+    title: 'Руководитель направления технико-экономической оценки',
+    summary:
+      'Отвечает за финансовые модели в INFRAPLAN и консультирует по оценке эффективности цифровых инвестиций для upstream проектов.',
+    experienceYears: 14,
+    domainIds: ['economic-evaluation', 'development-scenarios', 'layout-optimization'],
+    moduleIds: ['module-infraplan-economics', 'module-infraplan-datahub', 'module-wwo-analytics'],
+    competencies: [
+      {
+        id: 'infrastructure-scenario-planning',
+        name: 'Сценарное моделирование обустройства',
+        category: 'Инвестиционное планирование',
+        level: 'expert',
+        description:
+          'Формализует альтернативные сценарии развития инфраструктуры и связывает их с финансовыми ограничениями.',
+        evidenceModules: ['module-infraplan-economics']
+      },
+      {
+        id: 'economic-scenarios',
+        name: 'Экономическая оценка капитальных программ',
+        category: 'Финансовое моделирование',
+        level: 'expert',
+        description:
+          'Проектирует расчёт NPV/IRR для портфелей и внедряет stress-test библиотеки.',
+        evidenceModules: ['module-infraplan-economics', 'module-wwo-analytics']
+      },
+      {
+        id: 'value-engineering',
+        name: 'Ценообразование цифровых инициатив',
+        category: 'Value management',
+        level: 'advanced',
+        description:
+          'Помогает заказчикам пересчитывать эффект от цифровых инициатив в экономические показатели и KPI.',
+        evidenceModules: ['module-infraplan-economics']
+      }
+    ],
+    consultingSkills: [
+      {
+        id: 'consulting-portfolio',
+        name: 'Портфельное управление продуктами',
+        description:
+          'Выстраивает стратегические сессии и формирует карты ценности между функциями и продуктами.'
+      },
+      {
+        id: 'consulting-change-management',
+        name: 'Управление изменениями',
+        description:
+          'Сопровождает внедрение решений, адаптируя KPI подразделений и систему мотивации.'
+      }
+    ],
+    focusAreas: ['Единая модель экономических данных', 'Интеграция с ERP-ланшафтом заказчика'],
+    availability: 'limited',
+    projectHighlights: [
+      {
+        moduleId: 'module-infraplan-economics',
+        contribution:
+          'Запустил расчёт вариантов обустройства по портфелям и внедрил stress-test сценариев CAPEX/OPEX.',
+        impact: 'Время подготовки инвестиционного досье сократилось на 45%.'
+      },
+      {
+        moduleId: 'module-wwo-analytics',
+        contribution: 'Сформировал витрину экономических KPI для анализа эффективности ремонтов.',
+        impact: 'Позволило выявить скрытый эффект на 280 млн ₽ в год.'
+      }
+    ],
+    mentoringTopics: ['Оценка цифровых инициатив', 'Согласование KPI между IT и бизнесом'],
+    learningInterests: ['ESG-метрики в добыче', 'Автоматизация стресс-тестирования моделей']
+  },
+  {
+    id: 'expert-raisa-chistyakova',
+    fullName: 'Раиса Чистякова',
+    title: 'Архитектор телеметрических платформ',
+    summary:
+      'Специализируется на потоковой обработке данных и построении отказоустойчивых витрин для цифровых двойников и лабораторий.',
+    experienceYears: 11,
+    domainIds: ['real-time-monitoring', 'pipeline-monitoring', 'production-optimization'],
+    moduleIds: ['module-dtwin-monitoring', 'module-dtwin-optimizer', 'module-lab-experiments'],
+    competencies: [
+      {
+        id: 'real-time-architecture',
+        name: 'Архитектура потоковой обработки',
+        category: 'Промышленная телеметрия',
+        level: 'expert',
+        description:
+          'Проектирует ingestion-конвейеры, балансирует нагрузку Kafka и настраивает SLA по доставке данных.',
+        evidenceModules: ['module-dtwin-monitoring']
+      },
+      {
+        id: 'stream-observability',
+        name: 'Наблюдаемость стриминговых платформ',
+        category: 'Site Reliability',
+        level: 'advanced',
+        description:
+          'Внедряет мониторинг задержек и контроль деградаций в real-time цепочках.',
+        evidenceModules: ['module-dtwin-monitoring', 'module-lab-experiments']
+      },
+      {
+        id: 'edge-integration',
+        name: 'Интеграция edge-оборудования',
+        category: 'Промышленный IoT',
+        level: 'advanced',
+        description:
+          'Выстраивает безопасные каналы связи с полевыми устройствами и унифицирует протоколы.',
+        evidenceModules: ['module-dtwin-monitoring']
+      }
+    ],
+    consultingSkills: [
+      {
+        id: 'consulting-ops-excellence',
+        name: 'Операционная эффективность',
+        description:
+          'Проводит сессии по оптимизации производственных процессов на основе потоковых метрик.'
+      },
+      {
+        id: 'consulting-safety',
+        name: 'Управление промышленной безопасностью',
+        description:
+          'Помогает внедрять цифровые регламенты по предотвращению аварий и контролю утечек.'
+      }
+    ],
+    focusAreas: ['Снижение задержек телеметрии', 'Безопасное подключение новых активов'],
+    availability: 'limited',
+    projectHighlights: [
+      {
+        moduleId: 'module-dtwin-monitoring',
+        contribution: 'Выстроила ingestion-стек на Kafka с активным перераспределением нагрузки между кластерами.',
+        impact: 'Время доставки телеметрии сократилось с 90 до 18 секунд.'
+      },
+      {
+        moduleId: 'module-lab-experiments',
+        contribution: 'Организовала безопасный канал обмена с лабораторией и автоматизировала публикацию экспериментов.',
+        impact: 'Количество проведённых экспериментов выросло в 2,3 раза.'
+      }
+    ],
+    mentoringTopics: ['Kafka и ClickHouse в промышленности', 'Обеспечение отказоустойчивости телеметрии'],
+    learningInterests: ['Edge AI', 'Adaptive streaming для IoT']
+  },
+  {
+    id: 'expert-elizar-kopylov',
+    fullName: 'Елизар Копылов',
+    title: 'Лид инженерных рекомендаций DIGITAL TWIN',
+    summary:
+      'Комбинирует моделирование процессов, машинное обучение и дистанционное управление для повышения добычи и снижения рисков.',
+    experienceYears: 10,
+    domainIds: ['production-optimization', 'remote-control', 'real-time-monitoring'],
+    moduleIds: ['module-dtwin-optimizer', 'module-dtwin-remote-control', 'module-lab-experiments'],
+    competencies: [
+      {
+        id: 'optimization-ml',
+        name: 'Оптимизация режимов с помощью ML',
+        category: 'Математическое моделирование',
+        level: 'expert',
+        description:
+          'Создаёт гибридные модели и orchestrator стратегий, учитывая физические ограничения и бизнес-метрики.',
+        evidenceModules: ['module-dtwin-optimizer']
+      },
+      {
+        id: 'real-time-architecture',
+        name: 'Архитектура потоковой обработки',
+        category: 'Промышленная телеметрия',
+        level: 'advanced',
+        description:
+          'Формирует контуры обратной связи и следит за качеством данных, поступающих в оптимизатор.',
+        evidenceModules: ['module-dtwin-optimizer', 'module-dtwin-remote-control']
+      },
+      {
+        id: 'control-loop-design',
+        name: 'Проектирование контуров управления',
+        category: 'Промышленная автоматизация',
+        level: 'advanced',
+        description:
+          'Настраивает дистанционные команды и проверку их выполнения на производственных площадках.',
+        evidenceModules: ['module-dtwin-remote-control']
+      }
+    ],
+    consultingSkills: [
+      {
+        id: 'consulting-automation-bootcamp',
+        name: 'Автоматизация производственных решений',
+        description:
+          'Проводит воркшопы по интеграции цифрового двойника в операционный контур.'
+      },
+      {
+        id: 'consulting-discovery',
+        name: 'Дискавери промышленных проектов',
+        description:
+          'Помогает выявлять точки роста добычи и оценивать эффект от дистанционного управления.'
+      }
+    ],
+    focusAreas: ['Замыкание контура управления', 'Повышение производительности скважин'],
+    availability: 'open',
+    projectHighlights: [
+      {
+        moduleId: 'module-dtwin-optimizer',
+        contribution: 'Построил гибридную модель оптимизации режимов и автоматизировал выбор стратегий запуска.',
+        impact: 'Дополнительная добыча +3,5% без увеличения энергоиздержек.'
+      },
+      {
+        moduleId: 'module-dtwin-remote-control',
+        contribution: 'Организовал дистанционное исполнение команд с контролем безопасности.',
+        impact: 'Сократил время реакции операторов на 40%.'
+      }
+    ],
+    mentoringTopics: ['Гибридные ML/physics модели', 'Организация дистанционного управления'],
+    learningInterests: ['Reinforcement learning в производстве', 'Explainable AI для операторов']
+  },
+  {
+    id: 'expert-margarita-kurganskaya',
+    fullName: 'Маргарита Курганская',
+    title: 'Практик цифрового полевого исполнения',
+    summary:
+      'Объединяет мобильные решения, работу бригад и контроль безопасности при выполнении внутрискважинных операций.',
+    experienceYears: 9,
+    domainIds: ['field-execution', 'workover-planning', 'quality-analytics'],
+    moduleIds: ['module-wwo-execution', 'module-wwo-planner', 'module-wwo-analytics'],
+    competencies: [
+      {
+        id: 'workover-process',
+        name: 'Операционные процессы ВИР',
+        category: 'Field operations',
+        level: 'expert',
+        description:
+          'Регламентирует работу бригад, формирует контрольные списки и цифровые наряды.',
+        evidenceModules: ['module-wwo-execution', 'module-wwo-planner']
+      },
+      {
+        id: 'field-data-collection',
+        name: 'Цифровой сбор полевых данных',
+        category: 'Мобильные решения',
+        level: 'advanced',
+        description:
+          'Внедряет оффлайн-сценарии и синхронизацию с центральным хранилищем.',
+        evidenceModules: ['module-wwo-execution']
+      },
+      {
+        id: 'safety-compliance',
+        name: 'Контроль промышленной безопасности',
+        category: 'HSE',
+        level: 'advanced',
+        description:
+          'Настраивает цифровые допуски и автоматическую проверку соответствия регламентам.',
+        evidenceModules: ['module-wwo-execution']
+      }
+    ],
+    consultingSkills: [
+      {
+        id: 'consulting-ops-excellence',
+        name: 'Операционная эффективность',
+        description:
+          'Диагностирует узкие места в полевых процессах и помогает выстроить систему показателей.'
+      },
+      {
+        id: 'consulting-safety',
+        name: 'Управление промышленной безопасностью',
+        description:
+          'Обучает бригады цифровым стандартам безопасности и контролю рисков.'
+      }
+    ],
+    focusAreas: ['Цифровые наряды-допуски', 'Интеграция с системами охраны труда'],
+    availability: 'booked',
+    projectHighlights: [
+      {
+        moduleId: 'module-wwo-execution',
+        contribution: 'Настроила оффлайн-режим и автоматическую синхронизацию отчётности с центральной системой.',
+        impact: 'Время закрытия наряда сократилось до 2 часов вместо 16.'
+      },
+      {
+        moduleId: 'module-wwo-planner',
+        contribution: 'Связала планы ремонтов с оперативной ситуацией и расписанием бригад.',
+        impact: 'Повысила соблюдение графика работ до 96%.'
+      }
+    ],
+    mentoringTopics: ['Онбординг полевых команд', 'Цифровые регламенты безопасности'],
+    learningInterests: ['Дополненная реальность для ВИР', 'Автоматизированный контроль охраны труда']
+  },
+  {
+    id: 'expert-denis-laptev',
+    fullName: 'Денис Лаптев',
+    title: 'Лид аналитической лаборатории WWO',
+    summary:
+      'Строит витрины эффективности внутрискважинных работ и соединяет операционные показатели с экономическими эффектами.',
+    experienceYears: 13,
+    domainIds: ['quality-analytics', 'workover-planning', 'production-optimization'],
+    moduleIds: ['module-wwo-analytics', 'module-wwo-planner', 'module-infraplan-economics'],
+    competencies: [
+      {
+        id: 'quality-analytics',
+        name: 'Аналитика качества ремонтов',
+        category: 'Производственная аналитика',
+        level: 'expert',
+        description:
+          'Формирует KPI по качеству ремонтов и создает интерактивные панели мониторинга.',
+        evidenceModules: ['module-wwo-analytics']
+      },
+      {
+        id: 'value-engineering',
+        name: 'Ценообразование цифровых инициатив',
+        category: 'Value management',
+        level: 'advanced',
+        description:
+          'Связывает операционные показатели с экономическими эффектами и бюджетированием.',
+        evidenceModules: ['module-infraplan-economics', 'module-wwo-analytics']
+      },
+      {
+        id: 'workover-process',
+        name: 'Операционные процессы ВИР',
+        category: 'Field operations',
+        level: 'advanced',
+        description:
+          'Анализирует длительность циклов и выявляет узкие места в производственных процессах.',
+        evidenceModules: ['module-wwo-planner', 'module-wwo-analytics']
+      }
+    ],
+    consultingSkills: [
+      {
+        id: 'consulting-portfolio',
+        name: 'Портфельное управление продуктами',
+        description:
+          'Помогает заказчику балансировать инвестиции в цифровизацию и операционный эффект.'
+      },
+      {
+        id: 'consulting-data-governance',
+        name: 'Построение data governance',
+        description:
+          'Организует совместную работу аналитиков, бизнес-пользователей и ИТ-команд.'
+      }
+    ],
+    focusAreas: ['Сквозные KPI по ремонту фонда', 'Интеграция с экономическими витринами'],
+    availability: 'limited',
+    projectHighlights: [
+      {
+        moduleId: 'module-wwo-analytics',
+        contribution: 'Настроил дашборды эффективности, объединяющие операционные и экономические метрики.',
+        impact: 'Руководители фондов получают отчёт в режиме T+1 вместо T+7.'
+      },
+      {
+        moduleId: 'module-infraplan-economics',
+        contribution: 'Синхронизировал экономические модели с фактическими данными ремонтов.',
+        impact: 'Снизил расхождение план/факт до 4%.'
+      }
+    ],
+    mentoringTopics: ['Настройка витрин показателей', 'Совместная работа аналитики и производства'],
+    learningInterests: ['Data mesh в производственных компаниях', 'Продвинутая визуализация KPI']
+  }
+];
 
 export type ArtifactNode = {
   id: string;
