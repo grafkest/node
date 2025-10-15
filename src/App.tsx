@@ -21,6 +21,7 @@ import {
 import type { CSSProperties } from 'react';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import DomainTree from './components/DomainTree';
+import ExpertSkillsPanel from './components/ExpertSkillsPanel';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
@@ -49,6 +50,8 @@ import NodeDetails from './components/NodeDetails';
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
+  expertProfiles,
+  expertSkillCatalog,
   modules as initialModules,
   reuseIndexHistory,
   type ArtifactNode,
@@ -70,6 +73,7 @@ const StatsDashboard = lazy(async () => ({
 
 const viewTabs = [
   { label: 'Связи', value: 'graph' },
+  { label: 'Эксперты', value: 'experts' },
   { label: 'Статистика', value: 'stats' },
   { label: 'Администрирование', value: 'admin' }
 ] as const;
@@ -2147,12 +2151,16 @@ function App() {
 
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
+  const isExpertsActive = viewMode === 'experts';
   const isStatsActive = viewMode === 'stats';
   const isAdminActive = viewMode === 'admin';
 
   const headerTitle = (() => {
     if (isGraphActive) {
       return 'Граф модулей и доменных областей';
+    }
+    if (isExpertsActive) {
+      return 'Матрица навыков R&D-экспертов';
     }
     if (isStatsActive) {
       return 'Статистика экосистемы решений';
@@ -2163,6 +2171,9 @@ function App() {
   const headerDescription = (() => {
     if (isGraphActive) {
       return 'Выберите домены, чтобы увидеть связанные модули и выявить пересечения.';
+    }
+    if (isExpertsActive) {
+      return 'Фильтруйте экспертов по доменам, модулям и консалтинговым навыкам для планирования R&D.';
     }
     if (isStatsActive) {
       return 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
@@ -2504,6 +2515,20 @@ function App() {
               domainNameMap={domainNameMap}
             />
           </aside>
+      </main>
+      <main
+        className={styles.expertsMain}
+        hidden={!isExpertsActive}
+        aria-hidden={!isExpertsActive}
+        style={{ display: isExpertsActive ? undefined : 'none' }}
+      >
+        <ExpertSkillsPanel
+          experts={expertProfiles}
+          skills={expertSkillCatalog}
+          modules={moduleData}
+          domains={domainData}
+          domainNameMap={domainNameMap}
+        />
       </main>
       {(statsActivated || isStatsActive) && (
         <main
