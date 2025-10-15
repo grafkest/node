@@ -216,6 +216,12 @@ function App() {
 
   const applySnapshot = useCallback(
     (snapshot: GraphSnapshotPayload) => {
+      const flattenedDomains = flattenDomainTree(snapshot.domains);
+      const domainIds = flattenedDomains.map((domain) => domain.id);
+      const activeNodeIds = new Set<string>([...domainIds]);
+      snapshot.modules.forEach((module) => activeNodeIds.add(module.id));
+      snapshot.artifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+
       setDomainData(snapshot.domains);
       setModuleDataState(recalculateReuseScores(snapshot.modules));
       setArtifactData(snapshot.artifacts);
@@ -224,10 +230,35 @@ function App() {
       setStatusFilters(new Set(allStatuses));
       setProductFilter(buildProductList(snapshot.modules));
       setCompanyFilter(null);
-      setSelectedDomains(
-        new Set(flattenDomainTree(snapshot.domains).map((domain) => domain.id))
-      );
-      setLayoutPositions(snapshot.layout?.nodes ?? {});
+      setSelectedDomains(new Set(domainIds));
+      setLayoutPositions((prev) => {
+        const serverPositions = snapshot.layout?.nodes ?? {};
+        const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
+        const hasExistingLayout = hasLoadedSnapshotRef.current && Object.keys(prev).length > 0;
+
+        if (!hasExistingLayout) {
+          if (layoutsEqual(prev, prunedServerPositions)) {
+            return prev;
+          }
+          return prunedServerPositions;
+        }
+
+        const merged: Record<string, GraphLayoutNodePosition> = {};
+        activeNodeIds.forEach((id) => {
+          const previousPosition = prev[id];
+          if (previousPosition) {
+            merged[id] = previousPosition;
+            return;
+          }
+
+          const serverPosition = prunedServerPositions[id];
+          if (serverPosition) {
+            merged[id] = serverPosition;
+          }
+        });
+
+        return layoutsEqual(prev, merged) ? prev : merged;
+      });
       hasLoadedSnapshotRef.current = true;
       hasPendingPersistRef.current = false;
     },
