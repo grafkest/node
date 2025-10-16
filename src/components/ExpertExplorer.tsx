@@ -279,25 +279,38 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       return;
     }
 
+    if (viewMode !== 'graph') {
+      return;
+    }
+
     const element = graphContainerRef.current;
     if (!element) {
       return;
     }
 
-    const observer = new window.ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) {
+    const measure = (target: Element | null) => {
+      if (!target) {
         return;
       }
 
-      const { width, height } = entry.contentRect;
-      setGraphDimensions({ width: Math.max(0, width), height: Math.max(0, height) });
+      const { width, height } = (target as HTMLElement).getBoundingClientRect();
+      setGraphDimensions({
+        width: Math.max(0, width),
+        height: Math.max(0, height)
+      });
+    };
+
+    measure(element);
+
+    const observer = new window.ResizeObserver((entries) => {
+      const entry = entries[0];
+      measure(entry?.target ?? null);
     });
 
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, []);
+  }, [viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'graph') {
