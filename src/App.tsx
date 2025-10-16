@@ -49,6 +49,7 @@ import NodeDetails from './components/NodeDetails';
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
+  experts as initialExperts,
   modules as initialModules,
   reuseIndexHistory,
   type ArtifactNode,
@@ -60,6 +61,7 @@ import {
   type NonFunctionalRequirements
 } from './data';
 import styles from './App.module.css';
+import ExpertExplorer from './components/ExpertExplorer';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -71,6 +73,7 @@ const StatsDashboard = lazy(async () => ({
 const viewTabs = [
   { label: 'Связи', value: 'graph' },
   { label: 'Статистика', value: 'stats' },
+  { label: 'Экспертиза', value: 'experts' },
   { label: 'Администрирование', value: 'admin' }
 ] as const;
 
@@ -92,6 +95,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
+  const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
   );
@@ -514,6 +518,14 @@ function App() {
     const map: Record<string, string> = {};
     moduleData.forEach((module) => {
       map[module.id] = module.name;
+    });
+    return map;
+  }, [moduleData]);
+
+  const moduleDomainMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    moduleData.forEach((module) => {
+      map[module.id] = module.domains;
     });
     return map;
   }, [moduleData]);
@@ -2148,6 +2160,7 @@ function App() {
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
   const isStatsActive = viewMode === 'stats';
+  const isExpertsActive = viewMode === 'experts';
   const isAdminActive = viewMode === 'admin';
 
   const headerTitle = (() => {
@@ -2156,6 +2169,9 @@ function App() {
     }
     if (isStatsActive) {
       return 'Статистика экосистемы решений';
+    }
+    if (isExpertsActive) {
+      return 'Экспертиза команды R&D';
     }
     return 'Панель администрирования экосистемы';
   })();
@@ -2166,6 +2182,9 @@ function App() {
     }
     if (isStatsActive) {
       return 'Обзор ключевых метрик по системам, модулям и обмену данными для планирования развития.';
+    }
+    if (isExpertsActive) {
+      return 'Постройте матрицу компетенций, найдите носителей знаний и дополнительные консалтинговые навыки.';
     }
     return 'Управляйте данными графа: обновляйте карточки модулей, доменов и артефактов, а также удаляйте устаревшие связи.';
   })();
@@ -2522,6 +2541,19 @@ function App() {
           </Suspense>
         </main>
       )}
+      <main
+        className={styles.expertMain}
+        hidden={!isExpertsActive}
+        aria-hidden={!isExpertsActive}
+        style={{ display: isExpertsActive ? undefined : 'none' }}
+      >
+        <ExpertExplorer
+          experts={expertProfiles}
+          moduleNameMap={moduleNameMap}
+          moduleDomainMap={moduleDomainMap}
+          domainNameMap={domainNameMap}
+        />
+      </main>
       <main
         className={styles.creationMain}
         hidden={!isAdminActive}

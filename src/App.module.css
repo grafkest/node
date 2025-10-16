@@ -218,6 +218,15 @@
   overflow-y: auto;
 }
 
+.expertMain {
+  padding: 24px;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+
 .creationMain {
   padding: 24px;
   box-sizing: border-box;

@@ -1,0 +1,258 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  flex: 1;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.searchField {
+  min-width: 220px;
+}
+
+.summaryRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.summaryCard {
+  height: 100%;
+}
+
+.viewToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modeTabs {
+  flex-shrink: 0;
+}
+
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.countBadge {
+  white-space: nowrap;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 16px;
+  min-height: 0;
+  flex: 1;
+}
+
+.listPane,
+.graphPane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.graphContainer {
+  flex: 1;
+  min-height: 440px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.graphPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.focusCard {
+  align-self: flex-start;
+}
+
+.focusExpertButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.focusExpertButton {
+  white-space: nowrap;
+}
+
+.expertCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.expertCard:hover {
+  border-color: var(--color-bg-link);
+}
+
+.expertCardActive {
+  border-color: var(--color-bg-link);
+  box-shadow: 0 0 0 3px rgba(63, 140, 255, 0.15);
+}
+
+.expertCardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.expertCardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skillBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+  border: 1px dashed var(--color-bg-border);
+  border-radius: 12px;
+  color: var(--color-typo-secondary);
+}
+
+.detailsPane {
+  background: var(--color-bg-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-layer);
+  padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+}
+
+.detailsContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.detailHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badgeGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.focusList,
+.detailList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detailListItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-bg-border);
+}
+
+.detailListItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.contactLink {
+  color: var(--color-typo-link);
+  text-decoration: none;
+}
+
+.contactLink:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 1280px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsPane {
+    order: -1;
+  }
+}
+
+@media (max-width: 960px) {
+  .controls {
+    grid-template-columns: 1fr;
+  }
+}
