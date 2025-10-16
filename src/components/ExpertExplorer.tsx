@@ -328,30 +328,6 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return () => window.clearTimeout(timeout);
   }, [filteredExperts, graphDimensions.height, graphDimensions.width, viewMode]);
 
-  useEffect(() => {
-    if (viewMode !== 'graph') {
-      return;
-    }
-
-    const graph = graphRef.current;
-    if (!graph) {
-      return;
-    }
-
-    const chargeForce = graph.d3Force('charge');
-    if (chargeForce && typeof (chargeForce as { strength?: unknown }).strength === 'function') {
-      (chargeForce as { strength: (value: number) => void }).strength(-160);
-    }
-
-    const linkForce = graph.d3Force('link');
-    if (linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
-      (linkForce as { distance: (value: number) => void }).distance(90);
-    }
-    if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
-      (linkForce as { strength: (value: number) => void }).strength(0.6);
-    }
-  }, [graphData, viewMode]);
-
   const graphData = useMemo(() => {
     const nodes: ForceNode[] = [];
     const links: ForceLink[] = [];
@@ -430,6 +406,30 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     return { nodes, links };
   }, [domainNameMap, filteredExperts]);
+
+  useEffect(() => {
+    if (viewMode !== 'graph') {
+      return;
+    }
+
+    const graph = graphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    const chargeForce = graph.d3Force('charge');
+    if (chargeForce && typeof (chargeForce as { strength?: unknown }).strength === 'function') {
+      (chargeForce as { strength: (value: number) => void }).strength(-160);
+    }
+
+    const linkForce = graph.d3Force('link');
+    if (linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
+      (linkForce as { distance: (value: number) => void }).distance(90);
+    }
+    if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
+      (linkForce as { strength: (value: number) => void }).strength(0.6);
+    }
+  }, [viewMode, graphData]);
 
   const highlightNodeIds = useMemo(() => {
     const set = new Set<string>();
