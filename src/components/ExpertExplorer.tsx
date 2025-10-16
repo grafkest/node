@@ -328,6 +328,30 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return () => window.clearTimeout(timeout);
   }, [filteredExperts, graphDimensions.height, graphDimensions.width, viewMode]);
 
+  useEffect(() => {
+    if (viewMode !== 'graph') {
+      return;
+    }
+
+    const graph = graphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    const chargeForce = graph.d3Force('charge');
+    if (chargeForce && typeof (chargeForce as { strength?: unknown }).strength === 'function') {
+      (chargeForce as { strength: (value: number) => void }).strength(-160);
+    }
+
+    const linkForce = graph.d3Force('link');
+    if (linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
+      (linkForce as { distance: (value: number) => void }).distance(90);
+    }
+    if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
+      (linkForce as { strength: (value: number) => void }).strength(0.6);
+    }
+  }, [graphData, viewMode]);
+
   const graphData = useMemo(() => {
     const nodes: ForceNode[] = [];
     const links: ForceLink[] = [];
@@ -493,7 +517,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   );
 
   const nodeCanvasObject = useCallback(
-    (node: NodeObject, ctx: CanvasRenderingContext2D) => {
+    (node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const typed = node as ForceNode;
       const radius = typed.type === 'expert' ? 14 : typed.type === 'domain' ? 11 : 9;
       const baseColor =
@@ -505,12 +529,17 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
               ? palette.competency
               : palette.consulting;
       const isHighlighted = highlightNodeIds.has(typed.id);
-      const fillColor = isHighlighted ? baseColor : withAlpha(baseColor, 0.25);
+      const fillColor = isHighlighted ? baseColor : withAlpha(baseColor, 0.22);
+
+      const fontSizeBase = typed.type === 'expert' ? 16 : typed.type === 'domain' ? 14 : 12;
+      const fontSize = fontSizeBase / Math.sqrt(Math.max(globalScale, 0.6));
+      const textY = (node.y ?? 0) + radius + 4;
 
       ctx.save();
       ctx.beginPath();
       ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
       ctx.fillStyle = fillColor;
+      ctx.globalAlpha = isHighlighted ? 1 : 0.9;
       ctx.fill();
 
       if (isHighlighted) {
@@ -518,13 +547,25 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         ctx.strokeStyle = baseColor;
         ctx.stroke();
       }
+      ctx.restore();
 
-      ctx.font = '11px "Inter", "Segoe UI", sans-serif';
+      ctx.save();
+      ctx.font = `${fontSize}px "Inter", "Segoe UI", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = isHighlighted ? palette.textOnAccent : palette.text;
-      ctx.globalAlpha = isHighlighted ? 1 : 0.85;
-      ctx.fillText(typed.label, node.x ?? 0, (node.y ?? 0) + radius + 4);
+
+      if (isHighlighted) {
+        ctx.lineWidth = Math.max(2, fontSize / 3);
+        ctx.strokeStyle = withAlpha(palette.background, 0.9);
+        ctx.strokeText(typed.label, node.x ?? 0, textY);
+        ctx.fillStyle = palette.text;
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = palette.text;
+        ctx.globalAlpha = Math.min(0.95, 0.55 + globalScale * 0.2);
+      }
+
+      ctx.fillText(typed.label, node.x ?? 0, textY);
       ctx.restore();
     },
     [highlightNodeIds, palette]
@@ -837,6 +878,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   cooldownTicks={80}
                   onNodeClick={handleNodeClick}
                   nodeCanvasObject={nodeCanvasObject}
+                  nodeCanvasObjectMode={() => 'replace'}
                   linkColor={linkColor}
                   linkWidth={linkWidth}
                   enableZoomInteraction
