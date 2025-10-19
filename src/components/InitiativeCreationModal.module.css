@@ -1,0 +1,202 @@
+.modal {
+  max-width: 1200px;
+  width: 100%;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px;
+  box-sizing: border-box;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 16px;
+  padding: 24px;
+  background: var(--color-bg-default);
+}
+
+.gridTwoCols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.inlineCreateRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.inlineCreateField {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.roleList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.roleCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.roleHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.roleHeaderActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.roleMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.workList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px dashed var(--color-bg-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.workHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.workGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+
+.recommendationList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.recommendationCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recommendationHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.recommendationHeaderInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.recommendationRoleTitle {
+  word-break: break-word;
+}
+
+.recommendationScoreBadge {
+  flex-shrink: 0;
+}
+
+.recommendationCandidates {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recommendationCandidate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+}
+
+.recommendationCandidateHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.recommendationCandidateInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.recommendationCandidateName {
+  word-break: break-word;
+}
+
+.recommendationRisks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}

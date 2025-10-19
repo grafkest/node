@@ -59,6 +59,10 @@ import {
   type DomainNode,
   type GraphLink,
   type Initiative,
+  type InitiativeRequirement,
+  type InitiativeRolePlan,
+  type InitiativeRoleWork,
+  type InitiativeWork,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -67,6 +71,14 @@ import {
 import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
 import InitiativePlanner from './components/InitiativePlanner';
+import type { InitiativeCreationRequest } from './types/initiativeCreation';
+import {
+  assignExpertsToWorkItems,
+  buildCandidatesFromReport,
+  buildRoleMatchReports,
+  selectPinnedExperts,
+  type RolePlanningDraft
+} from './utils/initiativeMatching';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -2287,6 +2299,115 @@ function App() {
     [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
   );
 
+  const handlePlannerCreateInitiative = useCallback(
+    (request: InitiativeCreationRequest): Initiative => {
+      const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
+      const initiativeId = createEntityId('initiative', request.name, existingIds);
+      const normalizedName = request.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
+      const normalizedDescription = request.description.trim() || 'Описание не заполнено';
+      const normalizedOwner = request.owner.trim() || 'Ответственный не указан';
+      const normalizedImpact = request.expectedImpact.trim() || 'Эффект не оценён';
+      const normalizedTarget = request.targetModuleName.trim() || normalizedName;
+      const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
+      const potentialModules = request.potentialModules.map((module) => module.trim()).filter(Boolean);
+      const roleEntries = request.roles.map((role, index) => {
+        const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
+        const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
+          id: item.id?.trim() || `${roleId}-work-${workIndex + 1}`,
+          title: item.title.trim() || `Работа ${workIndex + 1}`,
+          description: item.description.trim() || 'Описание не заполнено',
+          startDay: Math.max(0, Math.round(item.startDay)),
+          durationDays: Math.max(1, Math.round(item.durationDays)),
+          effortDays: Math.max(1, Math.round(item.effortDays))
+        }));
+
+        return {
+          draft: {
+            id: roleId,
+            role: role.role,
+            required: Math.max(1, Math.round(role.required)),
+            skills: role.skills.map((skill) => skill.trim()).filter(Boolean),
+            workItems: sanitizedWorkItems
+          } satisfies RolePlanningDraft,
+          comment: role.comment?.trim() || undefined
+        };
+      });
+
+      const planningRoles = roleEntries.map((entry) => entry.draft);
+      const matchReports = buildRoleMatchReports(planningRoles, expertProfiles);
+
+      const roles: InitiativeRolePlan[] = planningRoles.map((planningRole, index) => {
+        const report = matchReports[index];
+        const candidates = buildCandidatesFromReport(report);
+        const pinnedExpertIds = selectPinnedExperts(candidates, planningRole.required);
+        const workItems: InitiativeRoleWork[] = assignExpertsToWorkItems(
+          planningRole.workItems,
+          pinnedExpertIds
+        );
+
+        return {
+          id: planningRole.id,
+          role: planningRole.role,
+          required: planningRole.required,
+          pinnedExpertIds,
+          candidates,
+          workItems
+        };
+      });
+
+      const works: InitiativeWork[] = roles.flatMap((rolePlan) =>
+        (rolePlan.workItems ?? []).map((item) => ({
+          id: `${rolePlan.id}-${item.id}`,
+          title: item.title,
+          description: item.description,
+          effortHours: Math.max(0, Math.round(item.effortDays)) * 8
+        }))
+      );
+
+      const requirements: InitiativeRequirement[] = roleEntries.map((entry) => ({
+        id: `${entry.draft.id}-req`,
+        role: entry.draft.role,
+        skills: entry.draft.skills,
+        count: entry.draft.required,
+        comment: entry.comment
+      }));
+
+      const initiative: Initiative = {
+        id: initiativeId,
+        name: normalizedName,
+        description: normalizedDescription,
+        domains,
+        plannedModuleIds: [],
+        requiredSkills: [],
+        workItems: [],
+        approvalStages: [],
+        status: request.status,
+        owner: normalizedOwner,
+        expectedImpact: normalizedImpact,
+        targetModuleName: normalizedTarget,
+        lastUpdated: new Date().toISOString(),
+        risks: [],
+        roles,
+        potentialModules,
+        works,
+        requirements,
+        customer: {
+          company: request.customer.company.trim(),
+          unit: request.customer.unit.trim(),
+          representative: request.customer.representative.trim(),
+          contact: request.customer.contact.trim(),
+          comment: request.customer.comment?.trim() || undefined
+        }
+      };
+
+      markGraphDirty();
+      setInitiativeData((prev) => [...prev, initiative]);
+      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
+      return initiative;
+    },
+    [expertProfiles, initiativeData, markGraphDirty, showAdminNotice]
+  );
+
   const handleUpdateInitiative = useCallback(
     (initiativeId: string, draft: InitiativeDraftPayload) => {
       const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
@@ -2936,6 +3057,7 @@ function App() {
           onRemoveRisk={handleRemoveInitiativeRisk}
           onStatusChange={handleInitiativeStatusChange}
           onExport={handleInitiativeExport}
+          onCreateInitiative={handlePlannerCreateInitiative}
         />
       </main>
       <main
