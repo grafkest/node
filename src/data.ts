@@ -128,6 +128,21 @@ export type ModuleNode = {
   nonFunctional: NonFunctionalRequirements;
 };
 
+export type InitiativeStatus = 'idea' | 'pilot' | 'scale';
+
+export type InitiativeNode = {
+  id: string;
+  name: string;
+  description: string;
+  status: InitiativeStatus;
+  owner: string;
+  domainIds: string[];
+  moduleIds: string[];
+  startDate: string;
+  targetDate?: string;
+  expectedImpact: string;
+};
+
 export const domainTree: DomainNode[] = [
   {
     id: 'upstream',
@@ -1599,6 +1614,34 @@ export const artifacts: ArtifactNode[] = [
     consumerIds: [],
     dataType: 'Power BI',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-performance-dashboard.pdf'
+  }
+];
+
+export const initiatives: InitiativeNode[] = [
+  {
+    id: 'initiative-ai-exploration',
+    name: 'ML-разведка новых месторождений',
+    description:
+      'Пилотный проект по внедрению ML-моделей для интерпретации геолого-геофизических данных и ускоренного выявления перспективных участков.',
+    status: 'pilot',
+    owner: 'Дирекция цифровой трансформации',
+    domainIds: ['seismic-interpretation', 'resource-evaluation'],
+    moduleIds: ['module-infraplan-datahub', 'module-infraplan-layout'],
+    startDate: '2024-Q1',
+    targetDate: '2024-Q4',
+    expectedImpact: 'Сокращение цикла анализа запасов на 30%'
+  },
+  {
+    id: 'initiative-digital-twin-expansion',
+    name: 'Расширение цифровых двойников добычи',
+    description:
+      'Масштабирование платформы цифровых двойников на новые промыслы с интеграцией мониторинга и предиктивной аналитики.',
+    status: 'scale',
+    owner: 'Проектный офис производственной эффективности',
+    domainIds: ['development-scenarios'],
+    moduleIds: ['module-dtwin-monitoring', 'module-dtwin-optimizer'],
+    startDate: '2023-Q3',
+    expectedImpact: 'Рост производственной эффективности на 12%'
   }
 ];
 

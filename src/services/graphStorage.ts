@@ -32,6 +32,7 @@ export async function createGraph(
     includeDomains: boolean;
     includeModules: boolean;
     includeArtifacts: boolean;
+    includeInitiatives: boolean;
   },
   signal?: AbortSignal
 ): Promise<GraphSummary> {
@@ -84,6 +85,7 @@ export async function fetchGraphSnapshot(
     modules: snapshot.modules,
     domains: snapshot.domains,
     artifacts: snapshot.artifacts,
+    initiatives: snapshot.initiatives ?? [],
     layout: normalizeLayoutSnapshot(snapshot.layout)
   };
 }
@@ -160,6 +162,7 @@ export async function importGraphFromSource(
     domains: request.includeDomains ? snapshot.domains : [],
     modules: request.includeModules ? snapshot.modules : [],
     artifacts: request.includeArtifacts ? snapshot.artifacts : [],
+    initiatives: request.includeInitiatives ? snapshot.initiatives ?? [] : [],
     layout:
       request.includeModules && snapshot.layout
         ? normalizeLayoutSnapshot(snapshot.layout) ?? undefined

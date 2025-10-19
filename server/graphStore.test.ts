@@ -20,6 +20,7 @@ import {
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
+  initiatives as initialInitiatives,
   modules as initialModules,
   type ArtifactNode,
   type DomainNode,
@@ -55,6 +56,7 @@ test('seeds initial data when database is empty by default', { concurrency: fals
   assert.equal(snapshot.modules.length, initialModules.length);
   assert.equal(snapshot.domains.length, initialDomainTree.length);
   assert.equal(snapshot.artifacts.length, initialArtifacts.length);
+  assert.equal(snapshot.initiatives.length, initialInitiatives.length);
 });
 
 test('persists snapshots and reloads them from disk', { concurrency: false }, async () => {
@@ -173,6 +175,31 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
         sampleUrl: 'https://example.com/sample.json'
       }
     ],
+    initiatives: [
+      {
+        id: 'initiative-alpha',
+        name: 'Initiative Alpha',
+        description: 'Первый пилот по объединению модулей.',
+        status: 'pilot',
+        owner: 'Product Office',
+        domainIds: ['root-domain'],
+        moduleIds: ['module-alpha'],
+        startDate: '2024-Q1',
+        targetDate: '2024-Q3',
+        expectedImpact: 'Повышение эффективности обмена данными'
+      },
+      {
+        id: 'initiative-beta',
+        name: 'Initiative Beta',
+        description: 'Масштабирование решения на смежные домены.',
+        status: 'idea',
+        owner: 'Digital Lab',
+        domainIds: ['child-domain'],
+        moduleIds: ['module-beta'],
+        startDate: '2024-Q2',
+        expectedImpact: 'Расширение набора аналитических сценариев'
+      }
+    ],
     layout: {
       nodes: {
         'module-alpha': { x: 10, y: 20, fx: 10, fy: 20 },
@@ -189,6 +216,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
   assert.deepEqual(loaded.modules, storedSnapshot.modules);
   assert.deepEqual(loaded.domains, storedSnapshot.domains);
   assert.deepEqual(loaded.artifacts, storedSnapshot.artifacts);
+  assert.deepEqual(loaded.initiatives, storedSnapshot.initiatives);
   assert.deepEqual(loaded.layout, storedSnapshot.layout);
 
   closeGraphStore();
@@ -199,6 +227,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
   assert.deepEqual(reloaded.modules, storedSnapshot.modules);
   assert.deepEqual(reloaded.domains, storedSnapshot.domains);
   assert.deepEqual(reloaded.artifacts, storedSnapshot.artifacts);
+  assert.deepEqual(reloaded.initiatives, storedSnapshot.initiatives);
   assert.deepEqual(reloaded.layout, storedSnapshot.layout);
 });
 
@@ -214,7 +243,8 @@ test('creates and deletes graphs with optional data copy', { concurrency: false 
     sourceGraphId: sourceGraph.id,
     includeDomains: true,
     includeModules: false,
-    includeArtifacts: true
+    includeArtifacts: true,
+    includeInitiatives: false
   });
 
   const graphsAfterCreate = listGraphs();
@@ -226,6 +256,8 @@ test('creates and deletes graphs with optional data copy', { concurrency: false 
   assert.equal(clonedSnapshot.domains.length > 0, true);
   assert.equal(clonedSnapshot.modules.length, 0);
   assert.equal(clonedSnapshot.artifacts.length, sourceSnapshot.artifacts.length);
+  assert.equal(sourceSnapshot.initiatives.length > 0, true);
+  assert.equal(clonedSnapshot.initiatives.length, 0);
 
   deleteGraph(clone.id);
   const graphsAfterDelete = listGraphs();
@@ -241,6 +273,7 @@ test('normalizes invalid layout entries on persist', { concurrency: false }, asy
     domains: [],
     modules: [],
     artifacts: [],
+    initiatives: [],
     layout: {
       nodes: {
         valid: { x: 1, y: 2, fx: Number.NaN, fy: 3 },
@@ -349,6 +382,7 @@ test('supports complex graph authoring flows', { concurrency: false }, async () 
     domains: [...snapshot.domains, newDomain],
     modules: [...snapshot.modules, newModule],
     artifacts: [...snapshot.artifacts, newArtifact],
+    initiatives: snapshot.initiatives,
     layout: {
       nodes: {
         ...snapshot.layout?.nodes,
@@ -387,6 +421,7 @@ test('removes persisted layout metadata when positions are absent', { concurrenc
     domains: [],
     modules: [],
     artifacts: [],
+    initiatives: [],
     layout: { nodes: {} }
   };
 

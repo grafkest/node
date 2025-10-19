@@ -50,11 +50,13 @@ import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
   experts as initialExperts,
+  initiatives as initialInitiatives,
   modules as initialModules,
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
+  type InitiativeNode,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -95,6 +97,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
+  const [initiativeData, setInitiativeData] = useState<InitiativeNode[]>(initialInitiatives);
   const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -138,8 +141,8 @@ function App() {
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
   const [graphCopyOptions, setGraphCopyOptions] = useState<
-    Set<'domains' | 'modules' | 'artifacts'>
-  >(() => new Set(['domains', 'modules', 'artifacts']));
+    Set<'domains' | 'modules' | 'artifacts' | 'initiatives'>
+  >(() => new Set(['domains', 'modules', 'artifacts', 'initiatives']));
   const [isGraphActionInProgress, setIsGraphActionInProgress] = useState(false);
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
@@ -229,6 +232,7 @@ function App() {
       setDomainData(snapshot.domains);
       setModuleDataState(recalculateReuseScores(snapshot.modules));
       setArtifactData(snapshot.artifacts);
+      setInitiativeData(snapshot.initiatives ?? []);
       setSelectedNode(null);
       setSearch('');
       setStatusFilters(new Set(allStatuses));
@@ -632,6 +636,7 @@ function App() {
         modules: moduleData,
         domains: domainData,
         artifacts: artifactData,
+        initiatives: initiativeData,
         layout: { nodes: layoutPositions }
       },
       controller.signal
@@ -669,6 +674,7 @@ function App() {
     };
   }, [
     artifactData,
+    initiativeData,
     domainData,
     moduleData,
     isSyncAvailable,
@@ -752,7 +758,8 @@ function App() {
       [
         { id: 'domains' as const, label: 'Домены' },
         { id: 'modules' as const, label: 'Модули' },
-        { id: 'artifacts' as const, label: 'Артефакты' }
+        { id: 'artifacts' as const, label: 'Артефакты' },
+        { id: 'initiatives' as const, label: 'Инициативы' }
       ],
     []
   );
@@ -2000,6 +2007,7 @@ function App() {
       includeDomains: boolean;
       includeModules: boolean;
       includeArtifacts: boolean;
+      includeInitiatives: boolean;
     }) => {
       try {
         const snapshot = await importGraphFromSource(request);
@@ -2010,7 +2018,8 @@ function App() {
         return {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
-          artifacts: snapshot.artifacts.length
+          artifacts: snapshot.artifacts.length,
+          initiatives: snapshot.initiatives.length
         };
       } catch (error) {
         const message =
@@ -2054,8 +2063,15 @@ function App() {
     const includeDomains = graphCopyOptions.has('domains');
     const includeModules = graphCopyOptions.has('modules');
     const includeArtifacts = graphCopyOptions.has('artifacts');
+    const includeInitiatives = graphCopyOptions.has('initiatives');
 
-    if (graphSourceIdDraft && !includeDomains && !includeModules && !includeArtifacts) {
+    if (
+      graphSourceIdDraft &&
+      !includeDomains &&
+      !includeModules &&
+      !includeArtifacts &&
+      !includeInitiatives
+    ) {
       setGraphActionStatus({
         type: 'error',
         message: 'Выберите хотя бы один тип данных для копирования из выбранного графа.'
@@ -2070,7 +2086,8 @@ function App() {
         sourceGraphId: graphSourceIdDraft ?? undefined,
         includeDomains,
         includeModules,
-        includeArtifacts
+        includeArtifacts,
+        includeInitiatives
       });
       setGraphActionStatus({
         type: 'success',
@@ -2078,7 +2095,7 @@ function App() {
       });
       setGraphNameDraft('');
       setGraphSourceIdDraft(null);
-      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts']));
+      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts', 'initiatives']));
       setIsCreatePanelOpen(false);
       await refreshGraphs(created.id, { preserveSelection: false });
       showAdminNotice('success', `Граф «${created.name}» создан.`);
@@ -2564,6 +2581,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          initiatives={initiativeData}
           onImport={handleImportGraph}
           onImportFromGraph={handleImportFromExistingGraph}
           graphs={graphs}
