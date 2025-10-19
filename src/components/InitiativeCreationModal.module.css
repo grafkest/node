@@ -37,6 +37,18 @@
   gap: 16px;
 }
 
+.inlineCreateRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.inlineCreateField {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
 .sectionHeader {
   display: flex;
   justify-content: space-between;
@@ -122,6 +134,23 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.recommendationHeaderInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.recommendationRoleTitle {
+  word-break: break-word;
+}
+
+.recommendationScoreBadge {
+  flex-shrink: 0;
 }
 
 .recommendationCandidates {
@@ -145,6 +174,19 @@
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.recommendationCandidateInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.recommendationCandidateName {
+  word-break: break-word;
 }
 
 .recommendationRisks {

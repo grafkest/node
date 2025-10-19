@@ -1,11 +1,13 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Card } from '@consta/uikit/Card';
+import { Combobox } from '@consta/uikit/Combobox';
 import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import React, { useEffect, useMemo, useState } from 'react';
+import { domainNameById, modules } from '../data';
 import type { ExpertProfile, InitiativeStatus, TeamRole } from '../data';
 import InitiativeGanttChart from './InitiativeGanttChart';
 import type { InitiativeGanttTask } from './InitiativeGanttChart';
@@ -20,6 +22,35 @@ import styles from './InitiativeCreationModal.module.css';
 type SelectOption<Value extends string> = {
   label: string;
   value: Value;
+};
+
+type OptionItem = {
+  id: string;
+  label: string;
+  value: string;
+  isCustom?: boolean;
+};
+
+const NEW_DOMAIN_OPTION_ID = '__new-domain__';
+const NEW_MODULE_OPTION_ID = '__new-module__';
+const NEW_COMPANY_OPTION_ID = '__new-company__';
+
+const DOMAIN_CREATE_OPTION: OptionItem = {
+  id: NEW_DOMAIN_OPTION_ID,
+  label: 'Новый домен',
+  value: NEW_DOMAIN_OPTION_ID
+};
+
+const MODULE_CREATE_OPTION: OptionItem = {
+  id: NEW_MODULE_OPTION_ID,
+  label: 'Новый модуль',
+  value: NEW_MODULE_OPTION_ID
+};
+
+const COMPANY_CREATE_OPTION: OptionItem = {
+  id: NEW_COMPANY_OPTION_ID,
+  label: 'Создать нового',
+  value: NEW_COMPANY_OPTION_ID
 };
 
 type RoleWorkDraft = {
@@ -95,15 +126,53 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   isSubmitting = false,
   errorMessage = null
 }) => {
+  const domainBaseItems = useMemo<OptionItem[]>(
+    () =>
+      Object.entries(domainNameById)
+        .map(([id, label]) => ({ id, label, value: id }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'ru')),
+    []
+  );
+
+  const moduleBaseItems = useMemo<OptionItem[]>(
+    () =>
+      modules
+        .map((module) => ({ id: module.id, label: module.name, value: module.id }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'ru')),
+    []
+  );
+
+  const companyBaseItems = useMemo<OptionItem[]>(() => {
+    const companyNames = new Set<string>();
+    modules.forEach((module) => {
+      if (module.ridOwner?.company) {
+        companyNames.add(module.ridOwner.company);
+      }
+      module.userStats.companies.forEach((company) => companyNames.add(company.name));
+    });
+    return Array.from(companyNames)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map((name) => ({ id: name, label: name, value: name }));
+  }, []);
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [owner, setOwner] = useState('');
   const [expectedImpact, setExpectedImpact] = useState('');
   const [targetModule, setTargetModule] = useState('');
   const [status, setStatus] = useState<InitiativeStatus>('initiated');
-  const [domainsInput, setDomainsInput] = useState('');
-  const [modulesInput, setModulesInput] = useState('');
-  const [customerCompany, setCustomerCompany] = useState('');
+  const [domainItems, setDomainItems] = useState<OptionItem[]>(() => [...domainBaseItems]);
+  const [selectedDomains, setSelectedDomains] = useState<OptionItem[]>([]);
+  const [isCreatingDomain, setIsCreatingDomain] = useState(false);
+  const [newDomainLabel, setNewDomainLabel] = useState('');
+  const [moduleItems, setModuleItems] = useState<OptionItem[]>(() => [...moduleBaseItems]);
+  const [selectedModules, setSelectedModules] = useState<OptionItem[]>([]);
+  const [isCreatingModule, setIsCreatingModule] = useState(false);
+  const [newModuleLabel, setNewModuleLabel] = useState('');
+  const [companyItems, setCompanyItems] = useState<OptionItem[]>(() => [...companyBaseItems]);
+  const [selectedCompany, setSelectedCompany] = useState<OptionItem | null>(null);
+  const [isCreatingCompany, setIsCreatingCompany] = useState(false);
+  const [newCompanyLabel, setNewCompanyLabel] = useState('');
   const [customerUnit, setCustomerUnit] = useState('');
   const [customerRepresentative, setCustomerRepresentative] = useState('');
   const [customerContact, setCustomerContact] = useState('');
@@ -118,16 +187,128 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setExpectedImpact('');
       setTargetModule('');
       setStatus('initiated');
-      setDomainsInput('');
-      setModulesInput('');
-      setCustomerCompany('');
+      setDomainItems([...domainBaseItems]);
+      setSelectedDomains([]);
+      setIsCreatingDomain(false);
+      setNewDomainLabel('');
+      setModuleItems([...moduleBaseItems]);
+      setSelectedModules([]);
+      setIsCreatingModule(false);
+      setNewModuleLabel('');
+      setCompanyItems([...companyBaseItems]);
+      setSelectedCompany(null);
+      setIsCreatingCompany(false);
+      setNewCompanyLabel('');
       setCustomerUnit('');
       setCustomerRepresentative('');
       setCustomerContact('');
       setCustomerComment('');
       setRoles([createRoleDraft('Аналитик')]);
     }
-  }, [isOpen]);
+  }, [companyBaseItems, domainBaseItems, isOpen, moduleBaseItems]);
+
+  const handleDomainSelectionChange = (items: OptionItem[] | null) => {
+    const nextItems = (items ?? []).filter((item) => item.id !== NEW_DOMAIN_OPTION_ID);
+    const uniqueItems = nextItems.filter(
+      (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+    );
+    if (items?.some((item) => item.id === NEW_DOMAIN_OPTION_ID)) {
+      setIsCreatingDomain(true);
+    }
+    setSelectedDomains(uniqueItems);
+  };
+
+  const handleModuleSelectionChange = (items: OptionItem[] | null) => {
+    const nextItems = (items ?? []).filter((item) => item.id !== NEW_MODULE_OPTION_ID);
+    const uniqueItems = nextItems.filter(
+      (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+    );
+    if (items?.some((item) => item.id === NEW_MODULE_OPTION_ID)) {
+      setIsCreatingModule(true);
+    }
+    setSelectedModules(uniqueItems);
+  };
+
+  const handleCompanySelectionChange = (item: OptionItem | null) => {
+    if (item?.id === NEW_COMPANY_OPTION_ID) {
+      setIsCreatingCompany(true);
+      return;
+    }
+    setSelectedCompany(item);
+  };
+
+  const handleAddCustomDomain = () => {
+    const trimmed = newDomainLabel.trim();
+    if (!trimmed) {
+      return;
+    }
+    const existing = domainItems.find(
+      (item) => item.label.toLowerCase() === trimmed.toLowerCase() || item.value.toLowerCase() === trimmed.toLowerCase()
+    );
+    const nextItem =
+      existing ?? {
+        id: `custom-domain-${createId()}`,
+        label: trimmed,
+        value: trimmed,
+        isCustom: true
+      };
+    setDomainItems((prev) => (existing ? prev : [...prev, nextItem]));
+    setSelectedDomains((prev) => {
+      const combined = existing ? prev : [...prev, nextItem];
+      return combined.filter(
+        (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+      );
+    });
+    setNewDomainLabel('');
+    setIsCreatingDomain(false);
+  };
+
+  const handleAddCustomModule = () => {
+    const trimmed = newModuleLabel.trim();
+    if (!trimmed) {
+      return;
+    }
+    const existing = moduleItems.find(
+      (item) => item.label.toLowerCase() === trimmed.toLowerCase() || item.value.toLowerCase() === trimmed.toLowerCase()
+    );
+    const nextItem =
+      existing ?? {
+        id: `custom-module-${createId()}`,
+        label: trimmed,
+        value: trimmed,
+        isCustom: true
+      };
+    setModuleItems((prev) => (existing ? prev : [...prev, nextItem]));
+    setSelectedModules((prev) => {
+      const combined = existing ? prev : [...prev, nextItem];
+      return combined.filter(
+        (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+      );
+    });
+    setNewModuleLabel('');
+    setIsCreatingModule(false);
+  };
+
+  const handleAddCustomCompany = () => {
+    const trimmed = newCompanyLabel.trim();
+    if (!trimmed) {
+      return;
+    }
+    const existing = companyItems.find(
+      (item) => item.label.toLowerCase() === trimmed.toLowerCase() || item.value.toLowerCase() === trimmed.toLowerCase()
+    );
+    const nextItem =
+      existing ?? {
+        id: `custom-company-${createId()}`,
+        label: trimmed,
+        value: trimmed,
+        isCustom: true
+      };
+    setCompanyItems((prev) => (existing ? prev : [...prev, nextItem]));
+    setSelectedCompany(nextItem);
+    setNewCompanyLabel('');
+    setIsCreatingCompany(false);
+  };
 
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
     () =>
@@ -182,10 +363,10 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       expectedImpact: expectedImpact.trim(),
       targetModuleName: targetModule.trim(),
       status,
-      domains: parseList(domainsInput),
-      potentialModules: parseList(modulesInput),
+      domains: selectedDomains.map((item) => item.value.trim()).filter(Boolean),
+      potentialModules: selectedModules.map((item) => item.value.trim()).filter(Boolean),
       customer: {
-        company: customerCompany.trim(),
+        company: selectedCompany?.value.trim() ?? '',
         unit: customerUnit.trim(),
         representative: customerRepresentative.trim(),
         contact: customerContact.trim(),
@@ -202,18 +383,18 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     }),
     [
       customerComment,
-      customerCompany,
       customerContact,
       customerRepresentative,
       customerUnit,
       description,
-      domainsInput,
       expectedImpact,
-      modulesInput,
       name,
       owner,
       planningRoles,
       roles,
+      selectedCompany,
+      selectedDomains,
+      selectedModules,
       status,
       targetModule
     ]
@@ -251,7 +432,18 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         }
         return {
           ...role,
-          works: role.works.map((work) => (work.id === workId ? { ...work, ...patch } : work))
+          works: role.works.map((work) => {
+            if (work.id !== workId) {
+              return work;
+            }
+            const nextWork = { ...work, ...patch };
+            if (patch.effortDays !== undefined) {
+              const normalizedEffort = Math.max(1, Math.round(patch.effortDays));
+              nextWork.effortDays = normalizedEffort;
+              nextWork.durationDays = normalizedEffort;
+            }
+            return nextWork;
+          })
         };
       })
     );
@@ -369,33 +561,100 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
               />
             </div>
             <div className={styles.gridTwoCols}>
-              <TextField
+              <Combobox<OptionItem>
                 size="s"
-                label="Домены (через запятую)"
-                placeholder="Например, real-time-monitoring, remote-control"
-                value={domainsInput}
-                onChange={(value) => setDomainsInput(value ?? '')}
+                label="Домены"
+                placeholder="Выберите домены"
+                items={[...domainItems, DOMAIN_CREATE_OPTION]}
+                value={selectedDomains}
+                multiple
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.id}
+                onChange={handleDomainSelectionChange}
               />
-              <TextField
+              <Combobox<OptionItem>
                 size="s"
-                label="Потенциальные модули (через запятую)"
-                placeholder="Перечислите существующие решения"
-                value={modulesInput}
-                onChange={(value) => setModulesInput(value ?? '')}
+                label="Потенциальные модули"
+                placeholder="Выберите модули"
+                items={[...moduleItems, MODULE_CREATE_OPTION]}
+                value={selectedModules}
+                multiple
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.id}
+                onChange={handleModuleSelectionChange}
               />
             </div>
+            {isCreatingDomain && (
+              <div className={styles.inlineCreateRow}>
+                <TextField
+                  size="s"
+                  label="Новый домен"
+                  placeholder="Введите название домена"
+                  value={newDomainLabel}
+                  onChange={(value) => setNewDomainLabel(value ?? '')}
+                  className={styles.inlineCreateField}
+                />
+                <Button
+                  size="s"
+                  view="primary"
+                  label="Добавить"
+                  onClick={handleAddCustomDomain}
+                  disabled={!newDomainLabel.trim()}
+                />
+                <Button
+                  size="s"
+                  view="ghost"
+                  label="Отмена"
+                  onClick={() => {
+                    setIsCreatingDomain(false);
+                    setNewDomainLabel('');
+                  }}
+                />
+              </div>
+            )}
+            {isCreatingModule && (
+              <div className={styles.inlineCreateRow}>
+                <TextField
+                  size="s"
+                  label="Новый модуль"
+                  placeholder="Введите название модуля"
+                  value={newModuleLabel}
+                  onChange={(value) => setNewModuleLabel(value ?? '')}
+                  className={styles.inlineCreateField}
+                />
+                <Button
+                  size="s"
+                  view="primary"
+                  label="Добавить"
+                  onClick={handleAddCustomModule}
+                  disabled={!newModuleLabel.trim()}
+                />
+                <Button
+                  size="s"
+                  view="ghost"
+                  label="Отмена"
+                  onClick={() => {
+                    setIsCreatingModule(false);
+                    setNewModuleLabel('');
+                  }}
+                />
+              </div>
+            )}
           </section>
           <section className={styles.section}>
             <Text size="s" weight="semibold">
               Параметры заказчика
             </Text>
             <div className={styles.gridTwoCols}>
-              <TextField
+              <Combobox<OptionItem>
                 size="s"
                 label="Компания"
-                placeholder="Например, Восток Инжиниринг"
-                value={customerCompany}
-                onChange={(value) => setCustomerCompany(value ?? '')}
+                placeholder="Выберите компанию заказчика"
+                items={[...companyItems, COMPANY_CREATE_OPTION]}
+                value={selectedCompany}
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.id}
+                onChange={handleCompanySelectionChange}
               />
               <TextField
                 size="s"
@@ -405,6 +664,34 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 onChange={(value) => setCustomerUnit(value ?? '')}
               />
             </div>
+            {isCreatingCompany && (
+              <div className={styles.inlineCreateRow}>
+                <TextField
+                  size="s"
+                  label="Новая компания"
+                  placeholder="Введите название компании"
+                  value={newCompanyLabel}
+                  onChange={(value) => setNewCompanyLabel(value ?? '')}
+                  className={styles.inlineCreateField}
+                />
+                <Button
+                  size="s"
+                  view="primary"
+                  label="Добавить"
+                  onClick={handleAddCustomCompany}
+                  disabled={!newCompanyLabel.trim()}
+                />
+                <Button
+                  size="s"
+                  view="ghost"
+                  label="Отмена"
+                  onClick={() => {
+                    setIsCreatingCompany(false);
+                    setNewCompanyLabel('');
+                  }}
+                />
+              </div>
+            )}
             <div className={styles.gridTwoCols}>
               <TextField
                 size="s"
@@ -526,17 +813,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                             />
                             <TextField
                               size="s"
-                              label="Длительность (дней)"
-                              type="number"
-                              value={String(work.durationDays)}
-                              onChange={(value) =>
-                                handleWorkChange(role.id, work.id, {
-                                  durationDays: Number(value ?? work.durationDays) || 1
-                                })
-                              }
-                            />
-                            <TextField
-                              size="s"
                               label="Трудозатраты (дней)"
                               type="number"
                               value={String(work.effortDays)}
@@ -585,8 +861,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                       horizontalSpace="l"
                     >
                       <div className={styles.recommendationHeader}>
-                        <div>
-                          <Text size="s" weight="semibold">
+                        <div className={styles.recommendationHeaderInfo}>
+                          <Text className={styles.recommendationRoleTitle} size="s" weight="semibold">
                             {role.role}
                           </Text>
                           <Text size="xs" view="secondary">
@@ -594,7 +870,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                           </Text>
                         </div>
                         {bestScore !== undefined && (
-                          <Badge size="s" view="filled" status="system" label={`${bestScore} баллов`} />
+                          <Badge
+                            size="s"
+                            view="filled"
+                            status="system"
+                            label={`${bestScore} баллов`}
+                            className={styles.recommendationScoreBadge}
+                          />
                         )}
                       </div>
                       {topCandidates.length === 0 ? (
@@ -611,8 +893,12 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                 className={styles.recommendationCandidate}
                               >
                                 <div className={styles.recommendationCandidateHeader}>
-                                  <div>
-                                    <Text size="s" weight="semibold">
+                                  <div className={styles.recommendationCandidateInfo}>
+                                    <Text
+                                      size="s"
+                                      weight="semibold"
+                                      className={styles.recommendationCandidateName}
+                                    >
                                       {expert?.name ?? candidate.expertId}
                                     </Text>
                                     <Text size="xs" view="secondary">
