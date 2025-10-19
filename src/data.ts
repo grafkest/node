@@ -42,51 +42,6 @@ export type TeamMember = {
   role: TeamRole;
 };
 
-export type InitiativeStatus =
-  | 'backlog'
-  | 'discovery'
-  | 'in-progress'
-  | 'pilot'
-  | 'completed';
-
-export type RoleRequirement = {
-  role: TeamRole;
-  fte: number;
-  skills: string[];
-};
-
-export type InitiativeWorkItem = {
-  id: string;
-  title: string;
-  description: string;
-  status: InitiativeStatus;
-  goal: string;
-  domains: string[];
-  modules: string[];
-  requiredFte: number;
-  roleRequirements: RoleRequirement[];
-  dependencies?: string[];
-  deliverables?: string[];
-};
-
-export type Initiative = {
-  id: string;
-  title: string;
-  summary: string;
-  sponsor: string;
-  status: InitiativeStatus;
-  goals: string[];
-  targetMetrics: string[];
-  domains: string[];
-  modules: string[];
-  startQuarter: string;
-  endQuarter?: string;
-  totalFte: number;
-  requiredRoles: RoleRequirement[];
-  workItems: InitiativeWorkItem[];
-  notes?: string;
-};
-
 export type RidOwner = {
   company: string;
   division: string;
@@ -138,6 +93,21 @@ export type ExpertProfile = {
 
 export type InitiativeStatus = 'initiated' | 'in-progress' | 'converted';
 
+export type InitiativeWork = {
+  id: string;
+  title: string;
+  description: string;
+  effortHours: number;
+};
+
+export type InitiativeRequirement = {
+  id: string;
+  role: TeamRole;
+  skills: string[];
+  count: number;
+  comment?: string;
+};
+
 export type InitiativeCandidateScore = {
   criterion: string;
   weight: number;
@@ -168,17 +138,17 @@ export type InitiativeRisk = {
   createdAt: string;
 };
 
-export type Initiative = {
-  id: string;
-  name: string;
-  description: string;
+export type Initiative = InitiativeNode & {
   status: InitiativeStatus;
-  domainIds: string[];
-  targetModuleName: string;
   owner: string;
+  expectedImpact: string;
+  targetModuleName: string;
   lastUpdated: string;
   risks: InitiativeRisk[];
   roles: InitiativeRolePlan[];
+  potentialModules: string[];
+  works: InitiativeWork[];
+  requirements: InitiativeRequirement[];
 };
 
 export type LibraryDependency = {
@@ -1291,7 +1261,7 @@ export const modules: ModuleNode[] = [
 ];
 
 
-export const initiatives: InitiativeNode[] = [
+export const initiativeNodes: InitiativeNode[] = [
   {
     id: 'initiative-digital-pad',
     name: 'Цифровая кустовая площадка',
@@ -1409,6 +1379,119 @@ export const initiatives: InitiativeNode[] = [
         id: 'remote-ops-it',
         title: 'ИТ-архитектурный совет',
         approver: 'Леонид Архипов',
+        status: 'pending'
+      }
+    ]
+  },
+  {
+    id: 'initiative-dtwin-remote',
+    name: 'Цифровой двойник удалённого промысла',
+    description:
+      'Запуск цифрового двойника удалённого промысла с круглосуточным мониторингом телеметрии и сценарным моделированием отклонений.',
+    domains: ['real-time-monitoring', 'data-preparation'],
+    plannedModuleIds: [
+      'module-dtwin-monitoring',
+      'module-dtwin-optimizer',
+      'module-dtwin-remote-control'
+    ],
+    requiredSkills: [
+      'Стриминговая обработка телеметрии',
+      'Архитектура цифровых двойников',
+      'Интеграция SCADA-систем'
+    ],
+    workItems: [
+      {
+        id: 'dtwin-remote-discovery',
+        title: 'Аудит телеметрии и готовности промысла',
+        description: 'Проверка каналов связи, стабильности поставки данных и готовности инфраструктуры для цифрового двойника.',
+        owner: 'Раиса Чистякова',
+        status: 'discovery',
+        timeframe: 'Q4 2024'
+      },
+      {
+        id: 'dtwin-remote-design',
+        title: 'Проектирование пайплайна данных и моделей',
+        description: 'Настройка потоковой обработки телеметрии, интеграция SCADA и построение моделей отклонений.',
+        owner: 'Павел Колосов',
+        status: 'design',
+        timeframe: 'Q1 2025'
+      },
+      {
+        id: 'dtwin-remote-pilot',
+        title: 'Запуск пилота на удалённом промысле',
+        description: 'Развёртывание цифрового двойника, подключение операторов и настройка процедур реагирования.',
+        owner: 'Ирина Сафонова',
+        status: 'pilot',
+        timeframe: 'Q2 2025'
+      }
+    ],
+    approvalStages: [
+      {
+        id: 'dtwin-remote-architecture',
+        title: 'Архитектурный комитет',
+        approver: 'Дмитрий Валов',
+        status: 'approved',
+        comment: 'Одобрено при условии контроля устойчивости каналов связи.'
+      },
+      {
+        id: 'dtwin-remote-operations',
+        title: 'Операционный совет',
+        approver: 'Сергей Ежов',
+        status: 'in-progress',
+        comment: 'Требуется согласовать план реагирования при потере телеметрии.'
+      }
+    ]
+  },
+  {
+    id: 'initiative-infraplan-economics',
+    name: 'Конвертация экономического модуля INFRAPLAN под M&A',
+    description:
+      'Расширение экономического блока INFRAPLAN для поддержки сделок M&A и стресс-тестов финансовых сценариев.',
+    domains: ['economic-evaluation', 'development-scenarios'],
+    plannedModuleIds: ['module-infraplan-economics', 'module-infraplan-datahub'],
+    requiredSkills: [
+      'Финансовое моделирование M&A',
+      'Интеграция корпоративных данных',
+      'Аналитика экономических эффектов'
+    ],
+    workItems: [
+      {
+        id: 'infraplan-mna-discovery',
+        title: 'Инвентаризация данных и методик',
+        description: 'Сбор требований к финансовым моделям и оценка качества доступных источников.',
+        owner: 'Антон Власов',
+        status: 'discovery',
+        timeframe: 'Q3 2024'
+      },
+      {
+        id: 'infraplan-mna-design',
+        title: 'Разработка моделей и сценариев',
+        description: 'Настройка стресс-тестов, интеграция с DataHub и подготовка шаблонов отчётности.',
+        owner: 'Виктория Бережная',
+        status: 'design',
+        timeframe: 'Q4 2024'
+      },
+      {
+        id: 'infraplan-mna-delivery',
+        title: 'Внедрение и обучение команд',
+        description: 'Пилотирование функциональности и обучение аналитиков корпоративного центра.',
+        owner: 'Жанна Алимбекова',
+        status: 'delivery',
+        timeframe: 'Q1 2025'
+      }
+    ],
+    approvalStages: [
+      {
+        id: 'infraplan-mna-finance',
+        title: 'Финансовый комитет',
+        approver: 'Марина Крылова',
+        status: 'in-progress',
+        comment: 'Необходимо подтвердить экономический эффект от автоматизации оценки сделки.'
+      },
+      {
+        id: 'infraplan-mna-risk',
+        title: 'Комитет по управлению рисками',
+        approver: 'Игорь Ковалёв',
         status: 'pending'
       }
     ]
@@ -2232,35 +2315,6 @@ export const artifacts: ArtifactNode[] = [
   }
 ];
 
-export const initiatives: InitiativeNode[] = [
-  {
-    id: 'initiative-ai-exploration',
-    name: 'ML-разведка новых месторождений',
-    description:
-      'Пилотный проект по внедрению ML-моделей для интерпретации геолого-геофизических данных и ускоренного выявления перспективных участков.',
-    status: 'pilot',
-    owner: 'Дирекция цифровой трансформации',
-    domainIds: ['seismic-interpretation', 'resource-evaluation'],
-    moduleIds: ['module-infraplan-datahub', 'module-infraplan-layout'],
-    startDate: '2024-Q1',
-    targetDate: '2024-Q4',
-    expectedImpact: 'Сокращение цикла анализа запасов на 30%'
-  },
-  {
-    id: 'initiative-digital-twin-expansion',
-    name: 'Расширение цифровых двойников добычи',
-    description:
-      'Масштабирование платформы цифровых двойников на новые промыслы с интеграцией мониторинга и предиктивной аналитики.',
-    status: 'scale',
-    owner: 'Проектный офис производственной эффективности',
-    domainIds: ['development-scenarios'],
-    moduleIds: ['module-dtwin-monitoring', 'module-dtwin-optimizer'],
-    startDate: '2023-Q3',
-    expectedImpact: 'Рост производственной эффективности на 12%'
-  }
-];
-
-
 export const artifactNameById: Record<string, string> = artifacts.reduce((acc, artifact) => {
   acc[artifact.id] = artifact.name;
   return acc;
@@ -2278,7 +2332,7 @@ export type GraphLink = {
     | 'initiative-plan';
 };
 
-export const initiativeLinks: GraphLink[] = initiatives.flatMap((initiative) => {
+export const initiativeLinks: GraphLink[] = initiativeNodes.flatMap((initiative) => {
   const domainLinks: GraphLink[] = initiative.domains.map((domainId) => ({
     source: initiative.id,
     target: domainId,
@@ -2329,16 +2383,14 @@ export const moduleLinks: GraphLink[] = modules.flatMap((module) => {
   return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
 });
 
-export const initiatives: Initiative[] = [
-  {
-    id: 'initiative-dtwin-remote',
-    name: 'Цифровой двойник удалённого промысла',
-    description:
-      'Запуск цифрового двойника для удалённого промысла с круглосуточным мониторингом телеметрии и моделированием отклонений.',
+type InitiativeExtra = Partial<Omit<Initiative, keyof InitiativeNode>>;
+
+const initiativeExtras: Record<string, InitiativeExtra> = {
+  'initiative-dtwin-remote': {
     status: 'initiated',
-    domainIds: ['real-time-monitoring', 'data-preparation'],
-    targetModuleName: 'DTwin Remote Monitoring',
     owner: 'Раиса Чистякова',
+    expectedImpact: 'Сокращение простоев и аварийных остановок на 15%',
+    targetModuleName: 'DTwin Remote Monitoring',
     lastUpdated: '2024-11-12T08:30:00.000Z',
     risks: [
       {
@@ -2463,17 +2515,59 @@ export const initiatives: Initiative[] = [
           }
         ]
       }
+    ],
+    potentialModules: [
+      'module-dtwin-monitoring',
+      'module-dtwin-optimizer',
+      'module-dtwin-remote-control'
+    ],
+    works: [
+      {
+        id: 'dtwin-work-architecture',
+        title: 'Проектирование архитектуры потоков данных',
+        description: 'Детализация пайплайна телеметрии и схемы отказоустойчивости.',
+        effortHours: 240
+      },
+      {
+        id: 'dtwin-work-modeling',
+        title: 'Настройка моделей отклонений и алертов',
+        description: 'Подбор алгоритмов и сценариев реагирования для диспетчеров.',
+        effortHours: 200
+      },
+      {
+        id: 'dtwin-work-rollout',
+        title: 'Пилотное развертывание и обучение команды',
+        description: 'Запуск на удалённом промысле и обучение операторов ситуационного центра.',
+        effortHours: 160
+      }
+    ],
+    requirements: [
+      {
+        id: 'dtwin-req-architect',
+        role: 'Архитектор',
+        skills: ['Архитектура цифровых двойников', 'Стриминговые платформы'],
+        count: 1,
+        comment: 'Вовлечённость не менее 0.5 FTE на весь пилот.'
+      },
+      {
+        id: 'dtwin-req-backend',
+        role: 'Backend',
+        skills: ['Stream Processing', 'Интеграция SCADA'],
+        count: 2
+      },
+      {
+        id: 'dtwin-req-analyst',
+        role: 'Аналитик',
+        skills: ['Каталогизация данных', 'Документация процессов'],
+        count: 1
+      }
     ]
   },
-  {
-    id: 'initiative-infraplan-economics',
-    name: 'Конвертация экономического модуля INFRAPLAN под M&A',
-    description:
-      'Расширение экономического блока INFRAPLAN для анализа сделок M&A и стресс-тестов финансовых сценариев.',
+  'initiative-infraplan-economics': {
     status: 'in-progress',
-    domainIds: ['economic-evaluation', 'development-scenarios'],
-    targetModuleName: 'INFRAPLAN Economics M&A',
     owner: 'Антон Власов',
+    expectedImpact: 'Рост точности оценки сделок M&A на 20%',
+    targetModuleName: 'INFRAPLAN Economics M&A',
     lastUpdated: '2024-11-10T15:45:00.000Z',
     risks: [
       {
@@ -2558,19 +2652,118 @@ export const initiatives: Initiative[] = [
             expertId: 'expert-pavel-kolosov',
             score: 65,
             fitComment:
-              'Может курировать UX части аналитических панелей, но потребует поддержки UI-разработчика.',
-            riskTags: ['Нет фокуса на фронтенд разработке'],
+              'Имеет опыт интеграции визуализаций, но доступен только на 30% времени.',
+            riskTags: ['Низкая доступность в первом квартале'],
             scoreDetails: [
-              { criterion: 'UI компетенции', weight: 0.4, value: 0.55 },
-              { criterion: 'Знание домена', weight: 0.35, value: 0.7 },
-              { criterion: 'Доступность', weight: 0.25, value: 0.5 }
+              { criterion: 'Знание домена', weight: 0.35, value: 0.6 },
+              { criterion: 'Frontend-экспертиза', weight: 0.35, value: 0.7 },
+              { criterion: 'Доступность', weight: 0.3, value: 0.3 }
             ]
           }
         ]
       }
+    ],
+    potentialModules: ['module-infraplan-economics', 'module-infraplan-datahub'],
+    works: [
+      {
+        id: 'mna-work-data',
+        title: 'Подготовка и очистка источников',
+        description: 'Инвентаризация финансовых данных и настройка витрин для расчётов.',
+        effortHours: 180
+      },
+      {
+        id: 'mna-work-models',
+        title: 'Разработка моделей оценки сделок',
+        description: 'Настройка сценариев и шаблонов стресс-тестирования.',
+        effortHours: 220
+      },
+      {
+        id: 'mna-work-rollout',
+        title: 'Запуск и обучение бизнес-команд',
+        description: 'Пилот на сделках M&A и обучение финансовых аналитиков.',
+        effortHours: 160
+      }
+    ],
+    requirements: [
+      {
+        id: 'mna-req-owner',
+        role: 'Владелец продукта',
+        skills: ['Управление продуктом', 'Финансовое моделирование'],
+        count: 1,
+        comment: 'Необходимо участие в управлении roadmap и коммуникациях.'
+      },
+      {
+        id: 'mna-req-analyst',
+        role: 'Аналитик',
+        skills: ['Финансовая аналитика', 'DataHub'],
+        count: 2
+      },
+      {
+        id: 'mna-req-frontend',
+        role: 'Frontend',
+        skills: ['React', 'Визуализация данных'],
+        count: 1
+      }
     ]
   }
-];
+};
+
+function buildDefaultWorks(node: InitiativeNode): InitiativeWork[] {
+  return node.workItems.map((item, index) => ({
+    id: `${item.id}-summary`,
+    title: item.title,
+    description: item.description,
+    effortHours: 120 + index * 40
+  }));
+}
+
+function buildDefaultRequirements(node: InitiativeNode): InitiativeRequirement[] {
+  if (node.requiredSkills.length === 0) {
+    return [
+      {
+        id: `${node.id}-req-1`,
+        role: 'Аналитик',
+        skills: ['Исследование домена'],
+        count: 1
+      }
+    ];
+  }
+
+  return node.requiredSkills.map((skill, index) => ({
+    id: `${node.id}-req-${index + 1}`,
+    role: 'Эксперт R&D',
+    skills: [skill],
+    count: 1
+  }));
+}
+
+export const initiatives: Initiative[] = initiativeNodes.map((node, index) => {
+  const extra = initiativeExtras[node.id] ?? {};
+  const baseLastUpdated = new Date(Date.UTC(2024, 10, 1 + index)).toISOString();
+  const risks = extra.risks ? [...extra.risks] : [];
+  const roles = extra.roles ? [...extra.roles] : [];
+  const potentialModules = extra.potentialModules
+    ? [...extra.potentialModules]
+    : [...node.plannedModuleIds];
+  const works = extra.works ? [...extra.works] : buildDefaultWorks(node);
+  const requirements = extra.requirements
+    ? [...extra.requirements]
+    : buildDefaultRequirements(node);
+
+  return {
+    ...node,
+    status: extra.status ?? 'initiated',
+    owner: extra.owner ?? 'Ответственный не назначен',
+    expectedImpact: extra.expectedImpact ?? 'Эффект не оценён',
+    targetModuleName: extra.targetModuleName ?? node.name,
+    lastUpdated: extra.lastUpdated ?? baseLastUpdated,
+    risks,
+    roles,
+    potentialModules,
+    works,
+    requirements
+  };
+});
 
 export { moduleById };
 
