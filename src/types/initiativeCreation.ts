@@ -7,7 +7,6 @@ export type InitiativeCreationWorkDraft = {
   startDay: number;
   durationDays: number;
   effortDays: number;
-  assignedExpertId: string | null;
 };
 
 export type InitiativeCreationRoleDraft = {

@@ -72,6 +72,13 @@ import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
 import InitiativePlanner from './components/InitiativePlanner';
 import type { InitiativeCreationRequest } from './types/initiativeCreation';
+import {
+  assignExpertsToWorkItems,
+  buildCandidatesFromReport,
+  buildRoleMatchReports,
+  selectPinnedExperts,
+  type RolePlanningDraft
+} from './utils/initiativeMatching';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -2303,51 +2310,66 @@ function App() {
       const normalizedTarget = request.targetModuleName.trim() || normalizedName;
       const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
       const potentialModules = request.potentialModules.map((module) => module.trim()).filter(Boolean);
-
-      const roles: InitiativeRolePlan[] = request.roles.map((role, index) => {
-        const workItems: InitiativeRoleWork[] = role.workItems.map((item, workIndex) => ({
-          id: item.id || `${initiativeId}-role-${index + 1}-work-${workIndex + 1}`,
+      const roleEntries = request.roles.map((role, index) => {
+        const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
+        const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
+          id: item.id?.trim() || `${roleId}-work-${workIndex + 1}`,
           title: item.title.trim() || `Работа ${workIndex + 1}`,
           description: item.description.trim() || 'Описание не заполнено',
           startDay: Math.max(0, Math.round(item.startDay)),
           durationDays: Math.max(1, Math.round(item.durationDays)),
-          effortDays: Math.max(1, Math.round(item.effortDays)),
-          assignedExpertId: item.assignedExpertId ?? undefined
+          effortDays: Math.max(1, Math.round(item.effortDays))
         }));
 
-        const pinnedExpertIds = Array.from(
-          new Set(
-            workItems
-              .map((item) => item.assignedExpertId)
-              .filter((id): id is string => typeof id === 'string' && id.length > 0)
-          )
+        return {
+          draft: {
+            id: roleId,
+            role: role.role,
+            required: Math.max(1, Math.round(role.required)),
+            skills: role.skills.map((skill) => skill.trim()).filter(Boolean),
+            workItems: sanitizedWorkItems
+          } satisfies RolePlanningDraft,
+          comment: role.comment?.trim() || undefined
+        };
+      });
+
+      const planningRoles = roleEntries.map((entry) => entry.draft);
+      const matchReports = buildRoleMatchReports(planningRoles, expertProfiles);
+
+      const roles: InitiativeRolePlan[] = planningRoles.map((planningRole, index) => {
+        const report = matchReports[index];
+        const candidates = buildCandidatesFromReport(report);
+        const pinnedExpertIds = selectPinnedExperts(candidates, planningRole.required);
+        const workItems: InitiativeRoleWork[] = assignExpertsToWorkItems(
+          planningRole.workItems,
+          pinnedExpertIds
         );
 
         return {
-          id: role.id || `${initiativeId}-role-${index + 1}`,
-          role: role.role,
-          required: Math.max(1, Math.round(role.required)),
+          id: planningRole.id,
+          role: planningRole.role,
+          required: planningRole.required,
           pinnedExpertIds,
-          candidates: [],
+          candidates,
           workItems
         };
       });
 
-      const works: InitiativeWork[] = roles.flatMap((role) =>
-        (role.workItems ?? []).map((item, index) => ({
-          id: `${role.id}-${item.id || index + 1}`,
+      const works: InitiativeWork[] = roles.flatMap((rolePlan) =>
+        (rolePlan.workItems ?? []).map((item) => ({
+          id: `${rolePlan.id}-${item.id}`,
           title: item.title,
           description: item.description,
           effortHours: Math.max(0, Math.round(item.effortDays)) * 8
         }))
       );
 
-      const requirements: InitiativeRequirement[] = request.roles.map((role, index) => ({
-        id: role.id || `${initiativeId}-req-${index + 1}`,
-        role: role.role,
-        skills: role.skills.map((skill) => skill.trim()).filter(Boolean),
-        count: Math.max(1, Math.round(role.required)),
-        comment: role.comment?.trim() || undefined
+      const requirements: InitiativeRequirement[] = roleEntries.map((entry) => ({
+        id: `${entry.draft.id}-req`,
+        role: entry.draft.role,
+        skills: entry.draft.skills,
+        count: entry.draft.required,
+        comment: entry.comment
       }));
 
       const initiative: Initiative = {
@@ -2383,7 +2405,7 @@ function App() {
       showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
       return initiative;
     },
-    [initiativeData, markGraphDirty, showAdminNotice]
+    [expertProfiles, initiativeData, markGraphDirty, showAdminNotice]
   );
 
   const handleUpdateInitiative = useCallback(

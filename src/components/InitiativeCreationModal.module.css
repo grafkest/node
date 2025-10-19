@@ -104,10 +104,53 @@
   gap: 12px;
 }
 
-.workActions {
+
+.recommendationList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.recommendationCard {
   display: flex;
+  flex-direction: column;
   gap: 12px;
+}
+
+.recommendationHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.recommendationCandidates {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recommendationCandidate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+}
+
+.recommendationCandidateHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.recommendationRisks {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .footer {

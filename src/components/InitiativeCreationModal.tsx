@@ -1,3 +1,4 @@
+import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Card } from '@consta/uikit/Card';
 import { Modal } from '@consta/uikit/Modal';
@@ -8,8 +9,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { ExpertProfile, InitiativeStatus, TeamRole } from '../data';
 import InitiativeGanttChart from './InitiativeGanttChart';
 import type { InitiativeGanttTask } from './InitiativeGanttChart';
-import ExpertSelectionModal from './ExpertSelectionModal';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
+import {
+  buildCandidatesFromReport,
+  buildRoleMatchReports,
+  type RolePlanningDraft
+} from '../utils/initiativeMatching';
 import styles from './InitiativeCreationModal.module.css';
 
 type SelectOption<Value extends string> = {
@@ -24,7 +29,6 @@ type RoleWorkDraft = {
   startDay: number;
   durationDays: number;
   effortDays: number;
-  assignedExpertId: string | null;
 };
 
 type RoleDraft = {
@@ -71,8 +75,7 @@ const createWorkDraft = (offset = 0): RoleWorkDraft => ({
   description: '',
   startDay: offset,
   durationDays: 5,
-  effortDays: 5,
-  assignedExpertId: null
+  effortDays: 5
 });
 
 const createRoleDraft = (role: TeamRole): RoleDraft => ({
@@ -106,7 +109,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
   const [roles, setRoles] = useState<RoleDraft[]>([createRoleDraft('Аналитик')]);
-  const [expertPickerTarget, setExpertPickerTarget] = useState<{ roleId: string; workId: string } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -124,19 +126,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setCustomerContact('');
       setCustomerComment('');
       setRoles([createRoleDraft('Аналитик')]);
-      setExpertPickerTarget(null);
-    } else {
-      setExpertPickerTarget(null);
     }
   }, [isOpen]);
-
-  const expertMap = useMemo(() => {
-    const map = new Map<string, string>();
-    experts.forEach((expert) => {
-      map.set(expert.id, expert.fullName);
-    });
-    return map;
-  }, [experts]);
 
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
     () =>
@@ -147,14 +138,10 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           title: work.title || 'Задача',
           startDay: Math.max(0, Math.round(work.startDay)),
           durationDays: Math.max(1, Math.round(work.durationDays)),
-          effortDays: Math.max(1, Math.round(work.effortDays)),
-          assignedExpert:
-            work.assignedExpertId && expertMap.get(work.assignedExpertId)
-              ? expertMap.get(work.assignedExpertId)
-              : work.assignedExpertId || undefined
+          effortDays: Math.max(1, Math.round(work.effortDays))
         }))
       ),
-    [expertMap, roles]
+    [roles]
   );
 
   const totalEffortDays = ganttTasks.reduce((acc, task) => acc + task.effortDays, 0);
@@ -162,20 +149,95 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const isSubmitDisabled =
     !name.trim() || roles.length === 0 || roles.every((role) => role.works.length === 0);
 
-  const targetExpertId = useMemo(() => {
-    if (!expertPickerTarget) {
-      return null;
-    }
-    const role = roles.find((item) => item.id === expertPickerTarget.roleId);
-    const work = role?.works.find((item) => item.id === expertPickerTarget.workId);
-    return work?.assignedExpertId ?? null;
-  }, [expertPickerTarget, roles]);
-
   const parseList = (input: string) =>
     input
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean);
+
+  const planningRoles = useMemo<RolePlanningDraft[]>(
+    () =>
+      roles.map((role) => ({
+        id: role.id,
+        role: role.role,
+        required: Math.max(1, Math.round(role.required)),
+        skills: parseList(role.skillsInput),
+        workItems: role.works.map((work) => ({
+          id: work.id,
+          title: work.title.trim() || 'Задача',
+          description: work.description.trim() || 'Описание не заполнено',
+          startDay: Math.max(0, Math.round(work.startDay)),
+          durationDays: Math.max(1, Math.round(work.durationDays)),
+          effortDays: Math.max(1, Math.round(work.effortDays))
+        }))
+      })),
+    [roles]
+  );
+
+  const draftPayload = useMemo<InitiativeCreationRequest>(
+    () => ({
+      name: name.trim(),
+      description: description.trim(),
+      owner: owner.trim(),
+      expectedImpact: expectedImpact.trim(),
+      targetModuleName: targetModule.trim(),
+      status,
+      domains: parseList(domainsInput),
+      potentialModules: parseList(modulesInput),
+      customer: {
+        company: customerCompany.trim(),
+        unit: customerUnit.trim(),
+        representative: customerRepresentative.trim(),
+        contact: customerContact.trim(),
+        comment: customerComment.trim() || undefined
+      },
+      roles: planningRoles.map((role, index) => ({
+        id: role.id,
+        role: role.role,
+        required: role.required,
+        skills: role.skills,
+        comment: roles[index]?.comment.trim() ? roles[index].comment.trim() : undefined,
+        workItems: role.workItems
+      }))
+    }),
+    [
+      customerComment,
+      customerCompany,
+      customerContact,
+      customerRepresentative,
+      customerUnit,
+      description,
+      domainsInput,
+      expectedImpact,
+      modulesInput,
+      name,
+      owner,
+      planningRoles,
+      roles,
+      status,
+      targetModule
+    ]
+  );
+
+  const matchReports = useMemo(
+    () => buildRoleMatchReports(planningRoles, experts),
+    [experts, planningRoles]
+  );
+
+  const candidatePreviewMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof buildCandidatesFromReport>>();
+    matchReports.forEach((report) => {
+      map.set(report.requirement.roleId, buildCandidatesFromReport(report));
+    });
+    return map;
+  }, [matchReports]);
+
+  const expertLookup = useMemo(() => {
+    const lookup = new Map(
+      experts.map((expert) => [expert.id, { name: expert.fullName, title: expert.title }])
+    );
+    return lookup;
+  }, [experts]);
 
   const handleRoleChange = (roleId: string, patch: Partial<RoleDraft>) => {
     setRoles((prev) => prev.map((role) => (role.id === roleId ? { ...role, ...patch } : role)));
@@ -223,62 +285,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     );
   };
 
-  const handleSelectExpert = (expertId: string | null) => {
-    if (!expertPickerTarget) {
-      return;
-    }
-    setRoles((prev) =>
-      prev.map((role) => {
-        if (role.id !== expertPickerTarget.roleId) {
-          return role;
-        }
-        return {
-          ...role,
-          works: role.works.map((work) =>
-            work.id === expertPickerTarget.workId ? { ...work, assignedExpertId: expertId } : work
-          )
-        };
-      })
-    );
-    setExpertPickerTarget(null);
-  };
-
   const handleSubmit = () => {
-    const payload: InitiativeCreationRequest = {
-      name: name.trim(),
-      description: description.trim(),
-      owner: owner.trim(),
-      expectedImpact: expectedImpact.trim(),
-      targetModuleName: targetModule.trim(),
-      status,
-      domains: parseList(domainsInput),
-      potentialModules: parseList(modulesInput),
-      customer: {
-        company: customerCompany.trim(),
-        unit: customerUnit.trim(),
-        representative: customerRepresentative.trim(),
-        contact: customerContact.trim(),
-        comment: customerComment.trim() || undefined
-      },
-      roles: roles.map((role) => ({
-        id: role.id,
-        role: role.role,
-        required: Math.max(1, Math.round(role.required)),
-        skills: parseList(role.skillsInput),
-        comment: role.comment.trim() || undefined,
-        workItems: role.works.map((work) => ({
-          id: work.id,
-          title: work.title.trim() || 'Задача',
-          description: work.description.trim() || 'Описание не заполнено',
-          startDay: Math.max(0, Math.round(work.startDay)),
-          durationDays: Math.max(1, Math.round(work.durationDays)),
-          effortDays: Math.max(1, Math.round(work.effortDays)),
-          assignedExpertId: work.assignedExpertId
-        }))
-      }))
-    };
-
-    onSubmit(payload);
+    onSubmit(draftPayload);
   };
 
   return (
@@ -539,20 +547,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                               }
                             />
                           </div>
-                          <div className={styles.workActions}>
-                            <Button
-                              size="s"
-                              view="secondary"
-                              label={
-                                work.assignedExpertId
-                                  ? expertMap.get(work.assignedExpertId) ?? 'Назначен сотрудник'
-                                  : 'Назначить сотрудника'
-                              }
-                              onClick={() =>
-                                setExpertPickerTarget({ roleId: role.id, workId: work.id })
-                              }
-                            />
-                          </div>
                         </div>
                       ))}
                       <Button size="s" view="ghost" label="Добавить работу" onClick={() => handleAddWork(role.id)} />
@@ -560,6 +554,100 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   </Card>
                 );
               })}
+            </div>
+          </section>
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <Text size="s" weight="semibold">
+                  Рекомендованные эксперты
+                </Text>
+                <Text size="xs" view="secondary">
+                  Система сравнила навыки роли и доступность специалистов.
+                </Text>
+              </div>
+            </div>
+            <div className={styles.recommendationList}>
+              {planningRoles.length === 0 ? (
+                <Text size="s" view="secondary">
+                  Добавьте роли и работы, чтобы увидеть подходящих экспертов.
+                </Text>
+              ) : (
+                planningRoles.map((role) => {
+                  const candidates = candidatePreviewMap.get(role.id) ?? [];
+                  const topCandidates = candidates.slice(0, 3);
+                  const bestScore = topCandidates[0]?.score;
+                  return (
+                    <Card
+                      key={role.id}
+                      className={styles.recommendationCard}
+                      verticalSpace="l"
+                      horizontalSpace="l"
+                    >
+                      <div className={styles.recommendationHeader}>
+                        <div>
+                          <Text size="s" weight="semibold">
+                            {role.role}
+                          </Text>
+                          <Text size="xs" view="secondary">
+                            Требуется: {role.required} · Работ: {role.workItems.length}
+                          </Text>
+                        </div>
+                        {bestScore !== undefined && (
+                          <Badge size="s" view="filled" status="system" label={`${bestScore} баллов`} />
+                        )}
+                      </div>
+                      {topCandidates.length === 0 ? (
+                        <Text size="xs" view="secondary">
+                          Уточните навыки роли, чтобы получить рекомендации.
+                        </Text>
+                      ) : (
+                        <div className={styles.recommendationCandidates}>
+                          {topCandidates.map((candidate) => {
+                            const expert = expertLookup.get(candidate.expertId);
+                            return (
+                              <div
+                                key={`${role.id}-${candidate.expertId}`}
+                                className={styles.recommendationCandidate}
+                              >
+                                <div className={styles.recommendationCandidateHeader}>
+                                  <div>
+                                    <Text size="s" weight="semibold">
+                                      {expert?.name ?? candidate.expertId}
+                                    </Text>
+                                    <Text size="xs" view="secondary">
+                                      {expert?.title ?? 'Эксперт каталога'}
+                                    </Text>
+                                  </div>
+                                  <Badge
+                                    size="s"
+                                    view="stroked"
+                                    status="system"
+                                    label={`${candidate.score} баллов`}
+                                  />
+                                </div>
+                                <Text size="xs">{candidate.fitComment}</Text>
+                                {candidate.riskTags.length > 0 && (
+                                  <div className={styles.recommendationRisks}>
+                                    {candidate.riskTags.slice(0, 3).map((risk) => (
+                                      <Badge
+                                        key={`${candidate.expertId}-${risk}`}
+                                        size="2xs"
+                                        view="ghost"
+                                        label={risk}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })
+              )}
             </div>
           </section>
           <section className={styles.section}>
@@ -587,13 +675,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           </footer>
         </div>
       </Modal>
-      <ExpertSelectionModal
-        isOpen={Boolean(expertPickerTarget)}
-        experts={experts}
-        selectedExpertId={targetExpertId}
-        onSelect={handleSelectExpert}
-        onClose={() => setExpertPickerTarget(null)}
-      />
     </>
   );
 };
