@@ -1670,3 +1670,23 @@ export const reuseIndexHistory: ReuseTrendPoint[] = [
   { period: '2024-09', averageScore: 0.65 },
   { period: '2024-10', averageScore: 0.66 }
 ];
+
+export {
+  skills,
+  roleToSkillsMap,
+  getSkillsByRole,
+  getSkillIdsByRole,
+  getRolesForSkill,
+  skillLevels,
+  evidenceStatuses
+} from './data/skills';
+
+export type {
+  SkillDefinition,
+  SkillLevelDescriptor,
+  EvidenceStatusDescriptor,
+  SkillCategory,
+  SkillSource,
+  SkillLevelId,
+  EvidenceStatusId
+} from './data/skills';
