@@ -2319,6 +2319,34 @@ export const artifacts: ArtifactNode[] = [
   }
 ];
 
+export const initiatives: InitiativeNode[] = [
+  {
+    id: 'initiative-ai-exploration',
+    name: 'ML-разведка новых месторождений',
+    description:
+      'Пилотный проект по внедрению ML-моделей для интерпретации геолого-геофизических данных и ускоренного выявления перспективных участков.',
+    status: 'pilot',
+    owner: 'Дирекция цифровой трансформации',
+    domainIds: ['seismic-interpretation', 'resource-evaluation'],
+    moduleIds: ['module-infraplan-datahub', 'module-infraplan-layout'],
+    startDate: '2024-Q1',
+    targetDate: '2024-Q4',
+    expectedImpact: 'Сокращение цикла анализа запасов на 30%'
+  },
+  {
+    id: 'initiative-digital-twin-expansion',
+    name: 'Расширение цифровых двойников добычи',
+    description:
+      'Масштабирование платформы цифровых двойников на новые промыслы с интеграцией мониторинга и предиктивной аналитики.',
+    status: 'scale',
+    owner: 'Проектный офис производственной эффективности',
+    domainIds: ['development-scenarios'],
+    moduleIds: ['module-dtwin-monitoring', 'module-dtwin-optimizer'],
+    startDate: '2023-Q3',
+    expectedImpact: 'Рост производственной эффективности на 12%'
+  }
+];
+
 
 export const artifactNameById: Record<string, string> = artifacts.reduce((acc, artifact) => {
   acc[artifact.id] = artifact.name;

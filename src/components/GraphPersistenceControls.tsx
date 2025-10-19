@@ -4,7 +4,7 @@ import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ArtifactNode, DomainNode, ModuleNode } from '../data';
+import type { ArtifactNode, DomainNode, InitiativeNode, ModuleNode } from '../data';
 import { normalizeLayoutSnapshot } from '../services/graphStorage';
 import {
   GRAPH_SNAPSHOT_VERSION,
@@ -23,13 +23,20 @@ type GraphPersistenceControlsProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
+  initiatives: InitiativeNode[];
   onImport: (snapshot: GraphSnapshotPayload) => void;
   onImportFromGraph?: (request: {
     graphId: string;
     includeDomains: boolean;
     includeModules: boolean;
     includeArtifacts: boolean;
-  }) => Promise<{ domains: number; modules: number; artifacts: number }>;
+    includeInitiatives: boolean;
+  }) => Promise<{
+    domains: number;
+    modules: number;
+    artifacts: number;
+    initiatives: number;
+  }>;
   graphs?: GraphSummary[];
   activeGraphId?: string | null;
   isGraphListLoading?: boolean;
@@ -41,6 +48,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   modules,
   domains,
   artifacts,
+  initiatives,
   onImport,
   onImportFromGraph,
   graphs,
@@ -52,8 +60,9 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<StatusMessage | null>(null);
   const [sourceGraphId, setSourceGraphId] = useState<string | null>(null);
-  const [copyOptions, setCopyOptions] = useState<Set<'domains' | 'modules' | 'artifacts'>>(
-    () => new Set(['domains', 'modules', 'artifacts'])
+  const [copyOptions, setCopyOptions] = useState<
+    Set<'domains' | 'modules' | 'artifacts' | 'initiatives'>
+  >(() => new Set(['domains', 'modules', 'artifacts', 'initiatives']))
   );
   const [isGraphImporting, setIsGraphImporting] = useState(false);
 
@@ -65,9 +74,10 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
       modules,
       domains,
       artifacts,
+      initiatives,
       layout: sanitizedLayout
     };
-  }, [artifacts, domains, layout, modules]);
+  }, [artifacts, domains, initiatives, layout, modules]);
 
   const handleExport = () => {
     try {
@@ -119,9 +129,10 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
         const moduleCount = normalized.modules.length;
         const domainCount = normalized.domains.length;
         const artifactCount = normalized.artifacts.length;
+        const initiativeCount = normalized.initiatives.length;
         setStatus({
           type: 'success',
-          message: `Импорт завершён. Модулей: ${moduleCount}, доменов: ${domainCount}, артефактов: ${artifactCount}.`
+          message: `Импорт завершён. Модулей: ${moduleCount}, доменов: ${domainCount}, артефактов: ${artifactCount}, инициатив: ${initiativeCount}.`
         });
       } catch (error) {
         setStatus({
@@ -169,7 +180,8 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
       [
         { id: 'domains' as const, label: 'Домены' },
         { id: 'modules' as const, label: 'Модули' },
-        { id: 'artifacts' as const, label: 'Артефакты' }
+        { id: 'artifacts' as const, label: 'Артефакты' },
+        { id: 'initiatives' as const, label: 'Инициативы' }
       ],
     []
   );
@@ -204,12 +216,13 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
         graphId: sourceGraphId,
         includeDomains: copyOptions.has('domains'),
         includeModules: copyOptions.has('modules'),
-        includeArtifacts: copyOptions.has('artifacts')
+        includeArtifacts: copyOptions.has('artifacts'),
+        includeInitiatives: copyOptions.has('initiatives')
       });
       const graphName = graphs?.find((graph) => graph.id === sourceGraphId)?.name ?? 'выбранного графа';
       setStatus({
         type: 'success',
-        message: `Импорт завершён из графа «${graphName}». Модулей: ${result.modules}, доменов: ${result.domains}, артефактов: ${result.artifacts}.`
+        message: `Импорт завершён из графа «${graphName}». Модулей: ${result.modules}, доменов: ${result.domains}, артефактов: ${result.artifacts}, инициатив: ${result.initiatives}.`
       });
     } catch (error) {
       setStatus({
@@ -361,6 +374,7 @@ type GraphSnapshotLike = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
+  initiatives?: InitiativeNode[];
   layout?: GraphSnapshotPayload['layout'];
 };
 
@@ -370,7 +384,12 @@ function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
   }
 
   const candidate = value as Partial<GraphSnapshotPayload>;
-  if (!Array.isArray(candidate.modules) || !Array.isArray(candidate.domains) || !Array.isArray(candidate.artifacts)) {
+  if (
+    !Array.isArray(candidate.modules) ||
+    !Array.isArray(candidate.domains) ||
+    !Array.isArray(candidate.artifacts) ||
+    (candidate.initiatives !== undefined && !Array.isArray(candidate.initiatives))
+  ) {
     return false;
   }
 
@@ -391,6 +410,7 @@ function normalizeImportedSnapshot(snapshot: GraphSnapshotLike): GraphSnapshotPa
     modules: snapshot.modules,
     domains: snapshot.domains,
     artifacts: snapshot.artifacts,
+    initiatives: Array.isArray(snapshot.initiatives) ? snapshot.initiatives : [],
     layout: normalizeLayoutSnapshot(snapshot.layout) ?? undefined
   };
 }
