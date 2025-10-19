@@ -131,6 +131,13 @@
   gap: 2px;
 }
 
+.listItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .companyList {
   list-style: none;
   margin: 0;

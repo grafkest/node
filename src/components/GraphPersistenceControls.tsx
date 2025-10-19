@@ -31,12 +31,7 @@ type GraphPersistenceControlsProps = {
     includeModules: boolean;
     includeArtifacts: boolean;
     includeInitiatives: boolean;
-  }) => Promise<{
-    domains: number;
-    modules: number;
-    artifacts: number;
-    initiatives: number;
-  }>;
+  }) => Promise<{ domains: number; modules: number; artifacts: number; initiatives: number }>;
   graphs?: GraphSummary[];
   activeGraphId?: string | null;
   isGraphListLoading?: boolean;
@@ -62,8 +57,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   const [sourceGraphId, setSourceGraphId] = useState<string | null>(null);
   const [copyOptions, setCopyOptions] = useState<
     Set<'domains' | 'modules' | 'artifacts' | 'initiatives'>
-  >(() => new Set(['domains', 'modules', 'artifacts', 'initiatives']))
-  );
+  >(() => new Set(['domains', 'modules', 'artifacts', 'initiatives']));
   const [isGraphImporting, setIsGraphImporting] = useState(false);
 
   const buildSnapshot = useCallback((): GraphSnapshotPayload => {
@@ -129,7 +123,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
         const moduleCount = normalized.modules.length;
         const domainCount = normalized.domains.length;
         const artifactCount = normalized.artifacts.length;
-        const initiativeCount = normalized.initiatives.length;
+        const initiativeCount = normalized.initiatives?.length ?? 0;
         setStatus({
           type: 'success',
           message: `Импорт завершён. Модулей: ${moduleCount}, доменов: ${domainCount}, артефактов: ${artifactCount}, инициатив: ${initiativeCount}.`
@@ -393,6 +387,10 @@ function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
     return false;
   }
 
+  if (candidate.initiatives !== undefined && !Array.isArray(candidate.initiatives)) {
+    return false;
+  }
+
   if (candidate.version !== undefined && typeof candidate.version !== 'number') {
     return false;
   }
@@ -410,7 +408,7 @@ function normalizeImportedSnapshot(snapshot: GraphSnapshotLike): GraphSnapshotPa
     modules: snapshot.modules,
     domains: snapshot.domains,
     artifacts: snapshot.artifacts,
-    initiatives: Array.isArray(snapshot.initiatives) ? snapshot.initiatives : [],
+    initiatives: snapshot.initiatives ?? [],
     layout: normalizeLayoutSnapshot(snapshot.layout) ?? undefined
   };
 }

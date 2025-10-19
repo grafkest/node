@@ -5,7 +5,13 @@ import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
 import React, { useEffect, useState } from 'react';
-import { type ModuleInput, type ModuleOutput, type TeamMember } from '../data';
+import {
+  type InitiativeApprovalStatus,
+  type InitiativeWorkItemStatus,
+  type ModuleInput,
+  type ModuleOutput,
+  type TeamMember
+} from '../data';
 import type { GraphNode } from './GraphView';
 import styles from './NodeDetails.module.css';
 
@@ -46,6 +52,25 @@ const clientTypeLabels: Record<'desktop' | 'web', string> = {
 const deploymentToolLabels: Record<'docker' | 'kubernetes', string> = {
   docker: 'Docker',
   kubernetes: 'Kubernetes'
+};
+
+const workItemStatusMeta: Record<
+  InitiativeWorkItemStatus,
+  { label: string; badge: 'normal' | 'warning' | 'system' | 'success' }
+> = {
+  discovery: { label: 'Исследование', badge: 'normal' },
+  design: { label: 'Проектирование', badge: 'warning' },
+  pilot: { label: 'Пилот', badge: 'system' },
+  delivery: { label: 'Внедрение', badge: 'success' }
+};
+
+const approvalStatusMeta: Record<
+  InitiativeApprovalStatus,
+  { label: string; badge: 'normal' | 'warning' | 'success' }
+> = {
+  pending: { label: 'Ожидание', badge: 'normal' },
+  'in-progress': { label: 'В работе', badge: 'warning' },
+  approved: { label: 'Одобрено', badge: 'success' }
 };
 
 const NodeDetails: React.FC<NodeDetailsProps> = ({
@@ -248,6 +273,174 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
           <a href={node.sampleUrl} className={styles.link} target="_blank" rel="noreferrer">
             {node.sampleUrl}
           </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === 'initiative') {
+    const domainLabels = node.domains.map((domainId) => domainNameMap[domainId] ?? domainId);
+    const plannedModules = node.plannedModuleIds.map((moduleId) => ({
+      id: moduleId,
+      label: moduleNameMap[moduleId] ?? moduleId
+    }));
+
+    return (
+      <div className={styles.container}>
+        <header className={styles.header}>
+          <Text size="l" weight="bold">
+            {node.name}
+          </Text>
+          <Button size="xs" label="Закрыть" view="ghost" onClick={onClose} />
+        </header>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Описание
+          </Text>
+          <Text size="s" view="secondary">
+            {node.description}
+          </Text>
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Домены
+          </Text>
+          {domainLabels.length > 0 ? (
+            <div className={styles.tagList}>
+              {domainLabels.map((label, index) => (
+                <Tag key={node.domains[index]} label={label} size="xs" />
+              ))}
+            </div>
+          ) : (
+            <Text size="xs" view="secondary">
+              Домены не указаны
+            </Text>
+          )}
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Планируемые модули
+          </Text>
+          {plannedModules.length > 0 ? (
+            <ul className={styles.list}>
+              {plannedModules.map((module) => (
+                <li key={module.id} className={styles.listItem}>
+                  <a
+                    href="#"
+                    className={styles.link}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onNavigate(module.id);
+                    }}
+                  >
+                    {module.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Text size="xs" view="secondary">
+              Модули не назначены
+            </Text>
+          )}
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Работы
+          </Text>
+          {node.workItems.length > 0 ? (
+            <ul className={styles.list}>
+              {node.workItems.map((item) => {
+                const status = workItemStatusMeta[item.status];
+                return (
+                  <li key={item.id} className={styles.listItem}>
+                    <div className={styles.listItemHeader}>
+                      <Text size="s" weight="semibold">
+                        {item.title}
+                      </Text>
+                      <Badge
+                        size="xs"
+                        status={status.badge}
+                        view="filled"
+                        label={status.label}
+                      />
+                    </div>
+                    <Text size="xs" view="secondary">
+                      {item.description}
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      {`Ответственный: ${item.owner} • ${item.timeframe}`}
+                    </Text>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <Text size="xs" view="secondary">
+              Работы не определены
+            </Text>
+          )}
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Требуемые навыки
+          </Text>
+          {node.requiredSkills.length > 0 ? (
+            <div className={styles.tagList}>
+              {node.requiredSkills.map((skill) => (
+                <Tag key={skill} label={skill} size="xs" />
+              ))}
+            </div>
+          ) : (
+            <Text size="xs" view="secondary">
+              Навыки не указаны
+            </Text>
+          )}
+        </div>
+
+        <div className={styles.section}>
+          <Text size="s" weight="semibold">
+            Этапы согласования
+          </Text>
+          {node.approvalStages.length > 0 ? (
+            <ul className={styles.list}>
+              {node.approvalStages.map((stage) => {
+                const status = approvalStatusMeta[stage.status];
+                return (
+                  <li key={stage.id} className={styles.listItem}>
+                    <div className={styles.listItemHeader}>
+                      <Text size="s" weight="semibold">
+                        {stage.title}
+                      </Text>
+                      <Badge
+                        size="xs"
+                        status={status.badge}
+                        view="filled"
+                        label={status.label}
+                      />
+                    </div>
+                    <Text size="xs" view="secondary">
+                      {`Согласующий: ${stage.approver}`}
+                    </Text>
+                    {stage.comment ? (
+                      <Text size="xs" view="secondary">
+                        {stage.comment}
+                      </Text>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <Text size="xs" view="secondary">
+              Этапы согласования не заданы
+            </Text>
+          )}
         </div>
       </div>
     );

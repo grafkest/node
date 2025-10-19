@@ -19,7 +19,7 @@ export type GraphSnapshotPayload = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
-  initiatives: InitiativeNode[];
+  initiatives?: InitiativeNode[];
   layout?: GraphLayoutSnapshot;
 };
 
