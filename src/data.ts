@@ -42,12 +42,79 @@ export type TeamMember = {
   role: TeamRole;
 };
 
+export type InitiativeStatus =
+  | 'backlog'
+  | 'discovery'
+  | 'in-progress'
+  | 'pilot'
+  | 'completed';
+
+export type RoleRequirement = {
+  role: TeamRole;
+  fte: number;
+  skills: string[];
+};
+
+export type InitiativeWorkItem = {
+  id: string;
+  title: string;
+  description: string;
+  status: InitiativeStatus;
+  goal: string;
+  domains: string[];
+  modules: string[];
+  requiredFte: number;
+  roleRequirements: RoleRequirement[];
+  dependencies?: string[];
+  deliverables?: string[];
+};
+
+export type Initiative = {
+  id: string;
+  title: string;
+  summary: string;
+  sponsor: string;
+  status: InitiativeStatus;
+  goals: string[];
+  targetMetrics: string[];
+  domains: string[];
+  modules: string[];
+  startQuarter: string;
+  endQuarter?: string;
+  totalFte: number;
+  requiredRoles: RoleRequirement[];
+  workItems: InitiativeWorkItem[];
+  notes?: string;
+};
+
 export type RidOwner = {
   company: string;
   division: string;
 };
 
 export type ExpertAvailability = 'available' | 'partial' | 'busy';
+
+export type SkillLevel = 'A' | 'B' | 'C' | 'D' | 'E';
+
+export type SkillEvidenceStatus = 'verified' | 'in-review' | 'self-reported';
+
+export type SkillInterestLevel = 'high' | 'medium' | 'low';
+
+export type SkillUsage = {
+  from: string;
+  to?: string;
+  description?: string;
+};
+
+export type ExpertSkill = {
+  id: string;
+  level: SkillLevel;
+  proofStatus: SkillEvidenceStatus;
+  usage?: SkillUsage;
+  artifacts: string[];
+  interest: SkillInterestLevel;
+  availableFte: number;
+};
 
 export type ExpertProfile = {
   id: string;
@@ -66,6 +133,7 @@ export type ExpertProfile = {
   notableProjects: string[];
   availability: ExpertAvailability;
   availabilityComment: string;
+  skills: ExpertSkill[];
 };
 
 export type LibraryDependency = {
@@ -128,20 +196,294 @@ export type ModuleNode = {
   nonFunctional: NonFunctionalRequirements;
 };
 
-export type InitiativeStatus = 'idea' | 'pilot' | 'scale';
+export const initiatives: Initiative[] = [
+  {
+    id: 'initiative-dtwin-scale',
+    title: 'Масштабирование цифрового двойника добычи',
+    summary:
+      'Расширение охвата цифрового двойника на дополнительные промыслы, углубление сценарного моделирования и автоматизация выдачи дистанционных предписаний.',
+    sponsor: 'Дирекция цифровой трансформации',
+    status: 'in-progress',
+    goals: [
+      'Увеличить охват скважин цифровым двойником до 75% фонда',
+      'Сократить цикл реакции на отклонения технологических режимов на 20%',
+      'Внедрить дистанционную выдачу управляющих воздействий с контролем исполнения'
+    ],
+    targetMetrics: [
+      'Прирост добычи +2,5% на подключённых промыслах',
+      'Сокращение незапланированных простоев на 12%',
+      'Повышение точности прогноза дебита до ±4%'
+    ],
+    domains: ['data-preparation', 'development-scenarios', 'surface-readiness'],
+    modules: ['module-dtwin-monitoring', 'module-dtwin-optimizer', 'module-dtwin-remote-control'],
+    startQuarter: '2024Q3',
+    endQuarter: '2025Q1',
+    totalFte: 7.6,
+    requiredRoles: [
+      { role: 'Эксперт R&D', fte: 1.2, skills: ['Производственные процессы', 'Системная динамика', 'Data Science'] },
+      { role: 'Backend', fte: 2.5, skills: ['NestJS', 'TimescaleDB', 'RabbitMQ'] },
+      { role: 'Frontend', fte: 1.3, skills: ['React', 'Realtime dashboards', 'UX исследование'] },
+      { role: 'Аналитик', fte: 1, skills: ['Value tracking', 'Product discovery', 'Производственные KPI'] },
+      { role: 'Тестировщик', fte: 0.8, skills: ['Автоматизация тестирования', 'Performance testing'] },
+      { role: 'Архитектор', fte: 0.8, skills: ['Solution Architecture', 'Integration patterns'] }
+    ],
+    workItems: [
+      {
+        id: 'dtwin-telemetry-upgrade',
+        title: 'Усиление витрины телеметрии',
+        description:
+          'Подключение новых скважин и датчиков, расширение ретроспективы хранения и построение единого профиля объекта.',
+        status: 'completed',
+        goal: 'Расширить поток телеметрии на 120 скважин с автоматической нормализацией данных.',
+        domains: ['data-preparation'],
+        modules: ['module-dtwin-monitoring'],
+        requiredFte: 2.1,
+        roleRequirements: [
+          { role: 'Backend', fte: 1.3, skills: ['NestJS', 'MQTT', 'ETL pipelines'] },
+          { role: 'Тестировщик', fte: 0.4, skills: ['Integration testing', 'Data quality'] },
+          { role: 'Эксперт R&D', fte: 0.4, skills: ['Сенсоры добычи', 'Нормализация сигналов'] }
+        ],
+        deliverables: ['Расширенный коннектор телеметрии', 'Регламент качества данных']
+      },
+      {
+        id: 'dtwin-scenario-lab',
+        title: 'Лаборатория сценариев оптимизации',
+        description:
+          'Моделирование новых режимов работы фонда, калибровка прогнозов и внедрение управленческих панелей.',
+        status: 'in-progress',
+        goal: 'Утвердить библиотеку сценариев с подтверждённой точностью прогноза и автоматическим расчётом эффекта.',
+        domains: ['development-scenarios'],
+        modules: ['module-dtwin-optimizer'],
+        requiredFte: 3.2,
+        roleRequirements: [
+          { role: 'Эксперт R&D', fte: 0.8, skills: ['Сценарное моделирование', 'Опыт разработки месторождений'] },
+          { role: 'Аналитик', fte: 0.7, skills: ['CustDev', 'Product metrics', 'Прототипирование'] },
+          { role: 'Backend', fte: 1.1, skills: ['Python', 'Machine Learning', 'Optimisation pipelines'] },
+          { role: 'Frontend', fte: 0.6, skills: ['React', 'D3.js', 'Data storytelling'] }
+        ],
+        dependencies: ['dtwin-telemetry-upgrade'],
+        deliverables: ['Каталог сценариев', 'Методика расчёта эффекта', 'Дашборды прогноза']
+      },
+      {
+        id: 'dtwin-remote-commands',
+        title: 'Дистанционные управляющие воздействия',
+        description:
+          'Настройка цепочки формирования и контроля команд, интеграция с системами диспетчеризации и обучение пользователей.',
+        status: 'pilot',
+        goal: 'Запустить пилот на трёх кустах с автоматическим журналированием и обратной связью.',
+        domains: ['surface-readiness'],
+        modules: ['module-dtwin-remote-control'],
+        requiredFte: 2.3,
+        roleRequirements: [
+          { role: 'Архитектор', fte: 0.6, skills: ['Интеграция SCADA', 'Security-by-design'] },
+          { role: 'Backend', fte: 0.8, skills: ['gRPC', 'Event sourcing', 'Device provisioning'] },
+          { role: 'Frontend', fte: 0.4, skills: ['Design systems', 'Operational UI'] },
+          { role: 'Тестировщик', fte: 0.5, skills: ['Нагрузочное тестирование', 'Chaos engineering'] }
+        ],
+        dependencies: ['dtwin-scenario-lab'],
+        deliverables: ['Цифровые предписания', 'План сопровождения пилота']
+      }
+    ],
+    notes: 'Программа согласована с техническим комитетом и поддержана блоком добычи.'
+  },
+  {
+    id: 'initiative-knowledge-catalog',
+    title: 'Каталог инженерных знаний INFRAPLAN',
+    summary:
+      'Создание управляемого каталога инженерных данных и моделей для быстрого тиражирования инфраструктурных проектов.',
+    sponsor: 'Департамент капитального строительства',
+    status: 'discovery',
+    goals: [
+      'Сформировать единый реестр инженерных исходных данных',
+      'Обеспечить переиспользование моделей размещения и экономических расчётов',
+      'Снизить срок подготовки инвестиционного обоснования на 15%'
+    ],
+    targetMetrics: [
+      '70% кейсов используют унифицированные исходные данные',
+      'Сокращение ручной подготовки исходников на 40%',
+      'Рост удовлетворённости пользователей до 4,5/5'
+    ],
+    domains: ['data-preparation', 'layout-optimization', 'economic-evaluation'],
+    modules: ['module-infraplan-datahub', 'module-infraplan-layout', 'module-infraplan-economics'],
+    startQuarter: '2024Q4',
+    totalFte: 5.4,
+    requiredRoles: [
+      { role: 'Аналитик', fte: 1.2, skills: ['Data governance', 'Requirements elicitation'] },
+      { role: 'Backend', fte: 1.6, skills: ['NestJS', 'GraphQL', 'Data catalogues'] },
+      { role: 'Frontend', fte: 1, skills: ['Design systems', 'Form builders'] },
+      { role: 'Эксперт R&D', fte: 1, skills: ['Инженерные расчёты', 'Промысловая инфраструктура'] },
+      { role: 'Тестировщик', fte: 0.6, skills: ['Автотесты', 'API testing'] }
+    ],
+    workItems: [
+      {
+        id: 'knowledge-inventory',
+        title: 'Инвентаризация источников данных',
+        description:
+          'Определение приоритетных источников, описаний, регламентов обновления и требований к качеству данных.',
+        status: 'in-progress',
+        goal: 'Описать не менее 50 критичных наборов данных и утвердить политику их сопровождения.',
+        domains: ['data-preparation'],
+        modules: ['module-infraplan-datahub'],
+        requiredFte: 1.8,
+        roleRequirements: [
+          { role: 'Аналитик', fte: 0.9, skills: ['Data discovery', 'Interviewing'] },
+          { role: 'Эксперт R&D', fte: 0.6, skills: ['Инженерные данные', 'Регламенты'] },
+          { role: 'Backend', fte: 0.3, skills: ['Metadata ingestion', 'ETL'] }
+        ],
+        deliverables: ['Реестр источников', 'Матрица качества данных']
+      },
+      {
+        id: 'layout-template-library',
+        title: 'Библиотека шаблонов инфраструктуры',
+        description:
+          'Формирование библиотеки модульных решений по размещению объектов с учётом ограничений и нормативов.',
+        status: 'backlog',
+        goal: 'Собрать 12 типовых шаблонов и подтвердить возможность переиспользования на пилотах.',
+        domains: ['layout-optimization'],
+        modules: ['module-infraplan-layout'],
+        requiredFte: 2.1,
+        roleRequirements: [
+          { role: 'Эксперт R&D', fte: 0.6, skills: ['Инженерные расчёты', 'Геодезия'] },
+          { role: 'Frontend', fte: 0.7, skills: ['UI прототипирование', 'Геовизуализация'] },
+          { role: 'Backend', fte: 0.8, skills: ['Optimization services', 'GeoJSON'] }
+        ],
+        dependencies: ['knowledge-inventory'],
+        deliverables: ['Каталог шаблонов', 'Методика выбора решения']
+      },
+      {
+        id: 'economics-integration',
+        title: 'Интеграция с экономическими моделями',
+        description:
+          'Унификация расчётных сценариев и обеспечение передачи исходных данных в экономический модуль.',
+        status: 'discovery',
+        goal: 'Автоматизировать передачу исходных данных и согласование ключевых допущений.',
+        domains: ['economic-evaluation'],
+        modules: ['module-infraplan-economics'],
+        requiredFte: 1.5,
+        roleRequirements: [
+          { role: 'Backend', fte: 0.7, skills: ['REST API', 'Data contracts'] },
+          { role: 'Аналитик', fte: 0.5, skills: ['Process mapping', 'Стандартизация показателей'] },
+          { role: 'Тестировщик', fte: 0.3, skills: ['Contract testing', 'Regression suites'] }
+        ],
+        dependencies: ['knowledge-inventory'],
+        deliverables: ['Интеграционный API', 'Единый справочник показателей']
+      }
+    ]
+  },
+  {
+    id: 'initiative-wwo-automation',
+    title: 'Автоматизация цикла работ WWO',
+    summary:
+      'Сквозная цифровизация планирования, исполнения и аналитики ремонтных работ по фонду скважин.',
+    sponsor: 'Дирекция по производственным операциям',
+    status: 'pilot',
+    goals: [
+      'Обеспечить прозрачный контроль исполнения работ в режиме реального времени',
+      'Снизить отклонения по срокам и бюджету на 10%',
+      'Повысить качество обратной связи и аналитики по завершённым работам'
+    ],
+    targetMetrics: [
+      'Сокращение просрочек этапов на 15%',
+      'Рост качества отчётности до 95% заполнения обязательных атрибутов',
+      'Повышение производительности бригад на 8%'
+    ],
+    domains: ['workover-planning', 'field-execution', 'quality-analytics'],
+    modules: ['module-wwo-planner', 'module-wwo-execution', 'module-wwo-analytics'],
+    startQuarter: '2024Q2',
+    totalFte: 6.8,
+    requiredRoles: [
+      { role: 'Руководитель проекта', fte: 0.8, skills: ['Project governance', 'Коммуникации с заказчиком'] },
+      { role: 'Аналитик', fte: 1.1, skills: ['Process mining', 'Change management'] },
+      { role: 'Backend', fte: 2, skills: ['Java', 'Event-driven architecture', 'Integration patterns'] },
+      { role: 'Frontend', fte: 1.4, skills: ['Offline-first UI', 'Design system Nedra.UI'] },
+      { role: 'Тестировщик', fte: 0.9, skills: ['Mobile testing', 'Automation frameworks'] },
+      { role: 'Эксперт R&D', fte: 0.6, skills: ['Нормативы WWO', 'Промысловые регламенты'] }
+    ],
+    workItems: [
+      {
+        id: 'wwo-plan-stream',
+        title: 'Автосбор заявок и формирование плана',
+        description:
+          'Интеграция заявок из смежных систем, автоматический расчёт ресурсов и маршрутизация согласований.',
+        status: 'completed',
+        goal: 'Обеспечить формирование согласованного плана за 2 дня вместо 5.',
+        domains: ['workover-planning'],
+        modules: ['module-wwo-planner'],
+        requiredFte: 2.2,
+        roleRequirements: [
+          { role: 'Backend', fte: 1.1, skills: ['Camunda', 'Oracle DB', 'Integration adapters'] },
+          { role: 'Frontend', fte: 0.6, skills: ['BPM UI', 'Form builder'] },
+          { role: 'Аналитик', fte: 0.5, skills: ['Process design', 'Stakeholder management'] }
+        ],
+        deliverables: ['Сервис автоформирования плана', 'Набор интеграционных адаптеров']
+      },
+      {
+        id: 'wwo-mobile-operations',
+        title: 'Мобильное рабочее место бригады',
+        description:
+          'Реализация офлайн-режима, фотофиксации, чек-листов и контроля техники безопасности.',
+        status: 'pilot',
+        goal: 'Запустить мобильное решение на 15 бригадах с NPS не ниже 4,2.',
+        domains: ['field-execution'],
+        modules: ['module-wwo-execution'],
+        requiredFte: 2.5,
+        roleRequirements: [
+          { role: 'Frontend', fte: 0.8, skills: ['Android', 'Offline-first patterns'] },
+          { role: 'Backend', fte: 0.9, skills: ['Ktor', 'RealmDB', 'Sync services'] },
+          { role: 'Тестировщик', fte: 0.5, skills: ['Mobile automation', 'Usability testing'] },
+          { role: 'Эксперт R&D', fte: 0.3, skills: ['Полевые процессы', 'ТБ требования'] }
+        ],
+        dependencies: ['wwo-plan-stream'],
+        deliverables: ['Мобильное приложение', 'Методика внедрения в бригады']
+      },
+      {
+        id: 'wwo-operational-analytics',
+        title: 'Оперативная аналитика исполнения',
+        description:
+          'Консолидация журнала операций, визуализация KPI и формирование обратной связи для планирования.',
+        status: 'in-progress',
+        goal: 'Создать сквозной отчёт с SLA 24 часа по обновлению данных.',
+        domains: ['quality-analytics'],
+        modules: ['module-wwo-analytics'],
+        requiredFte: 2.1,
+        roleRequirements: [
+          { role: 'Backend', fte: 1, skills: ['Kafka', 'OLAP', 'Event sourcing'] },
+          { role: 'Frontend', fte: 0.8, skills: ['Data visualization', 'Storytelling'] },
+          { role: 'Аналитик', fte: 0.3, skills: ['KPI design', 'User research'] }
+        ],
+        dependencies: ['wwo-plan-stream', 'wwo-mobile-operations'],
+        deliverables: ['Дашборд исполнения', 'Набор KPI и отчётов']
+      }
+    ]
+  }
+];
 
-export type InitiativeNode = {
-  id: string;
-  name: string;
-  description: string;
-  status: InitiativeStatus;
-  owner: string;
-  domainIds: string[];
-  moduleIds: string[];
-  startDate: string;
-  targetDate?: string;
-  expectedImpact: string;
-};
+export const initiativesByDomain = initiatives.reduce<Record<string, Initiative[]>>((acc, initiative) => {
+  initiative.domains.forEach((domainId) => {
+    if (!acc[domainId]) {
+      acc[domainId] = [];
+    }
+    acc[domainId].push(initiative);
+  });
+  return acc;
+}, {});
+
+export const initiativesByStatus = initiatives.reduce<Record<InitiativeStatus, Initiative[]>>(
+  (acc, initiative) => {
+    if (!acc[initiative.status]) {
+      acc[initiative.status] = [];
+    }
+    acc[initiative.status].push(initiative);
+    return acc;
+  },
+  {
+    backlog: [],
+    discovery: [],
+    'in-progress': [],
+    pilot: [],
+    completed: []
+  }
+);
 
 export const domainTree: DomainNode[] = [
   {
@@ -1198,7 +1540,47 @@ export const experts: ExpertProfile[] = [
       'Выстроила мониторинг качества источников в ПАО «СибНефть Добыча»'
     ],
     availability: 'available',
-    availabilityComment: 'Может подключиться к 1–2 консалтинговым инициативам в квартал'
+    availabilityComment: 'Может подключиться к 1–2 консалтинговым инициативам в квартал',
+    skills: [
+      {
+        id: 'data-normalization',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2023-01-15',
+          to: '2024-04-01',
+          description: 'Стандартизация инженерных датасетов для DataHub на месторождениях «Северный купол» и «Арктика»'
+        },
+        artifacts: ['artifact-infraplan-source-pack'],
+        interest: 'high',
+        availableFte: 0.4
+      },
+      {
+        id: 'streaming-pipelines',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-09-01',
+          to: '2024-02-20',
+          description: 'Поддержка Kafka-пайплайнов телеметрии для ситуационных центров Nedra.Production'
+        },
+        artifacts: ['artifact-dtwin-telemetry-cube'],
+        interest: 'medium',
+        availableFte: 0.3
+      },
+      {
+        id: 'data-governance',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-05-01',
+          description: 'Разработка матрицы владения инженерными данными и процессов каталогизации'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.2
+      }
+    ]
   },
   {
     id: 'expert-pavel-kolosov',
@@ -1234,7 +1616,47 @@ export const experts: ExpertProfile[] = [
       'Сопровождал масштабирование INFRAPLAN в холдинге «Западнефть Разработка»'
     ],
     availability: 'partial',
-    availabilityComment: 'Загружен проектами на 60%, доступен для стратегических консультаций'
+    availabilityComment: 'Загружен проектами на 60%, доступен для стратегических консультаций',
+    skills: [
+      {
+        id: 'layout-optimization',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-02-01',
+          to: '2024-03-15',
+          description: 'Оптимизация размещения объектов обустройства с использованием OptaPlanner'
+        },
+        artifacts: ['artifact-infraplan-layout'],
+        interest: 'high',
+        availableFte: 0.25
+      },
+      {
+        id: 'geo-apis',
+        level: 'B',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2021-07-01',
+          to: '2023-12-10',
+          description: 'Проектирование API для геосервисов и интеграции с подрядчиками ЛИДАР'
+        },
+        artifacts: ['artifact-infraplan-layout'],
+        interest: 'medium',
+        availableFte: 0.15
+      },
+      {
+        id: 'infrastructure-economics',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-06-01',
+          description: 'Совместные расчёты экономических эффектов для сценариев размещения'
+        },
+        artifacts: ['artifact-infraplan-economic-report'],
+        interest: 'low',
+        availableFte: 0.1
+      }
+    ]
   },
   {
     id: 'expert-anton-vlasov',
@@ -1270,7 +1692,47 @@ export const experts: ExpertProfile[] = [
       'Сопровождал сделки по покупке активов в Арктическом регионе'
     ],
     availability: 'busy',
-    availabilityComment: 'Свободные слоты с ноября, возможна точечная экспертиза документов'
+    availabilityComment: 'Свободные слоты с ноября, возможна точечная экспертиза документов',
+    skills: [
+      {
+        id: 'financial-modeling',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-01-01',
+          to: '2024-04-20',
+          description: 'Подготовка инвестиционных моделей для масштабирования INFRAPLAN'
+        },
+        artifacts: ['artifact-infraplan-economic-report'],
+        interest: 'high',
+        availableFte: 0.1
+      },
+      {
+        id: 'scenario-planning',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2023-03-01',
+          to: '2024-01-30',
+          description: 'Сценарный анализ инвестиционных программ для портфеля месторождений'
+        },
+        artifacts: ['artifact-infraplan-economic-report'],
+        interest: 'medium',
+        availableFte: 0.05
+      },
+      {
+        id: 'ma-support',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2022-11-01',
+          description: 'Экспертиза сделок по покупке активов в Арктическом регионе'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.05
+      }
+    ]
   },
   {
     id: 'expert-raisa-chistyakova',
@@ -1308,7 +1770,47 @@ export const experts: ExpertProfile[] = [
       'Создала стандарт подключения подрядчиков IoT к Digital Twin'
     ],
     availability: 'partial',
-    availabilityComment: 'Доступна для аудитов и предпроектной диагностики на 2–3 дня в месяц'
+    availabilityComment: 'Доступна для аудитов и предпроектной диагностики на 2–3 дня в месяц',
+    skills: [
+      {
+        id: 'telemetry-streaming',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-04-01',
+          to: '2024-03-01',
+          description: 'Поддержка ClickHouse и Kafka пайплайнов с нагрузкой 500k сообщений/сек'
+        },
+        artifacts: ['artifact-dtwin-telemetry-cube'],
+        interest: 'high',
+        availableFte: 0.2
+      },
+      {
+        id: 'iot-integration',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-02-01',
+          description: 'Интеграция промышленного IoT с ситуационными центрами и Digital Twin'
+        },
+        artifacts: ['artifact-dtwin-telemetry-cube'],
+        interest: 'medium',
+        availableFte: 0.15
+      },
+      {
+        id: 'sre-monitoring',
+        level: 'B',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2021-11-01',
+          to: '2023-10-01',
+          description: 'Настройка SLO/SLI для событийных систем мониторинга'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.1
+      }
+    ]
   },
   {
     id: 'expert-elizar-kopylov',
@@ -1345,7 +1847,47 @@ export const experts: ExpertProfile[] = [
       'Внедрил процесс MLOps для Nedra.Production в пяти регионах'
     ],
     availability: 'available',
-    availabilityComment: 'Готов подключиться к пилотам и пресейлам, приоритет — оптимизация добычи'
+    availabilityComment: 'Готов подключиться к пилотам и пресейлам, приоритет — оптимизация добычи',
+    skills: [
+      {
+        id: 'production-ml',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-08-01',
+          to: '2024-02-15',
+          description: 'Обучение и внедрение ML-моделей оптимизации добычи на 5 активах'
+        },
+        artifacts: ['artifact-dtwin-optimization-orders'],
+        interest: 'high',
+        availableFte: 0.35
+      },
+      {
+        id: 'mlops-production',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2023-01-10',
+          to: '2024-03-10',
+          description: 'Организация конвейера MLOps для Digital Twin'
+        },
+        artifacts: ['artifact-dtwin-optimization-orders'],
+        interest: 'medium',
+        availableFte: 0.25
+      },
+      {
+        id: 'value-discovery',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-06-01',
+          description: 'Фасилитация discovery-сессий с производством по выбору сценариев'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.2
+      }
+    ]
   },
   {
     id: 'expert-igor-shamov',
@@ -1381,7 +1923,47 @@ export const experts: ExpertProfile[] = [
       'Разработал стандарт интеграции Remote Ops с подрядчиками HSE'
     ],
     availability: 'partial',
-    availabilityComment: 'Находится в проектах внедрения, доступен для очных воркшопов раз в месяц'
+    availabilityComment: 'Находится в проектах внедрения, доступен для очных воркшопов раз в месяц',
+    skills: [
+      {
+        id: 'remote-ops-integration',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2021-09-01',
+          to: '2024-02-28',
+          description: 'Интеграция SCADA, MES и дистанционного управления на кустовых площадках'
+        },
+        artifacts: ['artifact-dtwin-remote-commands'],
+        interest: 'high',
+        availableFte: 0.2
+      },
+      {
+        id: 'remote-ops-security',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2022-05-01',
+          description: 'Оценка и настройка кибербезопасности дистанционных операций'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.15
+      },
+      {
+        id: 'change-management',
+        level: 'C',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2023-04-01',
+          to: '2024-01-10',
+          description: 'Организация change management при внедрении Remote Ops'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.1
+      }
+    ]
   },
   {
     id: 'expert-vladimir-romanov',
@@ -1418,7 +2000,47 @@ export const experts: ExpertProfile[] = [
       'Внедрил цифровые регламенты взаимодействия с подрядчиками в трёх промыслах'
     ],
     availability: 'available',
-    availabilityComment: 'Готов вести консалтинговые треки и наставничество по WWO-процессам'
+    availabilityComment: 'Готов вести консалтинговые треки и наставничество по WWO-процессам',
+    skills: [
+      {
+        id: 'wwo-planning',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2021-03-01',
+          to: '2024-02-01',
+          description: 'Оптимизация и согласование программ ГТМ для 3 промыслов'
+        },
+        artifacts: ['artifact-wwo-plan'],
+        interest: 'high',
+        availableFte: 0.3
+      },
+      {
+        id: 'contractor-management',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-05-01',
+          to: '2024-03-20',
+          description: 'Выстраивание взаимодействия с подрядчиками и SLA по ремонтам'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.25
+      },
+      {
+        id: 'process-digitization',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-09-01',
+          description: 'Перевод регламентов WWO в цифровые шаблоны'
+        },
+        artifacts: ['artifact-wwo-operations-log'],
+        interest: 'high',
+        availableFte: 0.2
+      }
+    ]
   },
   {
     id: 'expert-margarita-kurganskaya',
@@ -1454,7 +2076,47 @@ export const experts: ExpertProfile[] = [
       'Сформировала программу обучения операторов цифровым инструментам WWO'
     ],
     availability: 'busy',
-    availabilityComment: 'Полная загрузка текущими внедрениями, возможны дистанционные консультации'
+    availabilityComment: 'Полная загрузка текущими внедрениями, возможны дистанционные консультации',
+    skills: [
+      {
+        id: 'field-dispatching',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-06-01',
+          to: '2024-04-05',
+          description: 'Диспетчеризация бригад и контроль исполнения ремонтов'
+        },
+        artifacts: ['artifact-wwo-operations-log'],
+        interest: 'high',
+        availableFte: 0.05
+      },
+      {
+        id: 'mobile-solutions',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-01-01',
+          description: 'Внедрение мобильных приложений для полевых сотрудников'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.05
+      },
+      {
+        id: 'hse-compliance',
+        level: 'C',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2022-09-01',
+          to: '2023-12-01',
+          description: 'Контроль соблюдения HSE требований во время ремонтов'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.05
+      }
+    ]
   },
   {
     id: 'expert-denis-laptev',
@@ -1490,7 +2152,47 @@ export const experts: ExpertProfile[] = [
       'Организовал программу развития аналитиков WWO Academy'
     ],
     availability: 'partial',
-    availabilityComment: 'Может вести до двух параллельных консалтинговых треков'
+    availabilityComment: 'Может вести до двух параллельных консалтинговых треков',
+    skills: [
+      {
+        id: 'wwo-analytics',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-03-01',
+          to: '2024-03-25',
+          description: 'Разработка BI-дашбордов эффективности ремонтов'
+        },
+        artifacts: ['artifact-wwo-performance-dashboard'],
+        interest: 'high',
+        availableFte: 0.25
+      },
+      {
+        id: 'forecasting',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-02-01',
+          to: '2024-01-15',
+          description: 'Прогнозирование производственных эффектов от ремонтов'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.2
+      },
+      {
+        id: 'data-storytelling',
+        level: 'B',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2021-10-01',
+          description: 'Обучение аналитиков storytelling и презентации данных'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.15
+      }
+    ]
   }
 ];
 
@@ -1713,3 +2415,23 @@ export const reuseIndexHistory: ReuseTrendPoint[] = [
   { period: '2024-09', averageScore: 0.65 },
   { period: '2024-10', averageScore: 0.66 }
 ];
+
+export {
+  skills,
+  roleToSkillsMap,
+  getSkillsByRole,
+  getSkillIdsByRole,
+  getRolesForSkill,
+  skillLevels,
+  evidenceStatuses
+} from './data/skills';
+
+export type {
+  SkillDefinition,
+  SkillLevelDescriptor,
+  EvidenceStatusDescriptor,
+  SkillCategory,
+  SkillSource,
+  SkillLevelId,
+  EvidenceStatusId
+} from './data/skills';
