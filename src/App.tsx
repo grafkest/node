@@ -57,7 +57,7 @@ import {
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
-  type Initiative,
+  type InitiativeNode,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -98,7 +98,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
-  const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
+  const [initiativeData, setInitiativeData] = useState<InitiativeNode[]>(initialInitiatives);
   const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -229,6 +229,7 @@ function App() {
       const activeNodeIds = new Set<string>([...domainIds]);
       snapshot.modules.forEach((module) => activeNodeIds.add(module.id));
       snapshot.artifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+      (snapshot.initiatives ?? []).forEach((initiative) => activeNodeIds.add(initiative.id));
 
       setDomainData(snapshot.domains);
       setModuleDataState(recalculateReuseScores(snapshot.modules));
@@ -675,6 +676,7 @@ function App() {
     };
   }, [
     artifactData,
+    initiativeData,
     domainData,
     moduleData,
     initiativeData,
@@ -855,6 +857,11 @@ function App() {
       return ids;
     }
 
+    if (selectedNode.type === 'initiative') {
+      selectedNode.plannedModuleIds.forEach((moduleId) => ids.add(moduleId));
+      return ids;
+    }
+
     if (selectedNode.type === 'domain') {
       moduleData.forEach((module) => {
         if (module.domains.includes(selectedNode.id)) {
@@ -897,6 +904,20 @@ function App() {
       });
     }
 
+    initiativeData.forEach((initiative) => {
+      const matchesSelectedDomain = initiative.domains.some((domainId) =>
+        selectedDomains.has(domainId)
+      );
+
+      if (!matchesSelectedDomain) {
+        return;
+      }
+
+      initiative.plannedModuleIds.forEach((moduleId) => {
+        extraModuleIds.add(moduleId);
+      });
+    });
+
     if (extraModuleIds.size === 0) {
       return filteredModules;
     }
@@ -930,8 +951,28 @@ function App() {
     showAllConnections,
     artifactMap,
     moduleDependents,
-    companyFilter
+    companyFilter,
+    initiativeData,
+    selectedDomains
   ]);
+
+  const graphInitiatives = useMemo(() => {
+    const visibleModuleIds = new Set(graphModules.map((module) => module.id));
+    const selectedInitiativeId = selectedNode?.type === 'initiative' ? selectedNode.id : null;
+
+    return initiativeData.filter((initiative) => {
+      const matchesDomain = initiative.domains.some((domainId) => selectedDomains.has(domainId));
+      const matchesModules = initiative.plannedModuleIds.some((moduleId) =>
+        visibleModuleIds.has(moduleId)
+      );
+
+      if (matchesDomain || matchesModules) {
+        return true;
+      }
+
+      return selectedInitiativeId === initiative.id;
+    });
+  }, [graphModules, initiativeData, selectedDomains, selectedNode]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
@@ -950,12 +991,16 @@ function App() {
       module.domains.forEach((domainId) => addWithAncestors(domainId));
     });
 
+    graphInitiatives.forEach((initiative) => {
+      initiative.domains.forEach((domainId) => addWithAncestors(domainId));
+    });
+
     if (highlightedDomainId) {
       addWithAncestors(highlightedDomainId);
     }
 
     return ids;
-  }, [graphModules, highlightedDomainId, domainAncestors, selectedDomains]);
+  }, [graphModules, graphInitiatives, highlightedDomainId, domainAncestors, selectedDomains]);
 
   const graphDomains = useMemo(
     () => filterDomainTreeByIds(domainData, relevantDomainIds),
@@ -996,14 +1041,18 @@ function App() {
   }, [artifactData, graphModules, selectedNode]);
 
   const graphLinksAll = useMemo(
-    () => buildModuleLinks(moduleData, artifactData, displayableDomainIdSet),
-    [moduleData, artifactData, displayableDomainIdSet]
+    () => [
+      ...buildModuleLinks(moduleData, artifactData, displayableDomainIdSet),
+      ...buildInitiativeLinks(initiativeData, displayableDomainIdSet)
+    ],
+    [moduleData, artifactData, initiativeData, displayableDomainIdSet]
   );
 
   const filteredLinks = useMemo(() => {
     const moduleIds = new Set(graphModules.map((module) => module.id));
     const artifactIds = new Set(graphArtifacts.map((artifact) => artifact.id));
     const domainIds = relevantDomainIds.size > 0 ? relevantDomainIds : null;
+    const initiativeIds = new Set(graphInitiatives.map((initiative) => initiative.id));
 
     return graphLinksAll.filter((link) => {
       const sourceId = getLinkEndpointId(link.source);
@@ -1043,12 +1092,29 @@ function App() {
         return Boolean(producerProduct && consumerProduct && producerProduct === consumerProduct);
       }
 
+      if (link.type === 'initiative-domain') {
+        if (!initiativeIds.has(sourceId)) {
+          return false;
+        }
+
+        if (domainIds && !domainIds.has(targetId)) {
+          return false;
+        }
+
+        return true;
+      }
+
+      if (link.type === 'initiative-plan') {
+        return initiativeIds.has(sourceId) && moduleIds.has(targetId);
+      }
+
       return false;
     });
   }, [
     artifactMap,
     graphArtifacts,
     graphLinksAll,
+    graphInitiatives,
     graphModules,
     moduleById,
     relevantDomainIds,
@@ -2106,7 +2172,7 @@ function App() {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
           artifacts: snapshot.artifacts.length,
-          initiatives: snapshot.initiatives.length
+          initiatives: snapshot.initiatives?.length ?? 0
         };
       } catch (error) {
         const message =
@@ -2605,10 +2671,12 @@ function App() {
                 modules={graphModules}
                 domains={graphDomains}
                 artifacts={graphArtifacts}
+                initiatives={graphInitiatives}
                 links={filteredLinks}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}
+                visibleModuleStatuses={statusFilters}
                 layoutPositions={layoutPositions}
                 onLayoutChange={handleLayoutChange}
               />
@@ -3289,6 +3357,29 @@ function buildModuleLinks(
       }));
 
     return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
+  });
+}
+
+function buildInitiativeLinks(
+  initiatives: InitiativeNode[],
+  allowedDomainIds: Set<string>
+): GraphLink[] {
+  return initiatives.flatMap((initiative) => {
+    const domainLinks: GraphLink[] = initiative.domains
+      .filter((domainId) => allowedDomainIds.has(domainId))
+      .map((domainId) => ({
+        source: initiative.id,
+        target: domainId,
+        type: 'initiative-domain'
+      }));
+
+    const moduleLinks: GraphLink[] = initiative.plannedModuleIds.map((moduleId) => ({
+      source: initiative.id,
+      target: moduleId,
+      type: 'initiative-plan'
+    }));
+
+    return [...domainLinks, ...moduleLinks];
   });
 }
 

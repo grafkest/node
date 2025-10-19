@@ -4,7 +4,7 @@ import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ArtifactNode, DomainNode, Initiative, ModuleNode } from '../data';
+import type { ArtifactNode, DomainNode, InitiativeNode, ModuleNode } from '../data';
 import { normalizeLayoutSnapshot } from '../services/graphStorage';
 import {
   GRAPH_SNAPSHOT_VERSION,
@@ -23,7 +23,7 @@ type GraphPersistenceControlsProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
-  initiatives: Initiative[];
+  initiatives: InitiativeNode[];
   onImport: (snapshot: GraphSnapshotPayload) => void;
   onImportFromGraph?: (request: {
     graphId: string;
@@ -123,7 +123,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
         const moduleCount = normalized.modules.length;
         const domainCount = normalized.domains.length;
         const artifactCount = normalized.artifacts.length;
-        const initiativeCount = normalized.initiatives.length;
+        const initiativeCount = normalized.initiatives?.length ?? 0;
         setStatus({
           type: 'success',
           message: `Импорт завершён. Модулей: ${moduleCount}, доменов: ${domainCount}, артефактов: ${artifactCount}, инициатив: ${initiativeCount}.`
@@ -368,7 +368,7 @@ type GraphSnapshotLike = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
-  initiatives?: Initiative[];
+  initiatives?: InitiativeNode[];
   layout?: GraphSnapshotPayload['layout'];
 };
 
@@ -381,7 +381,8 @@ function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
   if (
     !Array.isArray(candidate.modules) ||
     !Array.isArray(candidate.domains) ||
-    !Array.isArray(candidate.artifacts)
+    !Array.isArray(candidate.artifacts) ||
+    (candidate.initiatives !== undefined && !Array.isArray(candidate.initiatives))
   ) {
     return false;
   }
