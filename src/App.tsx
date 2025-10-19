@@ -25,7 +25,8 @@ import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
   type InitiativeDraftPayload,
-  type ModuleDraftPayload
+  type ModuleDraftPayload,
+  type ModuleDraftPrefillRequest
 } from './components/AdminPanel';
 import FiltersPanel from './components/FiltersPanel';
 import GraphPersistenceControls from './components/GraphPersistenceControls';
@@ -90,11 +91,6 @@ type AdminNotice = {
   message: string;
 };
 
-type ModuleDraftPrefillRequest = {
-  id: number;
-  draft: Partial<ModuleDraftPayload>;
-};
-
 function App() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
   const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
@@ -138,6 +134,9 @@ function App() {
   const adminNoticeIdRef = useRef(0);
   const moduleDraftPrefillIdRef = useRef(0);
   const [moduleDraftPrefill, setModuleDraftPrefill] = useState<ModuleDraftPrefillRequest | null>(null);
+  const handleModuleDraftPrefillApplied = useCallback(() => {
+    setModuleDraftPrefill(null);
+  }, []);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
@@ -2963,6 +2962,8 @@ function App() {
           domains={domainData}
           artifacts={artifactData}
           initiatives={initiativeData}
+          moduleDraftPrefill={moduleDraftPrefill}
+          onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
           onUpdateModule={handleUpdateModule}
           onDeleteModule={handleDeleteModule}
