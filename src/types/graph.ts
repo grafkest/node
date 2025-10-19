@@ -1,4 +1,4 @@
-import type { ArtifactNode, DomainNode, InitiativeNode, ModuleNode } from '../data';
+import type { ArtifactNode, DomainNode, Initiative, ModuleNode } from '../data';
 
 export const GRAPH_SNAPSHOT_VERSION = 2;
 
@@ -19,7 +19,7 @@ export type GraphSnapshotPayload = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
-  initiatives?: InitiativeNode[];
+  initiatives?: Initiative[];
   layout?: GraphLayoutSnapshot;
 };
 

@@ -4,7 +4,7 @@ import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ArtifactNode, DomainNode, InitiativeNode, ModuleNode } from '../data';
+import type { ArtifactNode, DomainNode, Initiative, ModuleNode } from '../data';
 import { normalizeLayoutSnapshot } from '../services/graphStorage';
 import {
   GRAPH_SNAPSHOT_VERSION,
@@ -23,7 +23,7 @@ type GraphPersistenceControlsProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
-  initiatives: InitiativeNode[];
+  initiatives: Initiative[];
   onImport: (snapshot: GraphSnapshotPayload) => void;
   onImportFromGraph?: (request: {
     graphId: string;
@@ -368,7 +368,7 @@ type GraphSnapshotLike = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
-  initiatives?: InitiativeNode[];
+  initiatives?: Initiative[];
   layout?: GraphSnapshotPayload['layout'];
 };
 
