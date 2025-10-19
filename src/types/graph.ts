@@ -1,4 +1,4 @@
-import type { ArtifactNode, DomainNode, ModuleNode } from '../data';
+import type { ArtifactNode, DomainNode, Initiative, ModuleNode } from '../data';
 
 export const GRAPH_SNAPSHOT_VERSION = 1;
 
@@ -19,6 +19,7 @@ export type GraphSnapshotPayload = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
+  initiatives: Initiative[];
   layout?: GraphLayoutSnapshot;
 };
 
@@ -40,4 +41,5 @@ export type GraphCopyRequest = {
   includeDomains: boolean;
   includeModules: boolean;
   includeArtifacts: boolean;
+  includeInitiatives: boolean;
 };

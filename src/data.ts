@@ -128,6 +128,36 @@ export type ModuleNode = {
   nonFunctional: NonFunctionalRequirements;
 };
 
+export type InitiativeStatus = 'idea' | 'analysis' | 'delivery' | 'complete';
+
+export type InitiativeWorkItem = {
+  id: string;
+  title: string;
+  description: string;
+  effortHours: number;
+};
+
+export type InitiativeRequirement = {
+  id: string;
+  role: TeamRole;
+  skills: string[];
+  count: number;
+  comment?: string;
+};
+
+export type Initiative = {
+  id: string;
+  name: string;
+  description: string;
+  owner: string;
+  status: InitiativeStatus;
+  expectedImpact: string;
+  domains: string[];
+  potentialModules: string[];
+  works: InitiativeWorkItem[];
+  requirements: InitiativeRequirement[];
+};
+
 export const domainTree: DomainNode[] = [
   {
     id: 'upstream',
@@ -1599,6 +1629,114 @@ export const artifacts: ArtifactNode[] = [
     consumerIds: [],
     dataType: 'Power BI',
     sampleUrl: 'https://storage.nedra.digital/samples/wwo-performance-dashboard.pdf'
+  }
+];
+
+export const initiatives: Initiative[] = [
+  {
+    id: 'initiative-dtwin-rollout',
+    name: 'Внедрение цифрового двойника промысла',
+    description:
+      'Построение цифрового двойника инфраструктуры промысла и настройка мониторинга исполнения программ развития.',
+    owner: 'Дирекция цифровой трансформации добычи',
+    status: 'analysis',
+    expectedImpact:
+      'Сокращение цикла планирования капитальных ремонтов на 20% и повышение прозрачности портфеля работ.',
+    domains: ['layout-optimization', 'development-scenarios'],
+    potentialModules: ['module-dtwin-optimizer', 'module-infraplan-layout'],
+    works: [
+      {
+        id: 'dtwin-discovery',
+        title: 'Сбор требований и описание процессов',
+        description: 'Интервью с производственными центрами, формирование пользовательских сценариев.',
+        effortHours: 160
+      },
+      {
+        id: 'dtwin-integration',
+        title: 'Интеграция с источниками данных',
+        description: 'Настройка потоков данных из DataHub и геомоделей, разработка проверок качества.',
+        effortHours: 240
+      },
+      {
+        id: 'dtwin-training',
+        title: 'Обучение и запуск пилотных команд',
+        description: 'Подготовка методических материалов, проведение очных тренингов и запуск пилота.',
+        effortHours: 120
+      }
+    ],
+    requirements: [
+      {
+        id: 'dtwin-product',
+        role: 'Владелец продукта',
+        skills: ['Управление требованиями', 'Работа с заказчиком'],
+        count: 1,
+        comment: 'Опыт управления цифровыми инициативами в добыче от 3 лет.'
+      },
+      {
+        id: 'dtwin-architect',
+        role: 'Архитектор',
+        skills: ['Integration patterns', 'Data governance'],
+        count: 1
+      },
+      {
+        id: 'dtwin-backend',
+        role: 'Backend',
+        skills: ['TypeScript', 'NestJS', 'Kafka'],
+        count: 2
+      },
+      {
+        id: 'dtwin-analyst',
+        role: 'Аналитик',
+        skills: ['BPMN', 'UX-аналитика'],
+        count: 1
+      }
+    ]
+  },
+  {
+    id: 'initiative-maintenance-optimizer',
+    name: 'Оптимизация программ ППР',
+    description:
+      'Автоматизация формирования и приоритизации программ планово-предупредительных ремонтов с оценкой эффекта.',
+    owner: 'Функция производственной эффективности',
+    status: 'delivery',
+    expectedImpact: 'Снижение неплановых простоев оборудования на 12% и оптимизация фонда ремонтов.',
+    domains: ['resource-evaluation', 'economic-evaluation'],
+    potentialModules: ['module-infraplan-economics', 'module-infraplan-datahub'],
+    works: [
+      {
+        id: 'ppr-data-quality',
+        title: 'Аудит качества исходных данных',
+        description: 'Проверка полноты исторических ремонтов и параметров оборудования, настройка витрин.',
+        effortHours: 140
+      },
+      {
+        id: 'ppr-scenarios',
+        title: 'Разработка сценариев оптимизации',
+        description: 'Построение моделей расчёта эффекта, настройка сравнительных сценариев и отчётности.',
+        effortHours: 200
+      }
+    ],
+    requirements: [
+      {
+        id: 'ppr-rd',
+        role: 'Эксперт R&D',
+        skills: ['Оптимизационные модели', 'Python'],
+        count: 1
+      },
+      {
+        id: 'ppr-frontend',
+        role: 'Frontend',
+        skills: ['React', 'UI/UX'],
+        count: 1
+      },
+      {
+        id: 'ppr-ux',
+        role: 'UX',
+        skills: ['Product discovery', 'Полевые исследования'],
+        count: 1,
+        comment: 'Готовность к командировкам на производственные площадки.'
+      }
+    ]
   }
 ];
 

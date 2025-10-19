@@ -24,6 +24,7 @@ import DomainTree from './components/DomainTree';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
+  type InitiativeDraftPayload,
   type ModuleDraftPayload
 } from './components/AdminPanel';
 import FiltersPanel from './components/FiltersPanel';
@@ -50,11 +51,13 @@ import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
   experts as initialExperts,
+  initiatives as initialInitiatives,
   modules as initialModules,
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
+  type Initiative,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -95,6 +98,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
+  const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
   const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -138,8 +142,8 @@ function App() {
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
   const [graphCopyOptions, setGraphCopyOptions] = useState<
-    Set<'domains' | 'modules' | 'artifacts'>
-  >(() => new Set(['domains', 'modules', 'artifacts']));
+    Set<'domains' | 'modules' | 'artifacts' | 'initiatives'>
+  >(() => new Set(['domains', 'modules', 'artifacts', 'initiatives']));
   const [isGraphActionInProgress, setIsGraphActionInProgress] = useState(false);
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
@@ -229,6 +233,7 @@ function App() {
       setDomainData(snapshot.domains);
       setModuleDataState(recalculateReuseScores(snapshot.modules));
       setArtifactData(snapshot.artifacts);
+      setInitiativeData(snapshot.initiatives ?? []);
       setSelectedNode(null);
       setSearch('');
       setStatusFilters(new Set(allStatuses));
@@ -632,6 +637,7 @@ function App() {
         modules: moduleData,
         domains: domainData,
         artifacts: artifactData,
+        initiatives: initiativeData,
         layout: { nodes: layoutPositions }
       },
       controller.signal
@@ -671,6 +677,7 @@ function App() {
     artifactData,
     domainData,
     moduleData,
+    initiativeData,
     isSyncAvailable,
     layoutPositions,
     activeGraphId
@@ -727,6 +734,7 @@ function App() {
     });
     return map;
   }, [moduleData]);
+  const moduleIdSet = useMemo(() => new Set(moduleData.map((module) => module.id)), [moduleData]);
 
   const graphSelectOptions = useMemo(
     () =>
@@ -752,7 +760,8 @@ function App() {
       [
         { id: 'domains' as const, label: 'Домены' },
         { id: 'modules' as const, label: 'Модули' },
-        { id: 'artifacts' as const, label: 'Артефакты' }
+        { id: 'artifacts' as const, label: 'Артефакты' },
+        { id: 'initiatives' as const, label: 'Инициативы' }
       ],
     []
   );
@@ -1483,6 +1492,12 @@ function App() {
         }));
 
       setModuleDataState(recalculateReuseScores(nextModulesBase));
+      setInitiativeData((prev) =>
+        prev.map((initiative) => ({
+          ...initiative,
+          potentialModules: initiative.potentialModules.filter((id) => id !== moduleId)
+        }))
+      );
 
       setLayoutPositions((prev) => {
         const next = { ...prev };
@@ -1710,6 +1725,12 @@ function App() {
         )
       );
       setArtifactData((prev) => prev.filter((artifact) => !removedIds.has(artifact.domainId)));
+      setInitiativeData((prev) =>
+        prev.map((initiative) => ({
+          ...initiative,
+          domains: initiative.domains.filter((id) => !removedIds.has(id))
+        }))
+      );
       setSelectedDomains((prev) => {
         const next = new Set(prev);
         removedIds.forEach((id) => next.delete(id));
@@ -1985,6 +2006,79 @@ function App() {
     [artifactData, markGraphDirty, showAdminNotice]
   );
 
+  const handleCreateInitiative = useCallback(
+    (draft: InitiativeDraftPayload) => {
+      const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
+      const initiativeId = createEntityId('initiative', draft.name, existingIds);
+      const defaults = {
+        name: draft.name.trim() || `Новая инициатива ${existingIds.size + 1}`,
+        description: draft.description.trim() || 'Описание не заполнено',
+        owner: draft.owner.trim() || 'Ответственный не указан',
+        expectedImpact: draft.expectedImpact.trim() || 'Эффект не оценён',
+        status: draft.status
+      } as const;
+
+      const initiative = buildInitiativeFromDraft(
+        initiativeId,
+        draft,
+        displayableDomainIdSet,
+        moduleIdSet,
+        defaults
+      );
+
+      markGraphDirty();
+      setInitiativeData((prev) => [...prev, initiative]);
+      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
+    },
+    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+
+  const handleUpdateInitiative = useCallback(
+    (initiativeId: string, draft: InitiativeDraftPayload) => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        return;
+      }
+
+      const defaults = {
+        name: existing.name,
+        description: existing.description,
+        owner: existing.owner,
+        expectedImpact: existing.expectedImpact,
+        status: existing.status
+      } as const;
+
+      const updated = buildInitiativeFromDraft(
+        initiativeId,
+        draft,
+        displayableDomainIdSet,
+        moduleIdSet,
+        defaults
+      );
+
+      markGraphDirty();
+      setInitiativeData((prev) =>
+        prev.map((initiative) => (initiative.id === initiativeId ? updated : initiative))
+      );
+      showAdminNotice('success', `Инициатива «${updated.name}» обновлена.`);
+    },
+    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+
+  const handleDeleteInitiative = useCallback(
+    (initiativeId: string) => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        return;
+      }
+
+      markGraphDirty();
+      setInitiativeData((prev) => prev.filter((initiative) => initiative.id !== initiativeId));
+      showAdminNotice('success', `Инициатива «${existing.name}» удалена.`);
+    },
+    [initiativeData, markGraphDirty, showAdminNotice]
+  );
+
   const handleImportGraph = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
@@ -2000,6 +2094,7 @@ function App() {
       includeDomains: boolean;
       includeModules: boolean;
       includeArtifacts: boolean;
+      includeInitiatives: boolean;
     }) => {
       try {
         const snapshot = await importGraphFromSource(request);
@@ -2010,7 +2105,8 @@ function App() {
         return {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
-          artifacts: snapshot.artifacts.length
+          artifacts: snapshot.artifacts.length,
+          initiatives: snapshot.initiatives.length
         };
       } catch (error) {
         const message =
@@ -2054,8 +2150,15 @@ function App() {
     const includeDomains = graphCopyOptions.has('domains');
     const includeModules = graphCopyOptions.has('modules');
     const includeArtifacts = graphCopyOptions.has('artifacts');
+    const includeInitiatives = graphCopyOptions.has('initiatives');
 
-    if (graphSourceIdDraft && !includeDomains && !includeModules && !includeArtifacts) {
+    if (
+      graphSourceIdDraft &&
+      !includeDomains &&
+      !includeModules &&
+      !includeArtifacts &&
+      !includeInitiatives
+    ) {
       setGraphActionStatus({
         type: 'error',
         message: 'Выберите хотя бы один тип данных для копирования из выбранного графа.'
@@ -2070,7 +2173,8 @@ function App() {
         sourceGraphId: graphSourceIdDraft ?? undefined,
         includeDomains,
         includeModules,
-        includeArtifacts
+        includeArtifacts,
+        includeInitiatives
       });
       setGraphActionStatus({
         type: 'success',
@@ -2078,7 +2182,7 @@ function App() {
       });
       setGraphNameDraft('');
       setGraphSourceIdDraft(null);
-      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts']));
+      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts', 'initiatives']));
       setIsCreatePanelOpen(false);
       await refreshGraphs(created.id, { preserveSelection: false });
       showAdminNotice('success', `Граф «${created.name}» создан.`);
@@ -2564,6 +2668,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          initiatives={initiativeData}
           onImport={handleImportGraph}
           onImportFromGraph={handleImportFromExistingGraph}
           graphs={graphs}
@@ -2576,6 +2681,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          initiatives={initiativeData}
           onCreateModule={handleCreateModule}
           onUpdateModule={handleUpdateModule}
           onDeleteModule={handleDeleteModule}
@@ -2585,6 +2691,9 @@ function App() {
           onCreateArtifact={handleCreateArtifact}
           onUpdateArtifact={handleUpdateArtifact}
           onDeleteArtifact={handleDeleteArtifact}
+          onCreateInitiative={handleCreateInitiative}
+          onUpdateInitiative={handleUpdateInitiative}
+          onDeleteInitiative={handleDeleteInitiative}
         />
       </main>
     </Layout>
@@ -2726,6 +2835,67 @@ function buildModuleFromDraft(
   };
 
   return { module, consumedArtifactIds };
+}
+
+function buildInitiativeFromDraft(
+  initiativeId: string,
+  draft: InitiativeDraftPayload,
+  allowedDomainIds: Set<string>,
+  allowedModuleIds: Set<string>,
+  defaults: {
+    name: string;
+    description: string;
+    owner: string;
+    expectedImpact: string;
+    status: Initiative['status'];
+  }
+): Initiative {
+  const normalizedName = draft.name.trim() || defaults.name;
+  const normalizedDescription = draft.description.trim() || defaults.description;
+  const normalizedOwner = draft.owner.trim() || defaults.owner;
+  const normalizedImpact = draft.expectedImpact.trim() || defaults.expectedImpact;
+  const normalizedStatus = draft.status ?? defaults.status;
+
+  const domains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
+  const potentialModules = deduplicateNonEmpty(draft.moduleIds).filter((id) => allowedModuleIds.has(id));
+
+  const works = draft.works.map((work, index) => {
+    const effortValue = Number(work.effortHours);
+    const normalizedEffort = Number.isFinite(effortValue) ? Math.max(0, effortValue) : 0;
+    return {
+      id: work.id.trim() || `work-${index + 1}-${initiativeId}`,
+      title: work.title.trim() || `Работа ${index + 1}`,
+      description: work.description.trim() || 'Описание не заполнено',
+      effortHours: normalizedEffort
+    };
+  });
+
+  const requirements = draft.requirements.map((requirement, index) => {
+    const countValue = Number(requirement.count);
+    const normalizedCount = Number.isFinite(countValue) ? Math.max(1, Math.round(countValue)) : 1;
+    const skills = deduplicateNonEmpty(requirement.skills.map((skill) => skill.trim()));
+    const comment = requirement.comment?.trim() ?? '';
+    return {
+      id: requirement.id.trim() || `requirement-${index + 1}-${initiativeId}`,
+      role: requirement.role,
+      skills,
+      count: normalizedCount,
+      comment: comment || undefined
+    };
+  });
+
+  return {
+    id: initiativeId,
+    name: normalizedName,
+    description: normalizedDescription,
+    owner: normalizedOwner,
+    status: normalizedStatus,
+    expectedImpact: normalizedImpact,
+    domains,
+    potentialModules,
+    works,
+    requirements
+  };
 }
 
 function recalculateReuseScores(modules: ModuleNode[]): ModuleNode[] {
