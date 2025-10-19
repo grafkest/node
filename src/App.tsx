@@ -25,7 +25,8 @@ import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
   type InitiativeDraftPayload,
-  type ModuleDraftPayload
+  type ModuleDraftPayload,
+  type ModuleDraftPrefillRequest
 } from './components/AdminPanel';
 import FiltersPanel from './components/FiltersPanel';
 import GraphPersistenceControls from './components/GraphPersistenceControls';
@@ -57,7 +58,7 @@ import {
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
-  type InitiativeNode,
+  type Initiative,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -90,11 +91,6 @@ type AdminNotice = {
   message: string;
 };
 
-type ModuleDraftPrefillRequest = {
-  id: number;
-  draft: Partial<ModuleDraftPayload>;
-};
-
 function App() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
   const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
@@ -105,7 +101,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
-  const [initiativeData, setInitiativeData] = useState<InitiativeNode[]>(initialInitiatives);
+  const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
   const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -138,6 +134,9 @@ function App() {
   const adminNoticeIdRef = useRef(0);
   const moduleDraftPrefillIdRef = useRef(0);
   const [moduleDraftPrefill, setModuleDraftPrefill] = useState<ModuleDraftPrefillRequest | null>(null);
+  const handleModuleDraftPrefillApplied = useCallback(() => {
+    setModuleDraftPrefill(null);
+  }, []);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
@@ -629,7 +628,7 @@ function App() {
         draft: {
           name: initiative.targetModuleName,
           productName: initiative.targetModuleName,
-          domainIds: initiative.domainIds,
+          domainIds: initiative.domains,
           projectTeam: team
         }
       });
@@ -2963,6 +2962,8 @@ function App() {
           domains={domainData}
           artifacts={artifactData}
           initiatives={initiativeData}
+          moduleDraftPrefill={moduleDraftPrefill}
+          onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
           onUpdateModule={handleUpdateModule}
           onDeleteModule={handleDeleteModule}
@@ -3574,7 +3575,7 @@ function buildModuleLinks(
 }
 
 function buildInitiativeLinks(
-  initiatives: InitiativeNode[],
+  initiatives: Initiative[],
   allowedDomainIds: Set<string>
 ): GraphLink[] {
   return initiatives.flatMap((initiative) => {

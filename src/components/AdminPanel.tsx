@@ -55,6 +55,11 @@ export type ModuleDraftPayload = {
   nonFunctional: NonFunctionalRequirements;
 };
 
+export type ModuleDraftPrefillRequest = {
+  id: number;
+  draft: Partial<ModuleDraftPayload>;
+};
+
 export type DomainDraftPayload = {
   name: string;
   description: string;
@@ -107,6 +112,8 @@ type AdminPanelProps = {
   domains: DomainNode[];
   artifacts: ArtifactNode[];
   initiatives: Initiative[];
+  moduleDraftPrefill: ModuleDraftPrefillRequest | null;
+  onModuleDraftPrefillApplied?: () => void;
   onCreateModule: (draft: ModuleDraftPayload) => void;
   onUpdateModule: (id: string, draft: ModuleDraftPayload) => void;
   onDeleteModule: (id: string) => void;
@@ -221,6 +228,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   domains,
   artifacts,
   initiatives,
+  moduleDraftPrefill,
+  onModuleDraftPrefillApplied,
   onCreateModule,
   onUpdateModule,
   onDeleteModule,
@@ -457,7 +466,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       }
       return next;
     });
-  }, [moduleDraftPrefillKey, moduleDraftPrefill]);
+    if (onModuleDraftPrefillApplied) {
+      onModuleDraftPrefillApplied();
+    }
+  }, [moduleDraftPrefillKey, moduleDraftPrefill, onModuleDraftPrefillApplied]);
 
   useEffect(() => {
     const nextOption = domainOptions.find((item) => item.value === selectedDomainId);

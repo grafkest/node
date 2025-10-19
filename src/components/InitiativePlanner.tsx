@@ -137,7 +137,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     );
   }
 
-  const domainLabels = selectedInitiative.domainIds.map(
+  const domainLabels = selectedInitiative.domains.map(
     (domainId) => domainNameMap[domainId] ?? domainId
   );
 
