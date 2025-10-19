@@ -68,6 +68,51 @@ export type ExpertProfile = {
   availabilityComment: string;
 };
 
+export type InitiativeStatus = 'initiated' | 'in-progress' | 'converted';
+
+export type InitiativeCandidateScore = {
+  criterion: string;
+  weight: number;
+  value: number;
+  comment?: string;
+};
+
+export type InitiativeCandidate = {
+  expertId: string;
+  score: number;
+  fitComment: string;
+  riskTags: string[];
+  scoreDetails: InitiativeCandidateScore[];
+};
+
+export type InitiativeRolePlan = {
+  id: string;
+  role: TeamRole;
+  required: number;
+  pinnedExpertIds: string[];
+  candidates: InitiativeCandidate[];
+};
+
+export type InitiativeRisk = {
+  id: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high';
+  createdAt: string;
+};
+
+export type Initiative = {
+  id: string;
+  name: string;
+  description: string;
+  status: InitiativeStatus;
+  domainIds: string[];
+  targetModuleName: string;
+  owner: string;
+  lastUpdated: string;
+  risks: InitiativeRisk[];
+  roles: InitiativeRolePlan[];
+};
+
 export type LibraryDependency = {
   name: string;
   version: string;
@@ -1648,6 +1693,249 @@ export const moduleLinks: GraphLink[] = modules.flatMap((module) => {
 
   return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
 });
+
+export const initiatives: Initiative[] = [
+  {
+    id: 'initiative-dtwin-remote',
+    name: 'Цифровой двойник удалённого промысла',
+    description:
+      'Запуск цифрового двойника для удалённого промысла с круглосуточным мониторингом телеметрии и моделированием отклонений.',
+    status: 'initiated',
+    domainIds: ['real-time-monitoring', 'data-preparation'],
+    targetModuleName: 'DTwin Remote Monitoring',
+    owner: 'Раиса Чистякова',
+    lastUpdated: '2024-11-12T08:30:00.000Z',
+    risks: [
+      {
+        id: 'risk-dtwin-connectivity',
+        description: 'Неустойчивый канал связи с месторождением может сорвать сроки пилота.',
+        severity: 'high',
+        createdAt: '2024-11-05T10:00:00.000Z'
+      },
+      {
+        id: 'risk-dtwin-staff',
+        description: 'Нет выделенного архитектора на этапе построения пайплайна телеметрии.',
+        severity: 'medium',
+        createdAt: '2024-11-07T14:20:00.000Z'
+      }
+    ],
+    roles: [
+      {
+        id: 'dtwin-architect',
+        role: 'Архитектор',
+        required: 1,
+        pinnedExpertIds: ['expert-raisa-chistyakova'],
+        candidates: [
+          {
+            expertId: 'expert-raisa-chistyakova',
+            score: 92,
+            fitComment:
+              'Вела внедрение телеметрии в INFRAPLAN, знает пайплайны и ограничения инфраструктуры.',
+            riskTags: ['Высокая вовлечённость в действующих проектах'],
+            scoreDetails: [
+              { criterion: 'Соответствие домену', weight: 0.4, value: 0.95 },
+              { criterion: 'Опыт внедрения двойников', weight: 0.35, value: 0.9 },
+              {
+                criterion: 'Доступность',
+                weight: 0.25,
+                value: 0.75,
+                comment: 'Свободно 20% времени, требуется поддержка лидом команды.'
+              }
+            ]
+          },
+          {
+            expertId: 'expert-pavel-kolosov',
+            score: 78,
+            fitComment:
+              'Опыт проектирования сервисов телеметрии через графовые модели, но меньше работал с потоковой частью.',
+            riskTags: ['Низкая доступность в Q4'],
+            scoreDetails: [
+              { criterion: 'Соответствие домену', weight: 0.4, value: 0.7 },
+              { criterion: 'Опыт внедрения двойников', weight: 0.35, value: 0.65 },
+              {
+                criterion: 'Доступность',
+                weight: 0.25,
+                value: 0.4,
+                comment: 'Запланированы консультации для других активов.'
+              }
+            ]
+          }
+        ]
+      },
+      {
+        id: 'dtwin-backend',
+        role: 'Backend',
+        required: 2,
+        pinnedExpertIds: [],
+        candidates: [
+          {
+            expertId: 'expert-viktoria-berezhnaya',
+            score: 88,
+            fitComment: 'Может закрыть потоковую часть и обеспечение качества инженерных данных.',
+            riskTags: ['Параллельная поддержка DataHub'],
+            scoreDetails: [
+              { criterion: 'Работа с телеметрией', weight: 0.35, value: 0.9 },
+              { criterion: 'Инженерия данных', weight: 0.35, value: 0.95 },
+              {
+                criterion: 'Доступность',
+                weight: 0.3,
+                value: 0.65,
+                comment: 'Готова подключиться на 30% времени.'
+              }
+            ]
+          },
+          {
+            expertId: 'expert-anton-vlasov',
+            score: 62,
+            fitComment: 'Финансовый аналитик, может взять управленческую отчётность, но не профильный backend.',
+            riskTags: ['Несоответствие основной компетенции'],
+            scoreDetails: [
+              { criterion: 'Работа с телеметрией', weight: 0.35, value: 0.2 },
+              { criterion: 'Инженерия данных', weight: 0.35, value: 0.4 },
+              { criterion: 'Доступность', weight: 0.3, value: 0.8 }
+            ]
+          }
+        ]
+      },
+      {
+        id: 'dtwin-analyst',
+        role: 'Аналитик',
+        required: 1,
+        pinnedExpertIds: [],
+        candidates: [
+          {
+            expertId: 'expert-viktoria-berezhnaya',
+            score: 74,
+            fitComment: 'Владеет методикой каталогизации данных и сможет описать входные наборы.',
+            riskTags: ['Может перегореть при совмещении ролей'],
+            scoreDetails: [
+              { criterion: 'Знание домена', weight: 0.4, value: 0.9 },
+              { criterion: 'Навыки аналитики', weight: 0.3, value: 0.75 },
+              { criterion: 'Доступность', weight: 0.3, value: 0.5 }
+            ]
+          },
+          {
+            expertId: 'expert-pavel-kolosov',
+            score: 68,
+            fitComment:
+              'Может поддержать архитектурный анализ ограничений, но не готов к ежедневной аналитике.',
+            riskTags: ['Нужен дополнительный аналитик для описания бизнес-процессов'],
+            scoreDetails: [
+              { criterion: 'Знание домена', weight: 0.4, value: 0.75 },
+              { criterion: 'Навыки аналитики', weight: 0.3, value: 0.65 },
+              { criterion: 'Доступность', weight: 0.3, value: 0.4 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'initiative-infraplan-economics',
+    name: 'Конвертация экономического модуля INFRAPLAN под M&A',
+    description:
+      'Расширение экономического блока INFRAPLAN для анализа сделок M&A и стресс-тестов финансовых сценариев.',
+    status: 'in-progress',
+    domainIds: ['economic-evaluation', 'development-scenarios'],
+    targetModuleName: 'INFRAPLAN Economics M&A',
+    owner: 'Антон Власов',
+    lastUpdated: '2024-11-10T15:45:00.000Z',
+    risks: [
+      {
+        id: 'risk-mna-data-quality',
+        description:
+          'Не выстроен процесс проверки источников финансовых данных при интеграции внешних активов.',
+        severity: 'medium',
+        createdAt: '2024-11-02T09:10:00.000Z'
+      }
+    ],
+    roles: [
+      {
+        id: 'mna-owner',
+        role: 'Владелец продукта',
+        required: 1,
+        pinnedExpertIds: ['expert-anton-vlasov'],
+        candidates: [
+          {
+            expertId: 'expert-anton-vlasov',
+            score: 95,
+            fitComment:
+              'Лид экономического блока, ведёт методологию M&A и знает потребности заказчиков.',
+            riskTags: ['Высокая загрузка до конца квартала'],
+            scoreDetails: [
+              { criterion: 'Знание домена', weight: 0.4, value: 0.98 },
+              { criterion: 'Опыт сделок M&A', weight: 0.4, value: 0.95 },
+              { criterion: 'Доступность', weight: 0.2, value: 0.75 }
+            ]
+          },
+          {
+            expertId: 'expert-pavel-kolosov',
+            score: 58,
+            fitComment:
+              'Может поддержать интеграцию пространственных сценариев, но не лидирует финансы.',
+            riskTags: ['Низкая вовлечённость в экономический блок'],
+            scoreDetails: [
+              { criterion: 'Знание домена', weight: 0.4, value: 0.45 },
+              { criterion: 'Опыт сделок M&A', weight: 0.4, value: 0.3 },
+              { criterion: 'Доступность', weight: 0.2, value: 0.6 }
+            ]
+          }
+        ]
+      },
+      {
+        id: 'mna-analyst',
+        role: 'Аналитик',
+        required: 2,
+        pinnedExpertIds: ['expert-viktoria-berezhnaya'],
+        candidates: [
+          {
+            expertId: 'expert-viktoria-berezhnaya',
+            score: 82,
+            fitComment:
+              'Сформирует витрины данных для финансовых моделей и подключит пайплайны качества.',
+            riskTags: ['Требуется поддержка junior-аналитика'],
+            scoreDetails: [
+              { criterion: 'Знание домена', weight: 0.35, value: 0.85 },
+              { criterion: 'Опыт финансовых моделей', weight: 0.35, value: 0.7 },
+              { criterion: 'Доступность', weight: 0.3, value: 0.6 }
+            ]
+          },
+          {
+            expertId: 'expert-anton-vlasov',
+            score: 89,
+            fitComment: 'Собирает финансовые сценарии и может выступать методологом анализа.',
+            riskTags: ['Загрузка как владельца продукта'],
+            scoreDetails: [
+              { criterion: 'Знание домена', weight: 0.35, value: 0.95 },
+              { criterion: 'Опыт финансовых моделей', weight: 0.35, value: 0.92 },
+              { criterion: 'Доступность', weight: 0.3, value: 0.55 }
+            ]
+          }
+        ]
+      },
+      {
+        id: 'mna-frontend',
+        role: 'Frontend',
+        required: 1,
+        pinnedExpertIds: [],
+        candidates: [
+          {
+            expertId: 'expert-pavel-kolosov',
+            score: 65,
+            fitComment:
+              'Может курировать UX части аналитических панелей, но потребует поддержки UI-разработчика.',
+            riskTags: ['Нет фокуса на фронтенд разработке'],
+            scoreDetails: [
+              { criterion: 'UI компетенции', weight: 0.4, value: 0.55 },
+              { criterion: 'Знание домена', weight: 0.35, value: 0.7 },
+              { criterion: 'Доступность', weight: 0.25, value: 0.5 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];
 
 export { moduleById };
 

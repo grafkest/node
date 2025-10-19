@@ -4,10 +4,11 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ArtifactNode, DomainNode, ModuleNode } from '../src/data';
+import type { ArtifactNode, DomainNode, Initiative, ModuleNode } from '../src/data';
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
+  initiatives as initialInitiatives,
   modules as initialModules
 } from '../src/data';
 import {
@@ -55,6 +56,13 @@ type ModuleRow = {
 };
 
 type ArtifactRow = {
+  graph_id: string;
+  id: string;
+  data: string;
+  position: number;
+};
+
+type InitiativeRow = {
   graph_id: string;
   id: string;
   data: string;
@@ -122,6 +130,7 @@ export function createGraph(options: {
   includeDomains: boolean;
   includeModules: boolean;
   includeArtifacts: boolean;
+  includeInitiatives: boolean;
 }): GraphSummary {
   const database = assertDatabase();
   const now = new Date().toISOString();
@@ -141,6 +150,7 @@ export function createGraph(options: {
         domains: options.includeDomains ? sourceSnapshot.domains : [],
         modules: options.includeModules ? sourceSnapshot.modules : [],
         artifacts: options.includeArtifacts ? sourceSnapshot.artifacts : [],
+        initiatives: options.includeInitiatives ? sourceSnapshot.initiatives : [],
         layout:
           options.includeModules && sourceSnapshot.layout
             ? normalizeLayout(sourceSnapshot.layout)
@@ -260,6 +270,26 @@ export function loadSnapshot(graphId: string): GraphSnapshotPayload {
     artifactStatement.free();
   }
 
+  const initiativeStatement = database.prepare(
+    'SELECT graph_id, id, data, position FROM initiatives WHERE graph_id = ? ORDER BY position'
+  );
+  const initiativeRows: InitiativeRow[] = [];
+
+  try {
+    initiativeStatement.bind([graphId]);
+    while (initiativeStatement.step()) {
+      const row = initiativeStatement.getAsObject() as InitiativeRow;
+      initiativeRows.push({
+        graph_id: String(row.graph_id),
+        id: String(row.id),
+        data: String(row.data),
+        position: Number(row.position)
+      });
+    }
+  } finally {
+    initiativeStatement.free();
+  }
+
   const version = readMetadata(graphId, 'snapshotVersion');
   const exportedAt = readMetadata(graphId, 'updatedAt');
   const layoutRaw = readMetadata(graphId, 'layout');
@@ -271,6 +301,7 @@ export function loadSnapshot(graphId: string): GraphSnapshotPayload {
     domains: buildDomainTree(domainRows),
     modules: moduleRows.map((row) => JSON.parse(row.data) as ModuleNode),
     artifacts: artifactRows.map((row) => JSON.parse(row.data) as ArtifactNode),
+    initiatives: initiativeRows.map((row) => JSON.parse(row.data) as Initiative),
     layout
   };
 }
@@ -306,7 +337,8 @@ export function isGraphSnapshotPayload(value: unknown): value is GraphSnapshotPa
   if (
     !Array.isArray(candidate.domains) ||
     !Array.isArray(candidate.modules) ||
-    !Array.isArray(candidate.artifacts)
+    !Array.isArray(candidate.artifacts) ||
+    !Array.isArray(candidate.initiatives)
   ) {
     return false;
   }
@@ -386,6 +418,14 @@ function initializeSchema(): void {
       data TEXT NOT NULL,
       PRIMARY KEY (graph_id, id)
     );
+
+    CREATE TABLE IF NOT EXISTS initiatives (
+      graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+      id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (graph_id, id)
+    );
   `);
 }
 
@@ -452,6 +492,18 @@ function migrateLegacySchema(): void {
     database.run('DROP TABLE legacy_artifacts');
   }
 
+  if (!hasTable('initiatives')) {
+    database.run(`
+      CREATE TABLE initiatives (
+        graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (graph_id, id)
+      );
+    `);
+  }
+
   if (hasTable('metadata')) {
     database.run('ALTER TABLE metadata RENAME TO legacy_metadata');
     database.run(
@@ -483,7 +535,7 @@ function seedInitialData(): boolean {
   const moduleCount = countRows(DEFAULT_GRAPH_ID, 'modules');
   const artifactCount = countRows(DEFAULT_GRAPH_ID, 'artifacts');
 
-  if (domainCount > 0 || moduleCount > 0 || artifactCount > 0) {
+  if (domainCount > 0 || moduleCount > 0 || artifactCount > 0 || countRows(DEFAULT_GRAPH_ID, 'initiatives') > 0) {
     return false;
   }
 
@@ -492,14 +544,18 @@ function seedInitialData(): boolean {
     exportedAt: new Date().toISOString(),
     domains: initialDomainTree,
     modules: initialModules,
-    artifacts: initialArtifacts
+    artifacts: initialArtifacts,
+    initiatives: initialInitiatives
   };
 
   persistSnapshot(DEFAULT_GRAPH_ID, snapshot);
   return true;
 }
 
-function countRows(graphId: string, table: 'domains' | 'modules' | 'artifacts'): number {
+function countRows(
+  graphId: string,
+  table: 'domains' | 'modules' | 'artifacts' | 'initiatives'
+): number {
   const database = assertDatabase();
   const statement = database.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE graph_id = ?`);
 
@@ -681,6 +737,7 @@ function writeSnapshot(database: SqlJsDatabase, graphId: string, snapshot: Graph
   database.run('DELETE FROM domains WHERE graph_id = ?', [graphId]);
   database.run('DELETE FROM modules WHERE graph_id = ?', [graphId]);
   database.run('DELETE FROM artifacts WHERE graph_id = ?', [graphId]);
+  database.run('DELETE FROM initiatives WHERE graph_id = ?', [graphId]);
 
   const domainRows = flattenDomains(snapshot.domains);
   const insertDomain = database.prepare(
@@ -724,6 +781,18 @@ function writeSnapshot(database: SqlJsDatabase, graphId: string, snapshot: Graph
     });
   } finally {
     insertArtifact.free();
+  }
+
+  const insertInitiative = database.prepare(
+    'INSERT INTO initiatives (graph_id, id, position, data) VALUES (?, ?, ?, ?)'
+  );
+
+  try {
+    snapshot.initiatives.forEach((initiative, index) => {
+      insertInitiative.run([graphId, initiative.id, index, JSON.stringify(initiative)]);
+    });
+  } finally {
+    insertInitiative.free();
   }
 
   upsertMetadata(graphId, 'snapshotVersion', String(snapshot.version ?? GRAPH_SNAPSHOT_VERSION), database);

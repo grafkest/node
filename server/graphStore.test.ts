@@ -20,9 +20,11 @@ import {
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
+  initiatives as initialInitiatives,
   modules as initialModules,
   type ArtifactNode,
   type DomainNode,
+  type Initiative,
   type ModuleNode
 } from '../src/data';
 
@@ -55,6 +57,7 @@ test('seeds initial data when database is empty by default', { concurrency: fals
   assert.equal(snapshot.modules.length, initialModules.length);
   assert.equal(snapshot.domains.length, initialDomainTree.length);
   assert.equal(snapshot.artifacts.length, initialArtifacts.length);
+  assert.equal(snapshot.initiatives.length, initialInitiatives.length);
 });
 
 test('persists snapshots and reloads them from disk', { concurrency: false }, async () => {
@@ -173,6 +176,46 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
         sampleUrl: 'https://example.com/sample.json'
       }
     ],
+    initiatives: [
+      {
+        id: 'initiative-alpha',
+        name: 'Инициатива тестового модуля',
+        description: 'Проверка экспорта состава команды',
+        status: 'initiated',
+        domainIds: ['root-domain'],
+        targetModuleName: 'Module Alpha Initiative',
+        owner: 'Тестовый владелец',
+        lastUpdated: new Date().toISOString(),
+        risks: [
+          {
+            id: 'risk-alpha-delay',
+            description: 'Возможная задержка из-за отсутствия аналитика',
+            severity: 'medium',
+            createdAt: new Date().toISOString()
+          }
+        ],
+        roles: [
+          {
+            id: 'role-alpha-analyst',
+            role: 'Аналитик',
+            required: 1,
+            pinnedExpertIds: [],
+            candidates: [
+              {
+                expertId: 'expert-test-alpha',
+                score: 82,
+                fitComment: 'Готов подключиться после согласования.',
+                riskTags: ['Требуется подтверждение доступности'],
+                scoreDetails: [
+                  { criterion: 'Опыт', weight: 0.5, value: 0.85 },
+                  { criterion: 'Доступность', weight: 0.5, value: 0.8 }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
     layout: {
       nodes: {
         'module-alpha': { x: 10, y: 20, fx: 10, fy: 20 },
@@ -189,6 +232,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
   assert.deepEqual(loaded.modules, storedSnapshot.modules);
   assert.deepEqual(loaded.domains, storedSnapshot.domains);
   assert.deepEqual(loaded.artifacts, storedSnapshot.artifacts);
+  assert.deepEqual(loaded.initiatives, storedSnapshot.initiatives);
   assert.deepEqual(loaded.layout, storedSnapshot.layout);
 
   closeGraphStore();
@@ -199,6 +243,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
   assert.deepEqual(reloaded.modules, storedSnapshot.modules);
   assert.deepEqual(reloaded.domains, storedSnapshot.domains);
   assert.deepEqual(reloaded.artifacts, storedSnapshot.artifacts);
+  assert.deepEqual(reloaded.initiatives, storedSnapshot.initiatives);
   assert.deepEqual(reloaded.layout, storedSnapshot.layout);
 });
 
@@ -214,7 +259,8 @@ test('creates and deletes graphs with optional data copy', { concurrency: false 
     sourceGraphId: sourceGraph.id,
     includeDomains: true,
     includeModules: false,
-    includeArtifacts: true
+    includeArtifacts: true,
+    includeInitiatives: false
   });
 
   const graphsAfterCreate = listGraphs();
@@ -241,6 +287,7 @@ test('normalizes invalid layout entries on persist', { concurrency: false }, asy
     domains: [],
     modules: [],
     artifacts: [],
+    initiatives: [],
     layout: {
       nodes: {
         valid: { x: 1, y: 2, fx: Number.NaN, fy: 3 },
@@ -349,6 +396,7 @@ test('supports complex graph authoring flows', { concurrency: false }, async () 
     domains: [...snapshot.domains, newDomain],
     modules: [...snapshot.modules, newModule],
     artifacts: [...snapshot.artifacts, newArtifact],
+    initiatives: [...snapshot.initiatives],
     layout: {
       nodes: {
         ...snapshot.layout?.nodes,
@@ -387,6 +435,7 @@ test('removes persisted layout metadata when positions are absent', { concurrenc
     domains: [],
     modules: [],
     artifacts: [],
+    initiatives: [],
     layout: { nodes: {} }
   };
 
