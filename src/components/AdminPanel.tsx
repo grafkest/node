@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type ArtifactNode,
   type DomainNode,
+  type Initiative,
   type LibraryDependency,
   type ModuleInput,
   type ModuleMetrics,
@@ -74,10 +75,38 @@ export type ArtifactDraftPayload = {
   sampleUrl: string;
 };
 
+type InitiativeWorkDraft = {
+  id: string;
+  title: string;
+  description: string;
+  effortHours: number;
+};
+
+type InitiativeRequirementDraft = {
+  id: string;
+  role: TeamRole;
+  skills: string[];
+  count: number;
+  comment?: string;
+};
+
+export type InitiativeDraftPayload = {
+  name: string;
+  description: string;
+  owner: string;
+  status: Initiative['status'];
+  expectedImpact: string;
+  domainIds: string[];
+  moduleIds: string[];
+  works: InitiativeWorkDraft[];
+  requirements: InitiativeRequirementDraft[];
+};
+
 type AdminPanelProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
+  initiatives: Initiative[];
   onCreateModule: (draft: ModuleDraftPayload) => void;
   onUpdateModule: (id: string, draft: ModuleDraftPayload) => void;
   onDeleteModule: (id: string) => void;
@@ -87,9 +116,12 @@ type AdminPanelProps = {
   onCreateArtifact: (draft: ArtifactDraftPayload) => void;
   onUpdateArtifact: (id: string, draft: ArtifactDraftPayload) => void;
   onDeleteArtifact: (id: string) => void;
+  onCreateInitiative: (draft: InitiativeDraftPayload) => void;
+  onUpdateInitiative: (id: string, draft: InitiativeDraftPayload) => void;
+  onDeleteInitiative: (id: string) => void;
 };
 
-type AdminTab = 'module' | 'domain' | 'artifact';
+type AdminTab = 'module' | 'domain' | 'artifact' | 'initiative';
 
 type SelectItem<Value extends string> = {
   label: string;
@@ -117,7 +149,8 @@ type ArtifactSectionId = 'basic' | 'relations';
 const adminTabs = [
   { label: 'Модули', value: 'module' },
   { label: 'Домены', value: 'domain' },
-  { label: 'Артефакты', value: 'artifact' }
+  { label: 'Артефакты', value: 'artifact' },
+  { label: 'Инициативы', value: 'initiative' }
 ] as const satisfies readonly { label: string; value: AdminTab }[];
 
 const ROOT_DOMAIN_OPTION = '__root__';
@@ -162,10 +195,32 @@ const teamRoleOptions: SelectItem<TeamRole>[] = (
   ] as TeamRole[]
 ).map((role) => ({ label: role, value: role }));
 
+type InitiativeSectionId = 'general' | 'works' | 'requirements' | 'relations';
+
+type InitiativeSection = {
+  id: InitiativeSectionId;
+  title: string;
+};
+
+const initiativeSections: InitiativeSection[] = [
+  { id: 'general', title: 'Общие сведения' },
+  { id: 'works', title: 'Работы и трудозатраты' },
+  { id: 'requirements', title: 'Роли и навыки' },
+  { id: 'relations', title: 'Связи с доменами и модулями' }
+];
+
+const initiativeStatusLabels: Record<Initiative['status'], string> = {
+  idea: 'Идея',
+  analysis: 'Анализ',
+  delivery: 'Реализация',
+  complete: 'Завершена'
+};
+
 const AdminPanel: React.FC<AdminPanelProps> = ({
   modules,
   domains,
   artifacts,
+  initiatives,
   onCreateModule,
   onUpdateModule,
   onDeleteModule,
@@ -174,7 +229,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteDomain,
   onCreateArtifact,
   onUpdateArtifact,
-  onDeleteArtifact
+  onDeleteArtifact,
+  onCreateInitiative,
+  onUpdateInitiative,
+  onDeleteInitiative
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('module');
 
@@ -206,6 +264,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       .map<SelectItem<string>>((artifact) => ({ label: artifact.name, value: artifact.id }));
     return [{ label: 'Создать новый артефакт', value: '__new__' }, ...base];
   }, [artifacts]);
+
+  const initiativeOptions = useMemo<SelectItem<string>[]>(() => {
+    const base = initiatives
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+      .map<SelectItem<string>>((initiative) => ({ label: initiative.name, value: initiative.id }));
+    return [{ label: 'Создать новую инициативу', value: '__new__' }, ...base];
+  }, [initiatives]);
+
+  const initiativeStatusItems = useMemo<SelectItem<Initiative['status']>[]>(
+    () =>
+      (Object.entries(initiativeStatusLabels) as Array<[Initiative['status'], string]>).map(
+        ([value, label]) => ({ value, label })
+      ),
+    []
+  );
+
+  const initiativeDomainIds = useMemo(
+    () =>
+      flattenDomainTree(domains)
+        .filter((domain) => !domain.isCatalogRoot)
+        .map((domain) => domain.id),
+    [domains]
+  );
+
+  const initiativeModuleIds = useMemo(() => modules.map((module) => module.id), [modules]);
 
   const knownCompanyNames = useMemo(() => {
     const names = new Set<string>();
@@ -295,6 +379,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
   const [selectedDomainId, setSelectedDomainId] = useState<string>('__new__');
   const [selectedArtifactId, setSelectedArtifactId] = useState<string>('__new__');
+  const [selectedInitiativeId, setSelectedInitiativeId] = useState<string>('__new__');
 
   const forbiddenParentIds = useMemo(() => {
     if (selectedDomainId === '__new__') {
@@ -312,6 +397,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [artifactDraft, setArtifactDraft] = useState<ArtifactDraftPayload>(() => createDefaultArtifactDraft());
   const [artifactStep, setArtifactStep] = useState<number>(0);
+  const [initiativeDraft, setInitiativeDraft] = useState<InitiativeDraftPayload>(
+    () => createDefaultInitiativeDraft()
+  );
+  const [initiativeStep, setInitiativeStep] = useState<number>(0);
 
   useEffect(() => {
     const nextOption = moduleOptions.find((item) => item.value === selectedModuleId);
@@ -379,6 +468,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [artifactOptions, artifacts, selectedArtifactId]);
 
+  useEffect(() => {
+    const nextOption = initiativeOptions.find((item) => item.value === selectedInitiativeId);
+    if (!nextOption) {
+      setSelectedInitiativeId('__new__');
+      setInitiativeDraft(createDefaultInitiativeDraft());
+      setInitiativeStep(0);
+      return;
+    }
+
+    if (nextOption.value === '__new__') {
+      setInitiativeDraft(createDefaultInitiativeDraft());
+      setInitiativeStep(0);
+      return;
+    }
+
+    const target = initiatives.find((initiative) => initiative.id === nextOption.value);
+    if (target) {
+      setInitiativeDraft(initiativeToDraft(target));
+      setInitiativeStep(0);
+    }
+  }, [initiativeOptions, initiatives, selectedInitiativeId]);
+
   const handleModuleSubmit = () => {
     if (selectedModuleId === '__new__' && moduleDraft.domainIds.length === 0) {
       setModuleStep(0);
@@ -436,6 +547,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     onDeleteArtifact(selectedArtifactId);
     setSelectedArtifactId('__new__');
+  };
+
+  const handleInitiativeSubmit = () => {
+    if (selectedInitiativeId === '__new__') {
+      onCreateInitiative(initiativeDraft);
+      setInitiativeDraft(createDefaultInitiativeDraft());
+      setInitiativeStep(0);
+    } else {
+      onUpdateInitiative(selectedInitiativeId, initiativeDraft);
+    }
+  };
+
+  const handleInitiativeDelete = () => {
+    if (selectedInitiativeId === '__new__') {
+      return;
+    }
+    onDeleteInitiative(selectedInitiativeId);
+    setSelectedInitiativeId('__new__');
   };
 
   const registerCompanyName = (name: string) => {
@@ -528,6 +657,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const domainSelectValue = domainOptions.find((item) => item.value === selectedDomainId) ?? domainOptions[0];
   const artifactSelectValue =
     artifactOptions.find((item) => item.value === selectedArtifactId) ?? artifactOptions[0];
+  const initiativeSelectValue =
+    initiativeOptions.find((item) => item.value === selectedInitiativeId) ?? initiativeOptions[0];
 
   return (
     <div className={styles.container}>
@@ -587,6 +718,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               onChange={(value) => {
                 if (value) {
                   setSelectedArtifactId(value.value);
+                }
+              }}
+            />
+          )}
+          {activeTab === 'initiative' && (
+            <Select<SelectItem<string>>
+              size="s"
+              items={initiativeOptions}
+              value={initiativeSelectValue}
+              getItemLabel={(item) => item.label}
+              getItemKey={(item) => item.value}
+              onChange={(value) => {
+                if (value) {
+                  setSelectedInitiativeId(value.value);
                 }
               }}
             />
@@ -668,7 +813,395 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             onDelete={selectedArtifactId === '__new__' ? undefined : handleArtifactDelete}
           />
         )}
+
+        {activeTab === 'initiative' && (
+          <InitiativeForm
+            mode={selectedInitiativeId === '__new__' ? 'create' : 'edit'}
+            draft={initiativeDraft}
+            step={initiativeStep}
+            domainItems={initiativeDomainIds}
+            domainLabelMap={domainLabelMap}
+            moduleItems={initiativeModuleIds}
+            moduleLabelMap={moduleLabelMap}
+            statusItems={initiativeStatusItems}
+            onChange={setInitiativeDraft}
+            onStepChange={setInitiativeStep}
+            onSubmit={handleInitiativeSubmit}
+            onDelete={selectedInitiativeId === '__new__' ? undefined : handleInitiativeDelete}
+          />
+        )}
       </div>
+    </div>
+  );
+};
+
+const InitiativeForm: React.FC<InitiativeFormProps> = ({
+  mode,
+  draft,
+  step,
+  domainItems,
+  domainLabelMap,
+  moduleItems,
+  moduleLabelMap,
+  statusItems,
+  onChange,
+  onStepChange,
+  onSubmit,
+  onDelete
+}) => {
+  const goToStep = (next: number) => {
+    onStepChange(Math.min(Math.max(next, 0), initiativeSections.length - 1));
+  };
+
+  const current = Math.min(Math.max(step, 0), initiativeSections.length - 1);
+
+  const setField = <K extends keyof InitiativeDraftPayload>(
+    key: K,
+    value: InitiativeDraftPayload[K]
+  ) => {
+    onChange({ ...draft, [key]: value });
+  };
+
+  const addWork = () => {
+    onChange({
+      ...draft,
+      works: [...draft.works, { id: '', title: '', description: '', effortHours: 0 }]
+    });
+  };
+
+  const updateWork = (index: number, patch: Partial<InitiativeWorkDraft>) => {
+    const next = draft.works.map((work, idx) => (idx === index ? { ...work, ...patch } : work));
+    onChange({ ...draft, works: next });
+  };
+
+  const removeWork = (index: number) => {
+    onChange({ ...draft, works: draft.works.filter((_, idx) => idx !== index) });
+  };
+
+  const addRequirement = () => {
+    onChange({
+      ...draft,
+      requirements: [
+        ...draft.requirements,
+        { id: '', role: 'Аналитик', skills: [], count: 1, comment: '' }
+      ]
+    });
+  };
+
+  const updateRequirement = (index: number, patch: Partial<InitiativeRequirementDraft>) => {
+    const next = draft.requirements.map((requirement, idx) =>
+      idx === index ? { ...requirement, ...patch } : requirement
+    );
+    onChange({ ...draft, requirements: next });
+  };
+
+  const removeRequirement = (index: number) => {
+    onChange({
+      ...draft,
+      requirements: draft.requirements.filter((_, idx) => idx !== index)
+    });
+  };
+
+  const statusSelectValue = statusItems.find((item) => item.value === draft.status) ?? null;
+
+  return (
+    <div className={styles.formBody}>
+      <div className={styles.formHeader}>
+        <div>
+          <Text size="l" weight="semibold" className={styles.formTitle}>
+            {mode === 'create' ? 'Создание инициативы' : 'Редактирование инициативы'}
+          </Text>
+          <Text size="xs" view="secondary" className={styles.formSubtitle}>
+            {mode === 'create'
+              ? 'Опишите инициативу, её ожидаемый эффект и состав команды.'
+              : 'Обновите сведения об инициативе, связанных ролях и доменах.'}
+          </Text>
+        </div>
+        {onDelete ? (
+          <Button view="clear" size="s" label="Удалить инициативу" onClick={onDelete} />
+        ) : null}
+      </div>
+
+      {initiativeSections.map((section, index) => (
+        <Collapse
+          key={section.id}
+          isOpen={current === index}
+          onClick={() => goToStep(index)}
+          label={
+            <div className={styles.collapseLabel}>
+              <Text size="s" weight="semibold">
+                {section.title}
+              </Text>
+              <Text size="xs" view="secondary">
+                Раздел {index + 1} из {initiativeSections.length}
+              </Text>
+            </div>
+          }
+        >
+          <div className={styles.sectionContent}>
+            {section.id === 'general' && (
+              <>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Название инициативы
+                  </Text>
+                  <input
+                    className={styles.input}
+                    value={draft.name}
+                    onChange={(event) => setField('name', event.target.value)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Ответственный
+                  </Text>
+                  <input
+                    className={styles.input}
+                    value={draft.owner}
+                    onChange={(event) => setField('owner', event.target.value)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Статус
+                  </Text>
+                  <Select<SelectItem<Initiative['status']>>
+                    size="s"
+                    items={statusItems}
+                    value={statusSelectValue}
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.value}
+                    onChange={(item) => {
+                      if (item) {
+                        setField('status', item.value);
+                      }
+                    }}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Ожидаемый эффект
+                  </Text>
+                  <textarea
+                    className={styles.textarea}
+                    value={draft.expectedImpact}
+                    onChange={(event) => setField('expectedImpact', event.target.value)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Описание инициативы
+                  </Text>
+                  <textarea
+                    className={styles.textarea}
+                    value={draft.description}
+                    onChange={(event) => setField('description', event.target.value)}
+                  />
+                </label>
+              </>
+            )}
+
+            {section.id === 'works' && (
+              <>
+                <div className={styles.list}>
+                  {draft.works.length === 0 ? (
+                    <Text size="s" view="secondary">
+                      Работы не добавлены.
+                    </Text>
+                  ) : (
+                    draft.works.map((work, index) => (
+                      <div key={work.id || `work-${index}`} className={styles.listItem}>
+                        <label className={styles.field}>
+                          <Text size="xs" weight="semibold" className={styles.label}>
+                            Название работы
+                          </Text>
+                          <input
+                            className={styles.input}
+                            value={work.title}
+                            onChange={(event) => updateWork(index, { title: event.target.value })}
+                          />
+                        </label>
+                        <label className={styles.field}>
+                          <Text size="xs" weight="semibold" className={styles.label}>
+                            Трудозатраты, часы
+                          </Text>
+                          <input
+                            className={styles.numberInput}
+                            type="number"
+                            min="0"
+                            value={work.effortHours}
+                            onChange={(event) =>
+                              updateWork(index, { effortHours: Number(event.target.value) })
+                            }
+                          />
+                        </label>
+                        <label className={styles.field}>
+                          <Text size="xs" weight="semibold" className={styles.label}>
+                            Описание работы
+                          </Text>
+                          <textarea
+                            className={styles.textarea}
+                            value={work.description}
+                            onChange={(event) => updateWork(index, { description: event.target.value })}
+                          />
+                        </label>
+                        <Button
+                          size="xs"
+                          view="ghost"
+                          label="Удалить"
+                          onClick={() => removeWork(index)}
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+                <Button size="s" view="ghost" label="Добавить работу" onClick={addWork} />
+              </>
+            )}
+
+            {section.id === 'requirements' && (
+              <>
+                <div className={styles.list}>
+                  {draft.requirements.length === 0 ? (
+                    <Text size="s" view="secondary">
+                      Требования по ролям не заданы.
+                    </Text>
+                  ) : (
+                    draft.requirements.map((requirement, index) => {
+                      const skillsValue = requirement.skills.join(', ');
+                      const roleValue =
+                        teamRoleOptions.find((item) => item.value === requirement.role) ??
+                        teamRoleOptions[0];
+                      return (
+                        <div key={requirement.id || `requirement-${index}`} className={styles.listItem}>
+                          <label className={styles.field}>
+                            <Text size="xs" weight="semibold" className={styles.label}>
+                              Роль
+                            </Text>
+                            <Select<SelectItem<TeamRole>>
+                              size="s"
+                              items={teamRoleOptions}
+                              value={roleValue}
+                              getItemLabel={(item) => item.label}
+                              getItemKey={(item) => item.value}
+                              onChange={(item) => {
+                                if (item) {
+                                  updateRequirement(index, { role: item.value });
+                                }
+                              }}
+                            />
+                          </label>
+                          <label className={styles.field}>
+                            <Text size="xs" weight="semibold" className={styles.label}>
+                              Количество специалистов
+                            </Text>
+                            <input
+                              className={styles.numberInput}
+                              type="number"
+                              min="1"
+                              value={requirement.count}
+                              onChange={(event) =>
+                                updateRequirement(index, { count: Number(event.target.value) })
+                              }
+                            />
+                          </label>
+                          <label className={styles.field}>
+                            <Text size="xs" weight="semibold" className={styles.label}>
+                              Навыки (через запятую)
+                            </Text>
+                            <input
+                              className={styles.input}
+                              value={skillsValue}
+                              onChange={(event) =>
+                                updateRequirement(index, {
+                                  skills: event.target.value
+                                    .split(',')
+                                    .map((skill) => skill.trim())
+                                    .filter((skill) => skill.length > 0)
+                                })
+                              }
+                            />
+                          </label>
+                          <label className={styles.field}>
+                            <Text size="xs" weight="semibold" className={styles.label}>
+                              Комментарий
+                            </Text>
+                            <textarea
+                              className={styles.textarea}
+                              value={requirement.comment ?? ''}
+                              onChange={(event) => updateRequirement(index, { comment: event.target.value })}
+                            />
+                          </label>
+                          <Button
+                            size="xs"
+                            view="ghost"
+                            label="Удалить"
+                            onClick={() => removeRequirement(index)}
+                          />
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <Button size="s" view="ghost" label="Добавить требование" onClick={addRequirement} />
+              </>
+            )}
+
+            {section.id === 'relations' && (
+              <>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Доменные области
+                  </Text>
+                  <Combobox<string>
+                    size="s"
+                    items={domainItems}
+                    value={draft.domainIds}
+                    multiple
+                    getItemKey={(item) => item}
+                    getItemLabel={(item) => domainLabelMap[item] ?? item}
+                    onChange={(value) => setField('domainIds', value ?? [])}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <Text size="xs" weight="semibold" className={styles.label}>
+                    Потенциальные модули
+                  </Text>
+                  <Combobox<string>
+                    size="s"
+                    items={moduleItems}
+                    value={draft.moduleIds}
+                    multiple
+                    getItemKey={(item) => item}
+                    getItemLabel={(item) => moduleLabelMap[item] ?? item}
+                    onChange={(value) => setField('moduleIds', value ?? [])}
+                  />
+                </label>
+              </>
+            )}
+
+            <div className={styles.stepActions}>
+              {index > 0 && (
+                <Button
+                  size="s"
+                  view="ghost"
+                  label="Вернуться к предыдущему разделу"
+                  onClick={() => goToStep(index - 1)}
+                />
+              )}
+              {index < initiativeSections.length - 1 ? (
+                <Button
+                  size="s"
+                  label="Заполнить следующий раздел"
+                  onClick={() => goToStep(index + 1)}
+                />
+              ) : (
+                <Button size="s" view="primary" label="Сохранить инициативу" onClick={onSubmit} />
+              )}
+            </div>
+          </div>
+        </Collapse>
+      ))}
     </div>
   );
 };
@@ -2923,6 +3456,21 @@ type ArtifactFormProps = {
   onDelete?: () => void;
 };
 
+type InitiativeFormProps = {
+  mode: 'create' | 'edit';
+  draft: InitiativeDraftPayload;
+  step: number;
+  domainItems: string[];
+  domainLabelMap: Record<string, string>;
+  moduleItems: string[];
+  moduleLabelMap: Record<string, string>;
+  statusItems: SelectItem<Initiative['status']>[];
+  onChange: (draft: InitiativeDraftPayload) => void;
+  onStepChange: (step: number) => void;
+  onSubmit: () => void;
+  onDelete?: () => void;
+};
+
 const artifactSections: ArtifactSectionId[] = ['basic', 'relations'];
 
 const ArtifactForm: React.FC<ArtifactFormProps> = ({
@@ -3254,6 +3802,20 @@ function createDefaultArtifactDraft(): ArtifactDraftPayload {
   };
 }
 
+function createDefaultInitiativeDraft(): InitiativeDraftPayload {
+  return {
+    name: '',
+    description: '',
+    owner: '',
+    status: 'idea',
+    expectedImpact: '',
+    domainIds: [],
+    moduleIds: [],
+    works: [{ id: '', title: '', description: '', effortHours: 0 }],
+    requirements: [{ id: '', role: 'Аналитик', skills: [], count: 1, comment: '' }]
+  };
+}
+
 function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
   return {
     name: module.name,
@@ -3323,6 +3885,31 @@ function artifactToDraft(artifact: ArtifactNode): ArtifactDraftPayload {
     consumerIds: [...artifact.consumerIds],
     dataType: artifact.dataType,
     sampleUrl: artifact.sampleUrl
+  };
+}
+
+function initiativeToDraft(initiative: Initiative): InitiativeDraftPayload {
+  return {
+    name: initiative.name,
+    description: initiative.description,
+    owner: initiative.owner,
+    status: initiative.status,
+    expectedImpact: initiative.expectedImpact,
+    domainIds: [...initiative.domains],
+    moduleIds: [...initiative.potentialModules],
+    works: initiative.works.map((work) => ({
+      id: work.id,
+      title: work.title,
+      description: work.description,
+      effortHours: work.effortHours
+    })),
+    requirements: initiative.requirements.map((requirement) => ({
+      id: requirement.id,
+      role: requirement.role,
+      skills: [...requirement.skills],
+      count: requirement.count,
+      comment: requirement.comment ?? ''
+    }))
   };
 }
 
