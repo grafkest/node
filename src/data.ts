@@ -128,6 +128,38 @@ export type ModuleNode = {
   nonFunctional: NonFunctionalRequirements;
 };
 
+export type InitiativeWorkItemStatus = 'discovery' | 'design' | 'pilot' | 'delivery';
+
+export type InitiativeWorkItem = {
+  id: string;
+  title: string;
+  description: string;
+  owner: string;
+  status: InitiativeWorkItemStatus;
+  timeframe: string;
+};
+
+export type InitiativeApprovalStatus = 'pending' | 'in-progress' | 'approved';
+
+export type InitiativeApprovalStage = {
+  id: string;
+  title: string;
+  approver: string;
+  status: InitiativeApprovalStatus;
+  comment?: string;
+};
+
+export type InitiativeNode = {
+  id: string;
+  name: string;
+  description: string;
+  domains: string[];
+  plannedModuleIds: string[];
+  requiredSkills: string[];
+  workItems: InitiativeWorkItem[];
+  approvalStages: InitiativeApprovalStage[];
+};
+
 export const domainTree: DomainNode[] = [
   {
     id: 'upstream',
@@ -1146,7 +1178,132 @@ export const modules: ModuleNode[] = [
 ];
 
 
-export const experts: ExpertProfile[] = [
+export const initiatives: InitiativeNode[] = [
+  {
+    id: 'initiative-digital-pad',
+    name: 'Цифровая кустовая площадка',
+    description:
+      'Создание цифрового контура подготовки площадок и проектирования наземной инфраструктуры для новых кустов скважин.',
+    domains: ['layout-optimization', 'surface-readiness'],
+    plannedModuleIds: ['module-infraplan-layout', 'module-infraplan-datahub', 'module-infraplan-economics'],
+    requiredSkills: [
+      'Оптимизация промысловой инфраструктуры',
+      'Инженерное моделирование',
+      'Геопространственный анализ',
+      'Управление проектными данными'
+    ],
+    workItems: [
+      {
+        id: 'digital-pad-discovery',
+        title: 'Сбор исходных требований площадок',
+        description: 'Анализ технологических ограничений и данных геодезии для типовых кустов.',
+        owner: 'Дарья Гончарова',
+        status: 'discovery',
+        timeframe: 'Q1 2025'
+      },
+      {
+        id: 'digital-pad-design',
+        title: 'Проектирование сценариев размещения',
+        description: 'Настройка алгоритмов оптимизации и сценарного анализа по выбранным полигонам.',
+        owner: 'Антон Чернышёв',
+        status: 'design',
+        timeframe: 'Q2 2025'
+      },
+      {
+        id: 'digital-pad-pilot',
+        title: 'Пилотирование в Восток Инжиниринг',
+        description: 'Совместная проверка расчётов и интеграция с INFRAPLAN Economics.',
+        owner: 'Александр Трофимов',
+        status: 'pilot',
+        timeframe: 'Q3 2025'
+      }
+    ],
+    approvalStages: [
+      {
+        id: 'digital-pad-architecture',
+        title: 'Архитектурный комитет',
+        approver: 'Дмитрий Валов',
+        status: 'approved',
+        comment: 'Целевая архитектура согласована, необходимо оформить план пилота.'
+      },
+      {
+        id: 'digital-pad-finance',
+        title: 'Финансовый комитет',
+        approver: 'Марина Крылова',
+        status: 'in-progress',
+        comment: 'Требуется уточнить эффект по CAPEX для пилотных кустов.'
+      },
+      {
+        id: 'digital-pad-operations',
+        title: 'Операционный совет',
+        approver: 'Игорь Ковалёв',
+        status: 'pending'
+      }
+    ]
+  },
+  {
+    id: 'initiative-remote-operations',
+    name: 'Единый контур дистанционного управления',
+    description:
+      'Интеграция цифровых двойников и сервисов диспетчеризации для безопасного дистанционного управления фонда скважин.',
+    domains: ['real-time-monitoring', 'workover-automation'],
+    plannedModuleIds: [
+      'module-dtwin-optimizer',
+      'module-dtwin-remote-ops',
+      'module-wwo-planner'
+    ],
+    requiredSkills: [
+      'Стриминговая обработка телеметрии',
+      'Интеграция SCADA-систем',
+      'Проектирование процессов дистанционного управления',
+      'Управление изменениями'
+    ],
+    workItems: [
+      {
+        id: 'remote-ops-discovery',
+        title: 'Картирование процессов и ролей',
+        description: 'Интервью с операторами и формализация цепочки принятия решений.',
+        owner: 'Ирина Сафонова',
+        status: 'discovery',
+        timeframe: 'Q4 2024'
+      },
+      {
+        id: 'remote-ops-design',
+        title: 'Проектирование интеграции SCADA',
+        description: 'Выбор каналов обмена и сценарии переключения режимов.',
+        owner: 'Геннадий Борисов',
+        status: 'design',
+        timeframe: 'Q1 2025'
+      },
+      {
+        id: 'remote-ops-delivery',
+        title: 'Запуск дистанционных процедур',
+        description: 'Обучение диспетчеров и выход в опытную эксплуатацию.',
+        owner: 'Галина Кручина',
+        status: 'delivery',
+        timeframe: 'Q3 2025'
+      }
+    ],
+    approvalStages: [
+      {
+        id: 'remote-ops-safety',
+        title: 'Комитет промышленной безопасности',
+        approver: 'Сергей Ежов',
+        status: 'in-progress',
+        comment: 'Подготовлены регламенты по аварийному отключению.'
+      },
+      {
+        id: 'remote-ops-it',
+        title: 'ИТ-архитектурный совет',
+        approver: 'Леонид Архипов',
+        status: 'pending'
+      }
+    ]
+  }
+];
+
+
+ export const experts: ExpertProfile[] = [
   {
     id: 'expert-viktoria-berezhnaya',
     fullName: 'Виктория Бережная',
@@ -1611,8 +1768,30 @@ export const artifactNameById: Record<string, string> = artifacts.reduce((acc, a
 export type GraphLink = {
   source: string;
   target: string;
-  type: 'domain' | 'dependency' | 'produces' | 'consumes';
+  type:
+    | 'domain'
+    | 'dependency'
+    | 'produces'
+    | 'consumes'
+    | 'initiative-domain'
+    | 'initiative-plan';
 };
+
+export const initiativeLinks: GraphLink[] = initiatives.flatMap((initiative) => {
+  const domainLinks: GraphLink[] = initiative.domains.map((domainId) => ({
+    source: initiative.id,
+    target: domainId,
+    type: 'initiative-domain'
+  }));
+
+  const moduleLinks: GraphLink[] = initiative.plannedModuleIds.map((moduleId) => ({
+    source: initiative.id,
+    target: moduleId,
+    type: 'initiative-plan'
+  }));
+
+  return [...domainLinks, ...moduleLinks];
+});
 
 const moduleById: Record<string, ModuleNode> = modules.reduce((acc, module) => {
   acc[module.id] = module;

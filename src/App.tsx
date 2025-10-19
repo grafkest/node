@@ -50,11 +50,13 @@ import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
   experts as initialExperts,
+  initiatives as initialInitiatives,
   modules as initialModules,
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
+  type InitiativeNode,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -95,6 +97,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
+  const [initiativeData, setInitiativeData] = useState<InitiativeNode[]>(initialInitiatives);
   const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -138,8 +141,8 @@ function App() {
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
   const [graphCopyOptions, setGraphCopyOptions] = useState<
-    Set<'domains' | 'modules' | 'artifacts'>
-  >(() => new Set(['domains', 'modules', 'artifacts']));
+    Set<'domains' | 'modules' | 'artifacts' | 'initiatives'>
+  >(() => new Set(['domains', 'modules', 'artifacts', 'initiatives']));
   const [isGraphActionInProgress, setIsGraphActionInProgress] = useState(false);
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
@@ -225,10 +228,12 @@ function App() {
       const activeNodeIds = new Set<string>([...domainIds]);
       snapshot.modules.forEach((module) => activeNodeIds.add(module.id));
       snapshot.artifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+      (snapshot.initiatives ?? []).forEach((initiative) => activeNodeIds.add(initiative.id));
 
       setDomainData(snapshot.domains);
       setModuleDataState(recalculateReuseScores(snapshot.modules));
       setArtifactData(snapshot.artifacts);
+      setInitiativeData(snapshot.initiatives ?? []);
       setSelectedNode(null);
       setSearch('');
       setStatusFilters(new Set(allStatuses));
@@ -632,6 +637,7 @@ function App() {
         modules: moduleData,
         domains: domainData,
         artifacts: artifactData,
+        initiatives: initiativeData,
         layout: { nodes: layoutPositions }
       },
       controller.signal
@@ -669,6 +675,7 @@ function App() {
     };
   }, [
     artifactData,
+    initiativeData,
     domainData,
     moduleData,
     isSyncAvailable,
@@ -752,7 +759,8 @@ function App() {
       [
         { id: 'domains' as const, label: 'Домены' },
         { id: 'modules' as const, label: 'Модули' },
-        { id: 'artifacts' as const, label: 'Артефакты' }
+        { id: 'artifacts' as const, label: 'Артефакты' },
+        { id: 'initiatives' as const, label: 'Инициативы' }
       ],
     []
   );
@@ -846,6 +854,11 @@ function App() {
       return ids;
     }
 
+    if (selectedNode.type === 'initiative') {
+      selectedNode.plannedModuleIds.forEach((moduleId) => ids.add(moduleId));
+      return ids;
+    }
+
     if (selectedNode.type === 'domain') {
       moduleData.forEach((module) => {
         if (module.domains.includes(selectedNode.id)) {
@@ -888,6 +901,20 @@ function App() {
       });
     }
 
+    initiativeData.forEach((initiative) => {
+      const matchesSelectedDomain = initiative.domains.some((domainId) =>
+        selectedDomains.has(domainId)
+      );
+
+      if (!matchesSelectedDomain) {
+        return;
+      }
+
+      initiative.plannedModuleIds.forEach((moduleId) => {
+        extraModuleIds.add(moduleId);
+      });
+    });
+
     if (extraModuleIds.size === 0) {
       return filteredModules;
     }
@@ -921,8 +948,28 @@ function App() {
     showAllConnections,
     artifactMap,
     moduleDependents,
-    companyFilter
+    companyFilter,
+    initiativeData,
+    selectedDomains
   ]);
+
+  const graphInitiatives = useMemo(() => {
+    const visibleModuleIds = new Set(graphModules.map((module) => module.id));
+    const selectedInitiativeId = selectedNode?.type === 'initiative' ? selectedNode.id : null;
+
+    return initiativeData.filter((initiative) => {
+      const matchesDomain = initiative.domains.some((domainId) => selectedDomains.has(domainId));
+      const matchesModules = initiative.plannedModuleIds.some((moduleId) =>
+        visibleModuleIds.has(moduleId)
+      );
+
+      if (matchesDomain || matchesModules) {
+        return true;
+      }
+
+      return selectedInitiativeId === initiative.id;
+    });
+  }, [graphModules, initiativeData, selectedDomains, selectedNode]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
@@ -941,12 +988,16 @@ function App() {
       module.domains.forEach((domainId) => addWithAncestors(domainId));
     });
 
+    graphInitiatives.forEach((initiative) => {
+      initiative.domains.forEach((domainId) => addWithAncestors(domainId));
+    });
+
     if (highlightedDomainId) {
       addWithAncestors(highlightedDomainId);
     }
 
     return ids;
-  }, [graphModules, highlightedDomainId, domainAncestors, selectedDomains]);
+  }, [graphModules, graphInitiatives, highlightedDomainId, domainAncestors, selectedDomains]);
 
   const graphDomains = useMemo(
     () => filterDomainTreeByIds(domainData, relevantDomainIds),
@@ -987,14 +1038,18 @@ function App() {
   }, [artifactData, graphModules, selectedNode]);
 
   const graphLinksAll = useMemo(
-    () => buildModuleLinks(moduleData, artifactData, displayableDomainIdSet),
-    [moduleData, artifactData, displayableDomainIdSet]
+    () => [
+      ...buildModuleLinks(moduleData, artifactData, displayableDomainIdSet),
+      ...buildInitiativeLinks(initiativeData, displayableDomainIdSet)
+    ],
+    [moduleData, artifactData, initiativeData, displayableDomainIdSet]
   );
 
   const filteredLinks = useMemo(() => {
     const moduleIds = new Set(graphModules.map((module) => module.id));
     const artifactIds = new Set(graphArtifacts.map((artifact) => artifact.id));
     const domainIds = relevantDomainIds.size > 0 ? relevantDomainIds : null;
+    const initiativeIds = new Set(graphInitiatives.map((initiative) => initiative.id));
 
     return graphLinksAll.filter((link) => {
       const sourceId = getLinkEndpointId(link.source);
@@ -1034,12 +1089,29 @@ function App() {
         return Boolean(producerProduct && consumerProduct && producerProduct === consumerProduct);
       }
 
+      if (link.type === 'initiative-domain') {
+        if (!initiativeIds.has(sourceId)) {
+          return false;
+        }
+
+        if (domainIds && !domainIds.has(targetId)) {
+          return false;
+        }
+
+        return true;
+      }
+
+      if (link.type === 'initiative-plan') {
+        return initiativeIds.has(sourceId) && moduleIds.has(targetId);
+      }
+
       return false;
     });
   }, [
     artifactMap,
     graphArtifacts,
     graphLinksAll,
+    graphInitiatives,
     graphModules,
     moduleById,
     relevantDomainIds,
@@ -2000,6 +2072,7 @@ function App() {
       includeDomains: boolean;
       includeModules: boolean;
       includeArtifacts: boolean;
+      includeInitiatives: boolean;
     }) => {
       try {
         const snapshot = await importGraphFromSource(request);
@@ -2010,7 +2083,8 @@ function App() {
         return {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
-          artifacts: snapshot.artifacts.length
+          artifacts: snapshot.artifacts.length,
+          initiatives: snapshot.initiatives?.length ?? 0
         };
       } catch (error) {
         const message =
@@ -2054,8 +2128,15 @@ function App() {
     const includeDomains = graphCopyOptions.has('domains');
     const includeModules = graphCopyOptions.has('modules');
     const includeArtifacts = graphCopyOptions.has('artifacts');
+    const includeInitiatives = graphCopyOptions.has('initiatives');
 
-    if (graphSourceIdDraft && !includeDomains && !includeModules && !includeArtifacts) {
+    if (
+      graphSourceIdDraft &&
+      !includeDomains &&
+      !includeModules &&
+      !includeArtifacts &&
+      !includeInitiatives
+    ) {
       setGraphActionStatus({
         type: 'error',
         message: 'Выберите хотя бы один тип данных для копирования из выбранного графа.'
@@ -2070,7 +2151,8 @@ function App() {
         sourceGraphId: graphSourceIdDraft ?? undefined,
         includeDomains,
         includeModules,
-        includeArtifacts
+        includeArtifacts,
+        includeInitiatives
       });
       setGraphActionStatus({
         type: 'success',
@@ -2078,7 +2160,7 @@ function App() {
       });
       setGraphNameDraft('');
       setGraphSourceIdDraft(null);
-      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts']));
+      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts', 'initiatives']));
       setIsCreatePanelOpen(false);
       await refreshGraphs(created.id, { preserveSelection: false });
       showAdminNotice('success', `Граф «${created.name}» создан.`);
@@ -2501,10 +2583,12 @@ function App() {
                 modules={graphModules}
                 domains={graphDomains}
                 artifacts={graphArtifacts}
+                initiatives={graphInitiatives}
                 links={filteredLinks}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}
+                visibleModuleStatuses={statusFilters}
                 layoutPositions={layoutPositions}
                 onLayoutChange={handleLayoutChange}
               />
@@ -2564,6 +2648,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          initiatives={initiativeData}
           onImport={handleImportGraph}
           onImportFromGraph={handleImportFromExistingGraph}
           graphs={graphs}
@@ -3119,6 +3204,29 @@ function buildModuleLinks(
       }));
 
     return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
+  });
+}
+
+function buildInitiativeLinks(
+  initiatives: InitiativeNode[],
+  allowedDomainIds: Set<string>
+): GraphLink[] {
+  return initiatives.flatMap((initiative) => {
+    const domainLinks: GraphLink[] = initiative.domains
+      .filter((domainId) => allowedDomainIds.has(domainId))
+      .map((domainId) => ({
+        source: initiative.id,
+        target: domainId,
+        type: 'initiative-domain'
+      }));
+
+    const moduleLinks: GraphLink[] = initiative.plannedModuleIds.map((moduleId) => ({
+      source: initiative.id,
+      target: moduleId,
+      type: 'initiative-plan'
+    }));
+
+    return [...domainLinks, ...moduleLinks];
   });
 }
 
