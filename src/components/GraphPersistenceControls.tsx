@@ -378,7 +378,12 @@ function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
   }
 
   const candidate = value as Partial<GraphSnapshotPayload>;
-  if (!Array.isArray(candidate.modules) || !Array.isArray(candidate.domains) || !Array.isArray(candidate.artifacts)) {
+  if (
+    !Array.isArray(candidate.modules) ||
+    !Array.isArray(candidate.domains) ||
+    !Array.isArray(candidate.artifacts) ||
+    (candidate.initiatives !== undefined && !Array.isArray(candidate.initiatives))
+  ) {
     return false;
   }
 

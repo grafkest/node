@@ -28,7 +28,14 @@ app.get('/api/graphs', (_req: Request, res: Response) => {
 });
 
 app.post('/api/graphs', (req: Request, res: Response) => {
-  const { name, sourceGraphId, includeDomains, includeModules, includeArtifacts } = req.body ?? {};
+  const {
+    name,
+    sourceGraphId,
+    includeDomains,
+    includeModules,
+    includeArtifacts,
+    includeInitiatives
+  } = req.body ?? {};
 
   if (typeof name !== 'string') {
     res.status(400).json({ message: 'Название графа обязательно.' });
@@ -40,7 +47,8 @@ app.post('/api/graphs', (req: Request, res: Response) => {
     sourceGraphId: typeof sourceGraphId === 'string' && sourceGraphId.length > 0 ? sourceGraphId : undefined,
     includeDomains: Boolean(includeDomains ?? true),
     includeModules: Boolean(includeModules ?? true),
-    includeArtifacts: Boolean(includeArtifacts ?? true)
+    includeArtifacts: Boolean(includeArtifacts ?? true),
+    includeInitiatives: Boolean(includeInitiatives ?? true)
   } as const;
 
   try {
