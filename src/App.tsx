@@ -65,6 +65,7 @@ import {
 } from './data';
 import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
+import InitiativePlanner from './components/InitiativePlanner';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -77,6 +78,7 @@ const viewTabs = [
   { label: 'Связи', value: 'graph' },
   { label: 'Статистика', value: 'stats' },
   { label: 'Экспертиза', value: 'experts' },
+  { label: 'Инициативы', value: 'initiatives' },
   { label: 'Администрирование', value: 'admin' }
 ] as const;
 
@@ -86,6 +88,11 @@ type AdminNotice = {
   id: number;
   type: 'success' | 'error';
   message: string;
+};
+
+type ModuleDraftPrefillRequest = {
+  id: number;
+  draft: Partial<ModuleDraftPayload>;
 };
 
 function App() {
@@ -129,6 +136,8 @@ function App() {
   const activeGraphIdRef = useRef<string | null>(null);
   const loadedGraphsRef = useRef(new Set<string>());
   const adminNoticeIdRef = useRef(0);
+  const moduleDraftPrefillIdRef = useRef(0);
+  const [moduleDraftPrefill, setModuleDraftPrefill] = useState<ModuleDraftPrefillRequest | null>(null);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
@@ -462,11 +471,191 @@ function App() {
   }, [loadSnapshot]);
 
   const markGraphDirty = useCallback(() => {
-    if (viewMode !== 'admin') {
-      return;
-    }
     hasPendingPersistRef.current = true;
-  }, [viewMode]);
+  }, []);
+
+  const patchInitiative = useCallback(
+    (initiativeId: string, updater: (initiative: Initiative) => Initiative) => {
+      let didChange = false;
+      setInitiativeData((prev) =>
+        prev.map((initiative) => {
+          if (initiative.id !== initiativeId) {
+            return initiative;
+          }
+          const next = updater(initiative);
+          if (next !== initiative) {
+            didChange = true;
+          }
+          return next;
+        })
+      );
+      if (didChange) {
+        markGraphDirty();
+      }
+    },
+    [markGraphDirty]
+  );
+
+  const handleToggleInitiativePin = useCallback(
+    (initiativeId: string, roleId: string, expertId: string) => {
+      patchInitiative(initiativeId, (initiative) => {
+        let updated = false;
+        const roles = initiative.roles.map((role) => {
+          if (role.id !== roleId) {
+            return role;
+          }
+          const hasExpert = role.pinnedExpertIds.includes(expertId);
+          let nextPinned = hasExpert
+            ? role.pinnedExpertIds.filter((id) => id !== expertId)
+            : [...role.pinnedExpertIds, expertId];
+          if (!hasExpert && role.required > 0 && nextPinned.length > role.required) {
+            nextPinned = nextPinned.slice(nextPinned.length - role.required);
+          }
+          const changed =
+            nextPinned.length !== role.pinnedExpertIds.length ||
+            nextPinned.some((id, index) => role.pinnedExpertIds[index] !== id);
+          if (!changed) {
+            return role;
+          }
+          updated = true;
+          return { ...role, pinnedExpertIds: nextPinned };
+        });
+        if (!updated) {
+          return initiative;
+        }
+        return { ...initiative, roles, lastUpdated: new Date().toISOString() };
+      });
+    },
+    [patchInitiative]
+  );
+
+  const handleAddInitiativeRisk = useCallback(
+    (
+      initiativeId: string,
+      payload: { description: string; severity: Initiative['risks'][number]['severity'] }
+    ) => {
+      const description = payload.description.trim();
+      if (!description) {
+        return;
+      }
+      patchInitiative(initiativeId, (initiative) => {
+        const riskId = `${initiative.id}-risk-${Date.now()}`;
+        const risk = {
+          id: riskId,
+          description,
+          severity: payload.severity,
+          createdAt: new Date().toISOString()
+        } satisfies Initiative['risks'][number];
+        return {
+          ...initiative,
+          risks: [...initiative.risks, risk],
+          lastUpdated: new Date().toISOString()
+        };
+      });
+    },
+    [patchInitiative]
+  );
+
+  const handleRemoveInitiativeRisk = useCallback(
+    (initiativeId: string, riskId: string) => {
+      patchInitiative(initiativeId, (initiative) => {
+        const nextRisks = initiative.risks.filter((risk) => risk.id !== riskId);
+        if (nextRisks.length === initiative.risks.length) {
+          return initiative;
+        }
+        return { ...initiative, risks: nextRisks, lastUpdated: new Date().toISOString() };
+      });
+    },
+    [patchInitiative]
+  );
+
+  const handleInitiativeStatusChange = useCallback(
+    (initiativeId: string, status: Initiative['status']) => {
+      patchInitiative(initiativeId, (initiative) => {
+        if (initiative.status === status) {
+          return initiative;
+        }
+        return { ...initiative, status, lastUpdated: new Date().toISOString() };
+      });
+    },
+    [patchInitiative]
+  );
+
+  const handleInitiativeExport = useCallback(
+    (initiativeId: string) => {
+      const initiative = initiativeData.find((item) => item.id === initiativeId);
+      if (!initiative) {
+        return;
+      }
+      const expertMap = new Map(expertProfiles.map((expert) => [expert.id, expert]));
+      const team: ModuleDraftPayload['projectTeam'] = [];
+
+      initiative.roles.forEach((role) => {
+        const orderedCandidates = [...role.candidates].sort((a, b) => b.score - a.score);
+        const selected = new Set<string>();
+        role.pinnedExpertIds.forEach((id) => {
+          if (expertMap.has(id)) {
+            selected.add(id);
+          }
+        });
+        for (const candidate of orderedCandidates) {
+          if (selected.size >= Math.max(1, role.required)) {
+            break;
+          }
+          if (selected.has(candidate.expertId)) {
+            continue;
+          }
+          if (!expertMap.has(candidate.expertId)) {
+            continue;
+          }
+          selected.add(candidate.expertId);
+        }
+        Array.from(selected).forEach((expertId) => {
+          const expert = expertMap.get(expertId);
+          if (!expert) {
+            return;
+          }
+          team.push({
+            id: `${initiative.id}-${role.id}-${expertId}`,
+            fullName: expert.fullName,
+            role: role.role
+          });
+        });
+      });
+
+      moduleDraftPrefillIdRef.current += 1;
+      setModuleDraftPrefill({
+        id: moduleDraftPrefillIdRef.current,
+        draft: {
+          name: initiative.targetModuleName,
+          productName: initiative.targetModuleName,
+          domainIds: initiative.domainIds,
+          projectTeam: team
+        }
+      });
+
+      patchInitiative(initiativeId, (current) => {
+        if (current.status === 'converted') {
+          return { ...current, lastUpdated: new Date().toISOString() };
+        }
+        return { ...current, status: 'converted', lastUpdated: new Date().toISOString() };
+      });
+
+      setViewMode('admin');
+      showAdminNotice(
+        'success',
+        `Команда инициативы «${initiative.name}» передана в черновик модуля.`
+      );
+    },
+    [
+      initiativeData,
+      expertProfiles,
+      patchInitiative,
+      setViewMode,
+      showAdminNotice,
+      setModuleDraftPrefill
+    ]
+  );
 
   useEffect(() => {
     setProductFilter((prev) => {
@@ -2331,6 +2520,7 @@ function App() {
   const isGraphActive = viewMode === 'graph';
   const isStatsActive = viewMode === 'stats';
   const isExpertsActive = viewMode === 'experts';
+  const isInitiativesActive = viewMode === 'initiatives';
   const isAdminActive = viewMode === 'admin';
 
   const headerTitle = (() => {
@@ -2342,6 +2532,9 @@ function App() {
     }
     if (isExpertsActive) {
       return 'Экспертиза команды R&D';
+    }
+    if (isInitiativesActive) {
+      return 'Планирование проектных инициатив';
     }
     return 'Панель администрирования экосистемы';
   })();
@@ -2355,6 +2548,9 @@ function App() {
     }
     if (isExpertsActive) {
       return 'Постройте матрицу компетенций, найдите носителей знаний и дополнительные консалтинговые навыки.';
+    }
+    if (isInitiativesActive) {
+      return 'Сформируйте команды под инициативы, зафиксируйте риски и экспортируйте состав в черновик модуля.';
     }
     return 'Управляйте данными графа: обновляйте карточки модулей, доменов и артефактов, а также удаляйте устаревшие связи.';
   })();
@@ -2724,6 +2920,23 @@ function App() {
           moduleNameMap={moduleNameMap}
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
+        />
+      </main>
+      <main
+        className={styles.initiativesMain}
+        hidden={!isInitiativesActive}
+        aria-hidden={!isInitiativesActive}
+        style={{ display: isInitiativesActive ? undefined : 'none' }}
+      >
+        <InitiativePlanner
+          initiatives={initiativeData}
+          experts={expertProfiles}
+          domainNameMap={domainNameMap}
+          onTogglePin={handleToggleInitiativePin}
+          onAddRisk={handleAddInitiativeRisk}
+          onRemoveRisk={handleRemoveInitiativeRisk}
+          onStatusChange={handleInitiativeStatusChange}
+          onExport={handleInitiativeExport}
         />
       </main>
       <main

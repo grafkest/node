@@ -24,6 +24,7 @@ import {
   modules as initialModules,
   type ArtifactNode,
   type DomainNode,
+  type Initiative,
   type ModuleNode
 } from '../src/data';
 

@@ -492,6 +492,18 @@ function migrateLegacySchema(): void {
     database.run('DROP TABLE legacy_artifacts');
   }
 
+  if (!hasTable('initiatives')) {
+    database.run(`
+      CREATE TABLE initiatives (
+        graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        PRIMARY KEY (graph_id, id)
+      );
+    `);
+  }
+
   if (hasTable('metadata')) {
     database.run('ALTER TABLE metadata RENAME TO legacy_metadata');
     database.run(

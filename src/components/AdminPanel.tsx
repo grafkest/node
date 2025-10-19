@@ -402,6 +402,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   );
   const [initiativeStep, setInitiativeStep] = useState<number>(0);
 
+  const moduleDraftPrefillKey = moduleDraftPrefill?.id;
+
   useEffect(() => {
     const nextOption = moduleOptions.find((item) => item.value === selectedModuleId);
     if (!nextOption) {
@@ -423,6 +425,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       setModuleStep(0);
     }
   }, [moduleOptions, modules, selectedModuleId]);
+
+  useEffect(() => {
+    if (!moduleDraftPrefill) {
+      return;
+    }
+    setActiveTab('module');
+    setSelectedModuleId('__new__');
+    setModuleStep(0);
+    const { draft } = moduleDraftPrefill;
+    setModuleDraft((prev) => {
+      let next = { ...prev };
+      if (draft.name !== undefined) {
+        next = { ...next, name: draft.name };
+      }
+      if (draft.productName !== undefined) {
+        next = { ...next, productName: draft.productName };
+      }
+      if (Array.isArray(draft.domainIds)) {
+        next = { ...next, domainIds: [...draft.domainIds] };
+      }
+      if (Array.isArray(draft.projectTeam) && draft.projectTeam.length > 0) {
+        next = {
+          ...next,
+          projectTeam: draft.projectTeam.map((member, index) => ({
+            id: member.id || `member-${index + 1}`,
+            fullName: member.fullName,
+            role: member.role
+          }))
+        };
+      }
+      return next;
+    });
+  }, [moduleDraftPrefillKey, moduleDraftPrefill]);
 
   useEffect(() => {
     const nextOption = domainOptions.find((item) => item.value === selectedDomainId);
