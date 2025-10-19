@@ -11,7 +11,7 @@ import type {
   ArtifactNode,
   DomainNode,
   GraphLink,
-  InitiativeNode,
+  Initiative,
   ModuleNode,
   ModuleStatus
 } from '../data';
@@ -21,7 +21,7 @@ import styles from './GraphView.module.css';
 type GraphNode =
   | ({ type: 'module' } & ModuleNode)
   | ({ type: 'domain' } & DomainNode)
-  | ({ type: 'initiative' } & InitiativeNode)
+  | ({ type: 'initiative' } & Initiative)
   | ({ type: 'artifact'; reuseScore?: number } & ArtifactNode);
 
 type LayoutChangeReason = 'drag' | 'engine';
@@ -30,7 +30,7 @@ type GraphViewProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
-  initiatives: InitiativeNode[];
+  initiatives: Initiative[];
   links: GraphLink[];
   onSelect: (node: GraphNode | null) => void;
   highlightedNode: string | null;

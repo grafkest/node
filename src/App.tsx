@@ -57,7 +57,7 @@ import {
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
-  type InitiativeNode,
+  type Initiative,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -105,7 +105,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
-  const [initiativeData, setInitiativeData] = useState<InitiativeNode[]>(initialInitiatives);
+  const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
   const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -629,7 +629,7 @@ function App() {
         draft: {
           name: initiative.targetModuleName,
           productName: initiative.targetModuleName,
-          domainIds: initiative.domainIds,
+          domainIds: initiative.domains,
           projectTeam: team
         }
       });
@@ -3574,7 +3574,7 @@ function buildModuleLinks(
 }
 
 function buildInitiativeLinks(
-  initiatives: InitiativeNode[],
+  initiatives: Initiative[],
   allowedDomainIds: Set<string>
 ): GraphLink[] {
   return initiatives.flatMap((initiative) => {
