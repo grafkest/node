@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ArtifactNode, DomainNode, Initiative, ModuleNode } from '../src/data';
+import type { ArtifactNode, DomainNode, InitiativeNode, ModuleNode } from '../src/data';
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
@@ -271,7 +271,7 @@ export function loadSnapshot(graphId: string): GraphSnapshotPayload {
   }
 
   const initiativeStatement = database.prepare(
-    'SELECT graph_id, id, data, position FROM initiatives WHERE graph_id = ? ORDER BY position'
+    'SELECT graph_id, id, data, position FROM initiative_rows WHERE graph_id = ? ORDER BY position'
   );
   const initiativeRows: InitiativeRow[] = [];
 
@@ -301,7 +301,7 @@ export function loadSnapshot(graphId: string): GraphSnapshotPayload {
     domains: buildDomainTree(domainRows),
     modules: moduleRows.map((row) => JSON.parse(row.data) as ModuleNode),
     artifacts: artifactRows.map((row) => JSON.parse(row.data) as ArtifactNode),
-    initiatives: initiativeRows.map((row) => JSON.parse(row.data) as Initiative),
+    initiatives: initiativeRows.map((row) => JSON.parse(row.data) as InitiativeNode),
     layout
   };
 }
@@ -338,7 +338,7 @@ export function isGraphSnapshotPayload(value: unknown): value is GraphSnapshotPa
     !Array.isArray(candidate.domains) ||
     !Array.isArray(candidate.modules) ||
     !Array.isArray(candidate.artifacts) ||
-    !Array.isArray(candidate.initiatives)
+    (candidate.initiatives !== undefined && !Array.isArray(candidate.initiatives))
   ) {
     return false;
   }
@@ -419,7 +419,7 @@ function initializeSchema(): void {
       PRIMARY KEY (graph_id, id)
     );
 
-    CREATE TABLE IF NOT EXISTS initiatives (
+    CREATE TABLE IF NOT EXISTS initiative_rows (
       graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
       id TEXT NOT NULL,
       position INTEGER NOT NULL,
@@ -534,8 +534,9 @@ function seedInitialData(): boolean {
   const domainCount = countRows(DEFAULT_GRAPH_ID, 'domains');
   const moduleCount = countRows(DEFAULT_GRAPH_ID, 'modules');
   const artifactCount = countRows(DEFAULT_GRAPH_ID, 'artifacts');
+  const initiativeCount = countRows(DEFAULT_GRAPH_ID, 'initiative_rows');
 
-  if (domainCount > 0 || moduleCount > 0 || artifactCount > 0 || countRows(DEFAULT_GRAPH_ID, 'initiatives') > 0) {
+  if (domainCount > 0 || moduleCount > 0 || artifactCount > 0 || initiativeCount > 0) {
     return false;
   }
 
@@ -554,7 +555,7 @@ function seedInitialData(): boolean {
 
 function countRows(
   graphId: string,
-  table: 'domains' | 'modules' | 'artifacts' | 'initiatives'
+  table: 'domains' | 'modules' | 'artifacts' | 'initiative_rows'
 ): number {
   const database = assertDatabase();
   const statement = database.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE graph_id = ?`);
@@ -737,7 +738,7 @@ function writeSnapshot(database: SqlJsDatabase, graphId: string, snapshot: Graph
   database.run('DELETE FROM domains WHERE graph_id = ?', [graphId]);
   database.run('DELETE FROM modules WHERE graph_id = ?', [graphId]);
   database.run('DELETE FROM artifacts WHERE graph_id = ?', [graphId]);
-  database.run('DELETE FROM initiatives WHERE graph_id = ?', [graphId]);
+  database.run('DELETE FROM initiative_rows WHERE graph_id = ?', [graphId]);
 
   const domainRows = flattenDomains(snapshot.domains);
   const insertDomain = database.prepare(
@@ -784,11 +785,11 @@ function writeSnapshot(database: SqlJsDatabase, graphId: string, snapshot: Graph
   }
 
   const insertInitiative = database.prepare(
-    'INSERT INTO initiatives (graph_id, id, position, data) VALUES (?, ?, ?, ?)'
+    'INSERT INTO initiative_rows (graph_id, id, position, data) VALUES (?, ?, ?, ?)'
   );
 
   try {
-    snapshot.initiatives.forEach((initiative, index) => {
+    (snapshot.initiatives ?? []).forEach((initiative, index) => {
       insertInitiative.run([graphId, initiative.id, index, JSON.stringify(initiative)]);
     });
   } finally {

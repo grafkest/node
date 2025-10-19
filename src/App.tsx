@@ -24,6 +24,7 @@ import DomainTree from './components/DomainTree';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
+  type InitiativeDraftPayload,
   type ModuleDraftPayload
 } from './components/AdminPanel';
 import FiltersPanel from './components/FiltersPanel';
@@ -56,7 +57,7 @@ import {
   type ArtifactNode,
   type DomainNode,
   type GraphLink,
-  type Initiative,
+  type InitiativeNode,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -104,7 +105,7 @@ function App() {
     recalculateReuseScores(initialModules)
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
-  const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
+  const [initiativeData, setInitiativeData] = useState<InitiativeNode[]>(initialInitiatives);
   const [expertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
@@ -237,6 +238,7 @@ function App() {
       const activeNodeIds = new Set<string>([...domainIds]);
       snapshot.modules.forEach((module) => activeNodeIds.add(module.id));
       snapshot.artifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+      (snapshot.initiatives ?? []).forEach((initiative) => activeNodeIds.add(initiative.id));
 
       setDomainData(snapshot.domains);
       setModuleDataState(recalculateReuseScores(snapshot.modules));
@@ -863,6 +865,7 @@ function App() {
     };
   }, [
     artifactData,
+    initiativeData,
     domainData,
     moduleData,
     initiativeData,
@@ -922,6 +925,7 @@ function App() {
     });
     return map;
   }, [moduleData]);
+  const moduleIdSet = useMemo(() => new Set(moduleData.map((module) => module.id)), [moduleData]);
 
   const graphSelectOptions = useMemo(
     () =>
@@ -947,7 +951,8 @@ function App() {
       [
         { id: 'domains' as const, label: 'Домены' },
         { id: 'modules' as const, label: 'Модули' },
-        { id: 'artifacts' as const, label: 'Артефакты' }
+        { id: 'artifacts' as const, label: 'Артефакты' },
+        { id: 'initiatives' as const, label: 'Инициативы' }
       ],
     []
   );
@@ -1041,6 +1046,11 @@ function App() {
       return ids;
     }
 
+    if (selectedNode.type === 'initiative') {
+      selectedNode.plannedModuleIds.forEach((moduleId) => ids.add(moduleId));
+      return ids;
+    }
+
     if (selectedNode.type === 'domain') {
       moduleData.forEach((module) => {
         if (module.domains.includes(selectedNode.id)) {
@@ -1083,6 +1093,20 @@ function App() {
       });
     }
 
+    initiativeData.forEach((initiative) => {
+      const matchesSelectedDomain = initiative.domains.some((domainId) =>
+        selectedDomains.has(domainId)
+      );
+
+      if (!matchesSelectedDomain) {
+        return;
+      }
+
+      initiative.plannedModuleIds.forEach((moduleId) => {
+        extraModuleIds.add(moduleId);
+      });
+    });
+
     if (extraModuleIds.size === 0) {
       return filteredModules;
     }
@@ -1116,8 +1140,28 @@ function App() {
     showAllConnections,
     artifactMap,
     moduleDependents,
-    companyFilter
+    companyFilter,
+    initiativeData,
+    selectedDomains
   ]);
+
+  const graphInitiatives = useMemo(() => {
+    const visibleModuleIds = new Set(graphModules.map((module) => module.id));
+    const selectedInitiativeId = selectedNode?.type === 'initiative' ? selectedNode.id : null;
+
+    return initiativeData.filter((initiative) => {
+      const matchesDomain = initiative.domains.some((domainId) => selectedDomains.has(domainId));
+      const matchesModules = initiative.plannedModuleIds.some((moduleId) =>
+        visibleModuleIds.has(moduleId)
+      );
+
+      if (matchesDomain || matchesModules) {
+        return true;
+      }
+
+      return selectedInitiativeId === initiative.id;
+    });
+  }, [graphModules, initiativeData, selectedDomains, selectedNode]);
 
   const relevantDomainIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1136,12 +1180,16 @@ function App() {
       module.domains.forEach((domainId) => addWithAncestors(domainId));
     });
 
+    graphInitiatives.forEach((initiative) => {
+      initiative.domains.forEach((domainId) => addWithAncestors(domainId));
+    });
+
     if (highlightedDomainId) {
       addWithAncestors(highlightedDomainId);
     }
 
     return ids;
-  }, [graphModules, highlightedDomainId, domainAncestors, selectedDomains]);
+  }, [graphModules, graphInitiatives, highlightedDomainId, domainAncestors, selectedDomains]);
 
   const graphDomains = useMemo(
     () => filterDomainTreeByIds(domainData, relevantDomainIds),
@@ -1182,14 +1230,18 @@ function App() {
   }, [artifactData, graphModules, selectedNode]);
 
   const graphLinksAll = useMemo(
-    () => buildModuleLinks(moduleData, artifactData, displayableDomainIdSet),
-    [moduleData, artifactData, displayableDomainIdSet]
+    () => [
+      ...buildModuleLinks(moduleData, artifactData, displayableDomainIdSet),
+      ...buildInitiativeLinks(initiativeData, displayableDomainIdSet)
+    ],
+    [moduleData, artifactData, initiativeData, displayableDomainIdSet]
   );
 
   const filteredLinks = useMemo(() => {
     const moduleIds = new Set(graphModules.map((module) => module.id));
     const artifactIds = new Set(graphArtifacts.map((artifact) => artifact.id));
     const domainIds = relevantDomainIds.size > 0 ? relevantDomainIds : null;
+    const initiativeIds = new Set(graphInitiatives.map((initiative) => initiative.id));
 
     return graphLinksAll.filter((link) => {
       const sourceId = getLinkEndpointId(link.source);
@@ -1229,12 +1281,29 @@ function App() {
         return Boolean(producerProduct && consumerProduct && producerProduct === consumerProduct);
       }
 
+      if (link.type === 'initiative-domain') {
+        if (!initiativeIds.has(sourceId)) {
+          return false;
+        }
+
+        if (domainIds && !domainIds.has(targetId)) {
+          return false;
+        }
+
+        return true;
+      }
+
+      if (link.type === 'initiative-plan') {
+        return initiativeIds.has(sourceId) && moduleIds.has(targetId);
+      }
+
       return false;
     });
   }, [
     artifactMap,
     graphArtifacts,
     graphLinksAll,
+    graphInitiatives,
     graphModules,
     moduleById,
     relevantDomainIds,
@@ -1678,6 +1747,12 @@ function App() {
         }));
 
       setModuleDataState(recalculateReuseScores(nextModulesBase));
+      setInitiativeData((prev) =>
+        prev.map((initiative) => ({
+          ...initiative,
+          potentialModules: initiative.potentialModules.filter((id) => id !== moduleId)
+        }))
+      );
 
       setLayoutPositions((prev) => {
         const next = { ...prev };
@@ -1905,6 +1980,12 @@ function App() {
         )
       );
       setArtifactData((prev) => prev.filter((artifact) => !removedIds.has(artifact.domainId)));
+      setInitiativeData((prev) =>
+        prev.map((initiative) => ({
+          ...initiative,
+          domains: initiative.domains.filter((id) => !removedIds.has(id))
+        }))
+      );
       setSelectedDomains((prev) => {
         const next = new Set(prev);
         removedIds.forEach((id) => next.delete(id));
@@ -2180,6 +2261,79 @@ function App() {
     [artifactData, markGraphDirty, showAdminNotice]
   );
 
+  const handleCreateInitiative = useCallback(
+    (draft: InitiativeDraftPayload) => {
+      const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
+      const initiativeId = createEntityId('initiative', draft.name, existingIds);
+      const defaults = {
+        name: draft.name.trim() || `Новая инициатива ${existingIds.size + 1}`,
+        description: draft.description.trim() || 'Описание не заполнено',
+        owner: draft.owner.trim() || 'Ответственный не указан',
+        expectedImpact: draft.expectedImpact.trim() || 'Эффект не оценён',
+        status: draft.status
+      } as const;
+
+      const initiative = buildInitiativeFromDraft(
+        initiativeId,
+        draft,
+        displayableDomainIdSet,
+        moduleIdSet,
+        defaults
+      );
+
+      markGraphDirty();
+      setInitiativeData((prev) => [...prev, initiative]);
+      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
+    },
+    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+
+  const handleUpdateInitiative = useCallback(
+    (initiativeId: string, draft: InitiativeDraftPayload) => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        return;
+      }
+
+      const defaults = {
+        name: existing.name,
+        description: existing.description,
+        owner: existing.owner,
+        expectedImpact: existing.expectedImpact,
+        status: existing.status
+      } as const;
+
+      const updated = buildInitiativeFromDraft(
+        initiativeId,
+        draft,
+        displayableDomainIdSet,
+        moduleIdSet,
+        defaults
+      );
+
+      markGraphDirty();
+      setInitiativeData((prev) =>
+        prev.map((initiative) => (initiative.id === initiativeId ? updated : initiative))
+      );
+      showAdminNotice('success', `Инициатива «${updated.name}» обновлена.`);
+    },
+    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+
+  const handleDeleteInitiative = useCallback(
+    (initiativeId: string) => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        return;
+      }
+
+      markGraphDirty();
+      setInitiativeData((prev) => prev.filter((initiative) => initiative.id !== initiativeId));
+      showAdminNotice('success', `Инициатива «${existing.name}» удалена.`);
+    },
+    [initiativeData, markGraphDirty, showAdminNotice]
+  );
+
   const handleImportGraph = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
@@ -2207,7 +2361,7 @@ function App() {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
           artifacts: snapshot.artifacts.length,
-          initiatives: snapshot.initiatives.length
+          initiatives: snapshot.initiatives?.length ?? 0
         };
       } catch (error) {
         const message =
@@ -2713,10 +2867,12 @@ function App() {
                 modules={graphModules}
                 domains={graphDomains}
                 artifacts={graphArtifacts}
+                initiatives={graphInitiatives}
                 links={filteredLinks}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}
+                visibleModuleStatuses={statusFilters}
                 layoutPositions={layoutPositions}
                 onLayoutChange={handleLayoutChange}
               />
@@ -2806,6 +2962,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          initiatives={initiativeData}
           onCreateModule={handleCreateModule}
           onUpdateModule={handleUpdateModule}
           onDeleteModule={handleDeleteModule}
@@ -2815,7 +2972,9 @@ function App() {
           onCreateArtifact={handleCreateArtifact}
           onUpdateArtifact={handleUpdateArtifact}
           onDeleteArtifact={handleDeleteArtifact}
-          moduleDraftPrefill={moduleDraftPrefill}
+          onCreateInitiative={handleCreateInitiative}
+          onUpdateInitiative={handleUpdateInitiative}
+          onDeleteInitiative={handleDeleteInitiative}
         />
       </main>
     </Layout>
@@ -2957,6 +3116,67 @@ function buildModuleFromDraft(
   };
 
   return { module, consumedArtifactIds };
+}
+
+function buildInitiativeFromDraft(
+  initiativeId: string,
+  draft: InitiativeDraftPayload,
+  allowedDomainIds: Set<string>,
+  allowedModuleIds: Set<string>,
+  defaults: {
+    name: string;
+    description: string;
+    owner: string;
+    expectedImpact: string;
+    status: Initiative['status'];
+  }
+): Initiative {
+  const normalizedName = draft.name.trim() || defaults.name;
+  const normalizedDescription = draft.description.trim() || defaults.description;
+  const normalizedOwner = draft.owner.trim() || defaults.owner;
+  const normalizedImpact = draft.expectedImpact.trim() || defaults.expectedImpact;
+  const normalizedStatus = draft.status ?? defaults.status;
+
+  const domains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
+  const potentialModules = deduplicateNonEmpty(draft.moduleIds).filter((id) => allowedModuleIds.has(id));
+
+  const works = draft.works.map((work, index) => {
+    const effortValue = Number(work.effortHours);
+    const normalizedEffort = Number.isFinite(effortValue) ? Math.max(0, effortValue) : 0;
+    return {
+      id: work.id.trim() || `work-${index + 1}-${initiativeId}`,
+      title: work.title.trim() || `Работа ${index + 1}`,
+      description: work.description.trim() || 'Описание не заполнено',
+      effortHours: normalizedEffort
+    };
+  });
+
+  const requirements = draft.requirements.map((requirement, index) => {
+    const countValue = Number(requirement.count);
+    const normalizedCount = Number.isFinite(countValue) ? Math.max(1, Math.round(countValue)) : 1;
+    const skills = deduplicateNonEmpty(requirement.skills.map((skill) => skill.trim()));
+    const comment = requirement.comment?.trim() ?? '';
+    return {
+      id: requirement.id.trim() || `requirement-${index + 1}-${initiativeId}`,
+      role: requirement.role,
+      skills,
+      count: normalizedCount,
+      comment: comment || undefined
+    };
+  });
+
+  return {
+    id: initiativeId,
+    name: normalizedName,
+    description: normalizedDescription,
+    owner: normalizedOwner,
+    status: normalizedStatus,
+    expectedImpact: normalizedImpact,
+    domains,
+    potentialModules,
+    works,
+    requirements
+  };
 }
 
 function recalculateReuseScores(modules: ModuleNode[]): ModuleNode[] {
@@ -3350,6 +3570,29 @@ function buildModuleLinks(
       }));
 
     return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
+  });
+}
+
+function buildInitiativeLinks(
+  initiatives: InitiativeNode[],
+  allowedDomainIds: Set<string>
+): GraphLink[] {
+  return initiatives.flatMap((initiative) => {
+    const domainLinks: GraphLink[] = initiative.domains
+      .filter((domainId) => allowedDomainIds.has(domainId))
+      .map((domainId) => ({
+        source: initiative.id,
+        target: domainId,
+        type: 'initiative-domain'
+      }));
+
+    const moduleLinks: GraphLink[] = initiative.plannedModuleIds.map((moduleId) => ({
+      source: initiative.id,
+      target: moduleId,
+      type: 'initiative-plan'
+    }));
+
+    return [...domainLinks, ...moduleLinks];
   });
 }
 

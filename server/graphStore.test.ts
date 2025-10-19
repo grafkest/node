@@ -179,41 +179,26 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
     initiatives: [
       {
         id: 'initiative-alpha',
-        name: 'Инициатива тестового модуля',
-        description: 'Проверка экспорта состава команды',
-        status: 'initiated',
+        name: 'Initiative Alpha',
+        description: 'Первый пилот по объединению модулей.',
+        status: 'pilot',
+        owner: 'Product Office',
         domainIds: ['root-domain'],
-        targetModuleName: 'Module Alpha Initiative',
-        owner: 'Тестовый владелец',
-        lastUpdated: new Date().toISOString(),
-        risks: [
-          {
-            id: 'risk-alpha-delay',
-            description: 'Возможная задержка из-за отсутствия аналитика',
-            severity: 'medium',
-            createdAt: new Date().toISOString()
-          }
-        ],
-        roles: [
-          {
-            id: 'role-alpha-analyst',
-            role: 'Аналитик',
-            required: 1,
-            pinnedExpertIds: [],
-            candidates: [
-              {
-                expertId: 'expert-test-alpha',
-                score: 82,
-                fitComment: 'Готов подключиться после согласования.',
-                riskTags: ['Требуется подтверждение доступности'],
-                scoreDetails: [
-                  { criterion: 'Опыт', weight: 0.5, value: 0.85 },
-                  { criterion: 'Доступность', weight: 0.5, value: 0.8 }
-                ]
-              }
-            ]
-          }
-        ]
+        moduleIds: ['module-alpha'],
+        startDate: '2024-Q1',
+        targetDate: '2024-Q3',
+        expectedImpact: 'Повышение эффективности обмена данными'
+      },
+      {
+        id: 'initiative-beta',
+        name: 'Initiative Beta',
+        description: 'Масштабирование решения на смежные домены.',
+        status: 'idea',
+        owner: 'Digital Lab',
+        domainIds: ['child-domain'],
+        moduleIds: ['module-beta'],
+        startDate: '2024-Q2',
+        expectedImpact: 'Расширение набора аналитических сценариев'
       }
     ],
     layout: {
@@ -272,6 +257,8 @@ test('creates and deletes graphs with optional data copy', { concurrency: false 
   assert.equal(clonedSnapshot.domains.length > 0, true);
   assert.equal(clonedSnapshot.modules.length, 0);
   assert.equal(clonedSnapshot.artifacts.length, sourceSnapshot.artifacts.length);
+  assert.equal(sourceSnapshot.initiatives.length > 0, true);
+  assert.equal(clonedSnapshot.initiatives.length, 0);
 
   deleteGraph(clone.id);
   const graphsAfterDelete = listGraphs();
@@ -396,7 +383,7 @@ test('supports complex graph authoring flows', { concurrency: false }, async () 
     domains: [...snapshot.domains, newDomain],
     modules: [...snapshot.modules, newModule],
     artifacts: [...snapshot.artifacts, newArtifact],
-    initiatives: [...snapshot.initiatives],
+    initiatives: snapshot.initiatives,
     layout: {
       nodes: {
         ...snapshot.layout?.nodes,

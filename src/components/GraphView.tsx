@@ -7,13 +7,21 @@ import ForceGraph2D, {
   LinkObject,
   NodeObject
 } from 'react-force-graph-2d';
-import type { ArtifactNode, DomainNode, GraphLink, ModuleNode } from '../data';
+import type {
+  ArtifactNode,
+  DomainNode,
+  GraphLink,
+  InitiativeNode,
+  ModuleNode,
+  ModuleStatus
+} from '../data';
 import type { GraphLayoutNodePosition } from '../types/graph';
 import styles from './GraphView.module.css';
 
 type GraphNode =
   | ({ type: 'module' } & ModuleNode)
   | ({ type: 'domain' } & DomainNode)
+  | ({ type: 'initiative' } & InitiativeNode)
   | ({ type: 'artifact'; reuseScore?: number } & ArtifactNode);
 
 type LayoutChangeReason = 'drag' | 'engine';
@@ -22,10 +30,12 @@ type GraphViewProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
+  initiatives: InitiativeNode[];
   links: GraphLink[];
   onSelect: (node: GraphNode | null) => void;
   highlightedNode: string | null;
   visibleDomainIds: Set<string>;
+  visibleModuleStatuses: Set<ModuleStatus>;
   layoutPositions: Record<string, GraphLayoutNodePosition>;
   onLayoutChange?: (
     positions: Record<string, GraphLayoutNodePosition>,
@@ -45,10 +55,12 @@ const GraphView: React.FC<GraphViewProps> = ({
   modules,
   domains,
   artifacts,
+  initiatives,
   links,
   onSelect,
   highlightedNode,
   visibleDomainIds,
+  visibleModuleStatuses,
   layoutPositions,
   onLayoutChange
 }) => {
@@ -158,6 +170,16 @@ const GraphView: React.FC<GraphViewProps> = ({
     [modules]
   );
 
+  const moduleStatusMap = useMemo(() => {
+    const map = new Map<string, ModuleStatus>();
+    moduleNodes.forEach((node) => {
+      if (node.type === 'module') {
+        map.set(node.id, node.status);
+      }
+    });
+    return map;
+  }, [moduleNodes]);
+
   const artifactNodes = useMemo<GraphNode[]>(
     () =>
       artifacts.map((artifact) => ({
@@ -166,6 +188,15 @@ const GraphView: React.FC<GraphViewProps> = ({
         reuseScore: 0
       })),
     [artifacts]
+  );
+
+  const initiativeNodes = useMemo<GraphNode[]>(
+    () =>
+      initiatives.map((initiative) => ({
+        ...initiative,
+        type: 'initiative'
+      })),
+    [initiatives]
   );
 
   const nodes = useMemo(() => {
@@ -189,9 +220,10 @@ const GraphView: React.FC<GraphViewProps> = ({
     domainNodes.forEach(upsertNode);
     artifactNodes.forEach(upsertNode);
     moduleNodes.forEach(upsertNode);
+    initiativeNodes.forEach(upsertNode);
 
     return nextNodes;
-  }, [domainNodes, artifactNodes, moduleNodes, layoutPositions]);
+  }, [domainNodes, artifactNodes, moduleNodes, initiativeNodes, layoutPositions]);
 
   const graphData = useMemo(
     () => ({
@@ -566,9 +598,12 @@ const GraphView: React.FC<GraphViewProps> = ({
   return (
     <div ref={containerRef} className={styles.container}>
       <div className={styles.legend}>
-        <Badge label="Модуль" size="s" view="filled" status="warning" />
-        <Badge label="Домен" size="s" view="filled" status="system" />
-        <Badge label="Артефакт" size="s" view="filled" status="success" />
+        <Badge label="🚀 Модуль • prod" size="s" view="filled" status="warning" />
+        <Badge label="🔧 Модуль • in-dev" size="s" view="filled" status="normal" />
+        <Badge label="🛑 Модуль • deprecated" size="s" view="filled" status="alert" />
+        <Badge label="📂 Домен" size="s" view="filled" status="system" />
+        <Badge label="🧩 Артефакт" size="s" view="filled" status="success" />
+        <Badge label="🎯 Инициатива" size="s" view="filled" status="warning" />
       </div>
       {highlightedNode ? (
         <div className={styles.viewControls}>
@@ -597,9 +632,19 @@ const GraphView: React.FC<GraphViewProps> = ({
           height={dimensions.height || 400}
           graphData={graphData}
           nodeLabel={(node: ForceNode) => node.name ?? node.id}
-          linkColor={(link: ForceLink) => resolveLinkColor(link, palette, visibleDomainIds)}
+          linkColor={(link: ForceLink) =>
+            resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
+          }
           nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
-            drawNode(node, ctx, globalScale, highlightedNode, palette, visibleDomainIds);
+            drawNode(
+              node,
+              ctx,
+              globalScale,
+              highlightedNode,
+              palette,
+              visibleDomainIds,
+              visibleModuleStatuses
+            );
           }}
           nodeCanvasObjectMode={() => 'replace'}
           onNodeClick={(node) => {
@@ -695,14 +740,18 @@ function flattenDomains(domains: DomainNode[], visibleDomainIds?: Set<string>): 
 }
 
 type GraphPalette = {
-  module: string;
+  moduleProduction: string;
+  moduleInDev: string;
+  moduleDeprecated: string;
   domain: string;
   artifact: string;
+  initiative: string;
   text: string;
   linkDependency: string;
   linkProduces: string;
   linkRelates: string;
   linkConsumes: string;
+  linkInitiative: string;
 };
 
 function drawNode(
@@ -711,39 +760,122 @@ function drawNode(
   globalScale: number,
   highlighted: string | null,
   palette: GraphPalette,
-  visibleDomainIds: Set<string>
+  visibleDomainIds: Set<string>,
+  visibleModuleStatuses: Set<ModuleStatus>
 ) {
   const label = node.name ?? node.id;
-  const fontSize = 12 / Math.sqrt(globalScale);
-  const radius = node.type === 'module' ? 10 : node.type === 'domain' ? 8 : 6;
+  const x = typeof node.x === 'number' ? node.x : 0;
+  const y = typeof node.y === 'number' ? node.y : 0;
+  const isHighlighted = highlighted === node.id;
   const isDomainDimmed =
     node.type === 'domain' && visibleDomainIds.size > 0 && !visibleDomainIds.has(node.id);
-  const isHighlighted = highlighted && node.id === highlighted;
-  const baseAlpha = isHighlighted ? 1 : isDomainDimmed ? 0.2 : 1;
+  const isModuleDimmed =
+    node.type === 'module' &&
+    visibleModuleStatuses.size > 0 &&
+    !visibleModuleStatuses.has(node.status);
+  const baseAlpha = isHighlighted ? 1 : 1;
+  const dimFactor =
+    (highlighted && node.id !== highlighted ? 0.4 : 1) *
+    (isModuleDimmed && !isHighlighted ? 0.35 : 1) *
+    (isDomainDimmed && !isHighlighted ? 0.35 : 1);
+  const effectiveAlpha = clamp(baseAlpha * dimFactor, 0.1, 1);
+  const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 10);
+  const iconFontSize = Math.max(14 / Math.sqrt(globalScale), 12);
+
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
-  ctx.fillStyle =
-    node.type === 'module'
-      ? palette.module
-      : node.type === 'domain'
-        ? palette.domain
-        : palette.artifact;
-  ctx.globalAlpha = highlighted && node.id !== highlighted ? 0.5 * baseAlpha : baseAlpha;
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  ctx.font = `${fontSize}px sans-serif`;
+  ctx.globalAlpha = effectiveAlpha;
+
+  let labelOffset = 14;
+  let iconColor = palette.text;
+  const icon = resolveNodeIcon(node);
+
+  switch (node.type) {
+    case 'module': {
+      const moduleRadius = 11;
+      const fill = resolveModuleColor(node.status, palette);
+      renderCircle(ctx, x, y, moduleRadius, fill, withAlpha(fill, 0.35));
+      labelOffset = moduleRadius + 8;
+      iconColor = '#FFFFFF';
+      break;
+    }
+    case 'domain': {
+      const domainRadius = 9;
+      renderDiamond(ctx, x, y, domainRadius, palette.domain, withAlpha(palette.domain, 0.35));
+      labelOffset = domainRadius + 10;
+      break;
+    }
+    case 'artifact': {
+      const artifactRadius = 8;
+      renderTriangle(ctx, x, y, artifactRadius, palette.artifact, withAlpha(palette.artifact, 0.35));
+      labelOffset = artifactRadius + 10;
+      break;
+    }
+    case 'initiative': {
+      const width = 26;
+      const height = 16;
+      renderRoundedRect(
+        ctx,
+        x - width / 2,
+        y - height / 2,
+        width,
+        height,
+        6,
+        palette.initiative,
+        withAlpha(palette.initiative, 0.35)
+      );
+      labelOffset = height / 2 + 10;
+      iconColor = '#FFFFFF';
+      break;
+    }
+  }
+
+  if (icon) {
+    ctx.font = `${iconFontSize}px sans-serif`;
+    ctx.fillStyle = iconColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icon, x, y);
+  }
+
+  const textAlpha = isHighlighted ? 1 : Math.max(effectiveAlpha, 0.45);
+  ctx.globalAlpha = textAlpha;
+  ctx.font = `${labelFontSize}px sans-serif`;
+  ctx.fillStyle = palette.text;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = palette.text;
-  if (isDomainDimmed && !isHighlighted) {
-    ctx.globalAlpha = 0.6;
-  }
-  ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + radius + 4);
+  ctx.fillText(label, x, y + labelOffset);
+
   ctx.restore();
 }
 
-function resolveLinkColor(link: ForceLink, palette: GraphPalette, visibleDomainIds: Set<string>) {
+function resolveLinkColor(
+  link: ForceLink,
+  palette: GraphPalette,
+  visibleDomainIds: Set<string>,
+  visibleModuleStatuses: Set<ModuleStatus>,
+  moduleStatusMap: Map<string, ModuleStatus>
+) {
+  if (link.type === 'initiative-plan') {
+    const moduleId =
+      typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
+    const base = palette.linkInitiative;
+
+    if (visibleModuleStatuses.size > 0) {
+      let status: ModuleStatus | undefined;
+      if (typeof link.target === 'object' && (link.target as ForceNode).type === 'module') {
+        status = (link.target as ForceNode & ModuleNode).status;
+      } else {
+        status = moduleStatusMap.get(moduleId);
+      }
+
+      if (status && !visibleModuleStatuses.has(status)) {
+        return withAlpha(base, 0.2);
+      }
+    }
+
+    return base;
+  }
+
   const baseColor =
     link.type === 'dependency'
       ? palette.linkDependency
@@ -751,18 +883,19 @@ function resolveLinkColor(link: ForceLink, palette: GraphPalette, visibleDomainI
         ? palette.linkProduces
         : link.type === 'consumes'
           ? palette.linkConsumes
-          : palette.linkRelates;
+          : link.type === 'initiative-domain'
+            ? palette.linkInitiative
+            : palette.linkRelates;
 
-  if (link.type !== 'domain' || visibleDomainIds.size === 0) {
-    return baseColor;
+  if ((link.type === 'domain' || link.type === 'initiative-domain') && visibleDomainIds.size > 0) {
+    const targetId =
+      typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
+    if (!visibleDomainIds.has(targetId)) {
+      return withAlpha(baseColor, 0.2);
+    }
   }
 
-  const targetId = typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
-  if (visibleDomainIds.has(targetId)) {
-    return baseColor;
-  }
-
-  return withAlpha(baseColor, 0.2);
+  return baseColor;
 }
 
 function withAlpha(color: string, alpha: number) {
@@ -782,6 +915,131 @@ function withAlpha(color: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function renderCircle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  fill: string,
+  outline: string
+) {
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, 2 * Math.PI);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function renderDiamond(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  fill: string,
+  outline: string
+) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - radius);
+  ctx.lineTo(x + radius, y);
+  ctx.lineTo(x, y + radius);
+  ctx.lineTo(x - radius, y);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function renderTriangle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  fill: string,
+  outline: string
+) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - radius);
+  ctx.lineTo(x + radius, y + radius);
+  ctx.lineTo(x - radius, y + radius);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function renderRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fill: string,
+  outline: string
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function resolveModuleColor(status: ModuleStatus, palette: GraphPalette): string {
+  switch (status) {
+    case 'production':
+      return palette.moduleProduction;
+    case 'in-dev':
+      return palette.moduleInDev;
+    case 'deprecated':
+    default:
+      return palette.moduleDeprecated;
+  }
+}
+
+const MODULE_ICON_MAP: Record<ModuleStatus, string> = {
+  production: '🚀',
+  'in-dev': '🔧',
+  deprecated: '🛑'
+};
+
+function resolveNodeIcon(node: GraphNode): string {
+  if (node.type === 'module') {
+    return MODULE_ICON_MAP[node.status];
+  }
+
+  if (node.type === 'domain') {
+    return '📂';
+  }
+
+  if (node.type === 'artifact') {
+    return '🧩';
+  }
+
+  if (node.type === 'initiative') {
+    return '🎯';
+  }
+
+  return '';
+}
+
 function resolvePalette(themeClassName?: string): GraphPalette {
   if (typeof window === 'undefined') {
     return DEFAULT_PALETTE;
@@ -792,14 +1050,18 @@ function resolvePalette(themeClassName?: string): GraphPalette {
   const getVar = (token: string, fallback: string) => styles.getPropertyValue(token).trim() || fallback;
 
   return {
-    module: getVar('--color-bg-warning', DEFAULT_PALETTE.module),
+    moduleProduction: getVar('--color-bg-warning', DEFAULT_PALETTE.moduleProduction),
+    moduleInDev: getVar('--color-bg-normal', DEFAULT_PALETTE.moduleInDev),
+    moduleDeprecated: getVar('--color-bg-alert', DEFAULT_PALETTE.moduleDeprecated),
     domain: getVar('--color-bg-info', DEFAULT_PALETTE.domain),
     artifact: getVar('--color-bg-success', DEFAULT_PALETTE.artifact),
+    initiative: getVar('--color-bg-brand', DEFAULT_PALETTE.initiative),
     text: getVar('--color-typo-primary', DEFAULT_PALETTE.text),
     linkDependency: getVar('--color-bg-border', DEFAULT_PALETTE.linkDependency),
     linkProduces: getVar('--color-bg-success', DEFAULT_PALETTE.linkProduces),
     linkRelates: getVar('--color-bg-info', DEFAULT_PALETTE.linkRelates),
-    linkConsumes: getVar('--color-bg-normal', DEFAULT_PALETTE.linkConsumes)
+    linkConsumes: getVar('--color-bg-normal', DEFAULT_PALETTE.linkConsumes),
+    linkInitiative: getVar('--color-bg-accent', DEFAULT_PALETTE.linkInitiative)
   };
 }
 
@@ -820,14 +1082,18 @@ function computeFocusZoom(
 }
 
 const DEFAULT_PALETTE: GraphPalette = {
-  module: '#FF8C69',
+  moduleProduction: '#FF8C69',
+  moduleInDev: '#4C9AFF',
+  moduleDeprecated: '#D06C6C',
   domain: '#5B8FF9',
   artifact: '#45C7B0',
+  initiative: '#A25DDC',
   text: '#1F1F1F',
   linkDependency: '#B8B8B8',
   linkProduces: '#45C7B0',
   linkRelates: '#5B8FF9',
-  linkConsumes: '#8E8E93'
+  linkConsumes: '#8E8E93',
+  linkInitiative: '#A25DDC'
 };
 
 export type { GraphNode };

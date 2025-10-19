@@ -42,12 +42,79 @@ export type TeamMember = {
   role: TeamRole;
 };
 
+export type InitiativeStatus =
+  | 'backlog'
+  | 'discovery'
+  | 'in-progress'
+  | 'pilot'
+  | 'completed';
+
+export type RoleRequirement = {
+  role: TeamRole;
+  fte: number;
+  skills: string[];
+};
+
+export type InitiativeWorkItem = {
+  id: string;
+  title: string;
+  description: string;
+  status: InitiativeStatus;
+  goal: string;
+  domains: string[];
+  modules: string[];
+  requiredFte: number;
+  roleRequirements: RoleRequirement[];
+  dependencies?: string[];
+  deliverables?: string[];
+};
+
+export type Initiative = {
+  id: string;
+  title: string;
+  summary: string;
+  sponsor: string;
+  status: InitiativeStatus;
+  goals: string[];
+  targetMetrics: string[];
+  domains: string[];
+  modules: string[];
+  startQuarter: string;
+  endQuarter?: string;
+  totalFte: number;
+  requiredRoles: RoleRequirement[];
+  workItems: InitiativeWorkItem[];
+  notes?: string;
+};
+
 export type RidOwner = {
   company: string;
   division: string;
 };
 
 export type ExpertAvailability = 'available' | 'partial' | 'busy';
+
+export type SkillLevel = 'A' | 'B' | 'C' | 'D' | 'E';
+
+export type SkillEvidenceStatus = 'verified' | 'in-review' | 'self-reported';
+
+export type SkillInterestLevel = 'high' | 'medium' | 'low';
+
+export type SkillUsage = {
+  from: string;
+  to?: string;
+  description?: string;
+};
+
+export type ExpertSkill = {
+  id: string;
+  level: SkillLevel;
+  proofStatus: SkillEvidenceStatus;
+  usage?: SkillUsage;
+  artifacts: string[];
+  interest: SkillInterestLevel;
+  availableFte: number;
+};
 
 export type ExpertProfile = {
   id: string;
@@ -66,6 +133,7 @@ export type ExpertProfile = {
   notableProjects: string[];
   availability: ExpertAvailability;
   availabilityComment: string;
+  skills: ExpertSkill[];
 };
 
 export type InitiativeStatus = 'initiated' | 'in-progress' | 'converted';
@@ -171,6 +239,38 @@ export type ModuleNode = {
   dataOut: ModuleOutput[];
   formula: string;
   nonFunctional: NonFunctionalRequirements;
+};
+
+export type InitiativeWorkItemStatus = 'discovery' | 'design' | 'pilot' | 'delivery';
+
+export type InitiativeWorkItem = {
+  id: string;
+  title: string;
+  description: string;
+  owner: string;
+  status: InitiativeWorkItemStatus;
+  timeframe: string;
+};
+
+export type InitiativeApprovalStatus = 'pending' | 'in-progress' | 'approved';
+
+export type InitiativeApprovalStage = {
+  id: string;
+  title: string;
+  approver: string;
+  status: InitiativeApprovalStatus;
+  comment?: string;
+};
+
+export type InitiativeNode = {
+  id: string;
+  name: string;
+  description: string;
+  domains: string[];
+  plannedModuleIds: string[];
+  requiredSkills: string[];
+  workItems: InitiativeWorkItem[];
+  approvalStages: InitiativeApprovalStage[];
 };
 
 export const domainTree: DomainNode[] = [
@@ -1191,7 +1291,132 @@ export const modules: ModuleNode[] = [
 ];
 
 
-export const experts: ExpertProfile[] = [
+export const initiatives: InitiativeNode[] = [
+  {
+    id: 'initiative-digital-pad',
+    name: 'Цифровая кустовая площадка',
+    description:
+      'Создание цифрового контура подготовки площадок и проектирования наземной инфраструктуры для новых кустов скважин.',
+    domains: ['layout-optimization', 'surface-readiness'],
+    plannedModuleIds: ['module-infraplan-layout', 'module-infraplan-datahub', 'module-infraplan-economics'],
+    requiredSkills: [
+      'Оптимизация промысловой инфраструктуры',
+      'Инженерное моделирование',
+      'Геопространственный анализ',
+      'Управление проектными данными'
+    ],
+    workItems: [
+      {
+        id: 'digital-pad-discovery',
+        title: 'Сбор исходных требований площадок',
+        description: 'Анализ технологических ограничений и данных геодезии для типовых кустов.',
+        owner: 'Дарья Гончарова',
+        status: 'discovery',
+        timeframe: 'Q1 2025'
+      },
+      {
+        id: 'digital-pad-design',
+        title: 'Проектирование сценариев размещения',
+        description: 'Настройка алгоритмов оптимизации и сценарного анализа по выбранным полигонам.',
+        owner: 'Антон Чернышёв',
+        status: 'design',
+        timeframe: 'Q2 2025'
+      },
+      {
+        id: 'digital-pad-pilot',
+        title: 'Пилотирование в Восток Инжиниринг',
+        description: 'Совместная проверка расчётов и интеграция с INFRAPLAN Economics.',
+        owner: 'Александр Трофимов',
+        status: 'pilot',
+        timeframe: 'Q3 2025'
+      }
+    ],
+    approvalStages: [
+      {
+        id: 'digital-pad-architecture',
+        title: 'Архитектурный комитет',
+        approver: 'Дмитрий Валов',
+        status: 'approved',
+        comment: 'Целевая архитектура согласована, необходимо оформить план пилота.'
+      },
+      {
+        id: 'digital-pad-finance',
+        title: 'Финансовый комитет',
+        approver: 'Марина Крылова',
+        status: 'in-progress',
+        comment: 'Требуется уточнить эффект по CAPEX для пилотных кустов.'
+      },
+      {
+        id: 'digital-pad-operations',
+        title: 'Операционный совет',
+        approver: 'Игорь Ковалёв',
+        status: 'pending'
+      }
+    ]
+  },
+  {
+    id: 'initiative-remote-operations',
+    name: 'Единый контур дистанционного управления',
+    description:
+      'Интеграция цифровых двойников и сервисов диспетчеризации для безопасного дистанционного управления фонда скважин.',
+    domains: ['real-time-monitoring', 'workover-automation'],
+    plannedModuleIds: [
+      'module-dtwin-optimizer',
+      'module-dtwin-remote-ops',
+      'module-wwo-planner'
+    ],
+    requiredSkills: [
+      'Стриминговая обработка телеметрии',
+      'Интеграция SCADA-систем',
+      'Проектирование процессов дистанционного управления',
+      'Управление изменениями'
+    ],
+    workItems: [
+      {
+        id: 'remote-ops-discovery',
+        title: 'Картирование процессов и ролей',
+        description: 'Интервью с операторами и формализация цепочки принятия решений.',
+        owner: 'Ирина Сафонова',
+        status: 'discovery',
+        timeframe: 'Q4 2024'
+      },
+      {
+        id: 'remote-ops-design',
+        title: 'Проектирование интеграции SCADA',
+        description: 'Выбор каналов обмена и сценарии переключения режимов.',
+        owner: 'Геннадий Борисов',
+        status: 'design',
+        timeframe: 'Q1 2025'
+      },
+      {
+        id: 'remote-ops-delivery',
+        title: 'Запуск дистанционных процедур',
+        description: 'Обучение диспетчеров и выход в опытную эксплуатацию.',
+        owner: 'Галина Кручина',
+        status: 'delivery',
+        timeframe: 'Q3 2025'
+      }
+    ],
+    approvalStages: [
+      {
+        id: 'remote-ops-safety',
+        title: 'Комитет промышленной безопасности',
+        approver: 'Сергей Ежов',
+        status: 'in-progress',
+        comment: 'Подготовлены регламенты по аварийному отключению.'
+      },
+      {
+        id: 'remote-ops-it',
+        title: 'ИТ-архитектурный совет',
+        approver: 'Леонид Архипов',
+        status: 'pending'
+      }
+    ]
+  }
+];
+
+
+ export const experts: ExpertProfile[] = [
   {
     id: 'expert-viktoria-berezhnaya',
     fullName: 'Виктория Бережная',
@@ -1228,7 +1453,47 @@ export const experts: ExpertProfile[] = [
       'Выстроила мониторинг качества источников в ПАО «СибНефть Добыча»'
     ],
     availability: 'available',
-    availabilityComment: 'Может подключиться к 1–2 консалтинговым инициативам в квартал'
+    availabilityComment: 'Может подключиться к 1–2 консалтинговым инициативам в квартал',
+    skills: [
+      {
+        id: 'data-normalization',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2023-01-15',
+          to: '2024-04-01',
+          description: 'Стандартизация инженерных датасетов для DataHub на месторождениях «Северный купол» и «Арктика»'
+        },
+        artifacts: ['artifact-infraplan-source-pack'],
+        interest: 'high',
+        availableFte: 0.4
+      },
+      {
+        id: 'streaming-pipelines',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-09-01',
+          to: '2024-02-20',
+          description: 'Поддержка Kafka-пайплайнов телеметрии для ситуационных центров Nedra.Production'
+        },
+        artifacts: ['artifact-dtwin-telemetry-cube'],
+        interest: 'medium',
+        availableFte: 0.3
+      },
+      {
+        id: 'data-governance',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-05-01',
+          description: 'Разработка матрицы владения инженерными данными и процессов каталогизации'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.2
+      }
+    ]
   },
   {
     id: 'expert-pavel-kolosov',
@@ -1264,7 +1529,47 @@ export const experts: ExpertProfile[] = [
       'Сопровождал масштабирование INFRAPLAN в холдинге «Западнефть Разработка»'
     ],
     availability: 'partial',
-    availabilityComment: 'Загружен проектами на 60%, доступен для стратегических консультаций'
+    availabilityComment: 'Загружен проектами на 60%, доступен для стратегических консультаций',
+    skills: [
+      {
+        id: 'layout-optimization',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-02-01',
+          to: '2024-03-15',
+          description: 'Оптимизация размещения объектов обустройства с использованием OptaPlanner'
+        },
+        artifacts: ['artifact-infraplan-layout'],
+        interest: 'high',
+        availableFte: 0.25
+      },
+      {
+        id: 'geo-apis',
+        level: 'B',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2021-07-01',
+          to: '2023-12-10',
+          description: 'Проектирование API для геосервисов и интеграции с подрядчиками ЛИДАР'
+        },
+        artifacts: ['artifact-infraplan-layout'],
+        interest: 'medium',
+        availableFte: 0.15
+      },
+      {
+        id: 'infrastructure-economics',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-06-01',
+          description: 'Совместные расчёты экономических эффектов для сценариев размещения'
+        },
+        artifacts: ['artifact-infraplan-economic-report'],
+        interest: 'low',
+        availableFte: 0.1
+      }
+    ]
   },
   {
     id: 'expert-anton-vlasov',
@@ -1300,7 +1605,47 @@ export const experts: ExpertProfile[] = [
       'Сопровождал сделки по покупке активов в Арктическом регионе'
     ],
     availability: 'busy',
-    availabilityComment: 'Свободные слоты с ноября, возможна точечная экспертиза документов'
+    availabilityComment: 'Свободные слоты с ноября, возможна точечная экспертиза документов',
+    skills: [
+      {
+        id: 'financial-modeling',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-01-01',
+          to: '2024-04-20',
+          description: 'Подготовка инвестиционных моделей для масштабирования INFRAPLAN'
+        },
+        artifacts: ['artifact-infraplan-economic-report'],
+        interest: 'high',
+        availableFte: 0.1
+      },
+      {
+        id: 'scenario-planning',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2023-03-01',
+          to: '2024-01-30',
+          description: 'Сценарный анализ инвестиционных программ для портфеля месторождений'
+        },
+        artifacts: ['artifact-infraplan-economic-report'],
+        interest: 'medium',
+        availableFte: 0.05
+      },
+      {
+        id: 'ma-support',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2022-11-01',
+          description: 'Экспертиза сделок по покупке активов в Арктическом регионе'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.05
+      }
+    ]
   },
   {
     id: 'expert-raisa-chistyakova',
@@ -1338,7 +1683,47 @@ export const experts: ExpertProfile[] = [
       'Создала стандарт подключения подрядчиков IoT к Digital Twin'
     ],
     availability: 'partial',
-    availabilityComment: 'Доступна для аудитов и предпроектной диагностики на 2–3 дня в месяц'
+    availabilityComment: 'Доступна для аудитов и предпроектной диагностики на 2–3 дня в месяц',
+    skills: [
+      {
+        id: 'telemetry-streaming',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-04-01',
+          to: '2024-03-01',
+          description: 'Поддержка ClickHouse и Kafka пайплайнов с нагрузкой 500k сообщений/сек'
+        },
+        artifacts: ['artifact-dtwin-telemetry-cube'],
+        interest: 'high',
+        availableFte: 0.2
+      },
+      {
+        id: 'iot-integration',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-02-01',
+          description: 'Интеграция промышленного IoT с ситуационными центрами и Digital Twin'
+        },
+        artifacts: ['artifact-dtwin-telemetry-cube'],
+        interest: 'medium',
+        availableFte: 0.15
+      },
+      {
+        id: 'sre-monitoring',
+        level: 'B',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2021-11-01',
+          to: '2023-10-01',
+          description: 'Настройка SLO/SLI для событийных систем мониторинга'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.1
+      }
+    ]
   },
   {
     id: 'expert-elizar-kopylov',
@@ -1375,7 +1760,47 @@ export const experts: ExpertProfile[] = [
       'Внедрил процесс MLOps для Nedra.Production в пяти регионах'
     ],
     availability: 'available',
-    availabilityComment: 'Готов подключиться к пилотам и пресейлам, приоритет — оптимизация добычи'
+    availabilityComment: 'Готов подключиться к пилотам и пресейлам, приоритет — оптимизация добычи',
+    skills: [
+      {
+        id: 'production-ml',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-08-01',
+          to: '2024-02-15',
+          description: 'Обучение и внедрение ML-моделей оптимизации добычи на 5 активах'
+        },
+        artifacts: ['artifact-dtwin-optimization-orders'],
+        interest: 'high',
+        availableFte: 0.35
+      },
+      {
+        id: 'mlops-production',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2023-01-10',
+          to: '2024-03-10',
+          description: 'Организация конвейера MLOps для Digital Twin'
+        },
+        artifacts: ['artifact-dtwin-optimization-orders'],
+        interest: 'medium',
+        availableFte: 0.25
+      },
+      {
+        id: 'value-discovery',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-06-01',
+          description: 'Фасилитация discovery-сессий с производством по выбору сценариев'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.2
+      }
+    ]
   },
   {
     id: 'expert-igor-shamov',
@@ -1411,7 +1836,47 @@ export const experts: ExpertProfile[] = [
       'Разработал стандарт интеграции Remote Ops с подрядчиками HSE'
     ],
     availability: 'partial',
-    availabilityComment: 'Находится в проектах внедрения, доступен для очных воркшопов раз в месяц'
+    availabilityComment: 'Находится в проектах внедрения, доступен для очных воркшопов раз в месяц',
+    skills: [
+      {
+        id: 'remote-ops-integration',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2021-09-01',
+          to: '2024-02-28',
+          description: 'Интеграция SCADA, MES и дистанционного управления на кустовых площадках'
+        },
+        artifacts: ['artifact-dtwin-remote-commands'],
+        interest: 'high',
+        availableFte: 0.2
+      },
+      {
+        id: 'remote-ops-security',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2022-05-01',
+          description: 'Оценка и настройка кибербезопасности дистанционных операций'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.15
+      },
+      {
+        id: 'change-management',
+        level: 'C',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2023-04-01',
+          to: '2024-01-10',
+          description: 'Организация change management при внедрении Remote Ops'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.1
+      }
+    ]
   },
   {
     id: 'expert-vladimir-romanov',
@@ -1448,7 +1913,47 @@ export const experts: ExpertProfile[] = [
       'Внедрил цифровые регламенты взаимодействия с подрядчиками в трёх промыслах'
     ],
     availability: 'available',
-    availabilityComment: 'Готов вести консалтинговые треки и наставничество по WWO-процессам'
+    availabilityComment: 'Готов вести консалтинговые треки и наставничество по WWO-процессам',
+    skills: [
+      {
+        id: 'wwo-planning',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2021-03-01',
+          to: '2024-02-01',
+          description: 'Оптимизация и согласование программ ГТМ для 3 промыслов'
+        },
+        artifacts: ['artifact-wwo-plan'],
+        interest: 'high',
+        availableFte: 0.3
+      },
+      {
+        id: 'contractor-management',
+        level: 'B',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-05-01',
+          to: '2024-03-20',
+          description: 'Выстраивание взаимодействия с подрядчиками и SLA по ремонтам'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.25
+      },
+      {
+        id: 'process-digitization',
+        level: 'C',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-09-01',
+          description: 'Перевод регламентов WWO в цифровые шаблоны'
+        },
+        artifacts: ['artifact-wwo-operations-log'],
+        interest: 'high',
+        availableFte: 0.2
+      }
+    ]
   },
   {
     id: 'expert-margarita-kurganskaya',
@@ -1484,7 +1989,47 @@ export const experts: ExpertProfile[] = [
       'Сформировала программу обучения операторов цифровым инструментам WWO'
     ],
     availability: 'busy',
-    availabilityComment: 'Полная загрузка текущими внедрениями, возможны дистанционные консультации'
+    availabilityComment: 'Полная загрузка текущими внедрениями, возможны дистанционные консультации',
+    skills: [
+      {
+        id: 'field-dispatching',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-06-01',
+          to: '2024-04-05',
+          description: 'Диспетчеризация бригад и контроль исполнения ремонтов'
+        },
+        artifacts: ['artifact-wwo-operations-log'],
+        interest: 'high',
+        availableFte: 0.05
+      },
+      {
+        id: 'mobile-solutions',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-01-01',
+          description: 'Внедрение мобильных приложений для полевых сотрудников'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.05
+      },
+      {
+        id: 'hse-compliance',
+        level: 'C',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2022-09-01',
+          to: '2023-12-01',
+          description: 'Контроль соблюдения HSE требований во время ремонтов'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.05
+      }
+    ]
   },
   {
     id: 'expert-denis-laptev',
@@ -1520,7 +2065,47 @@ export const experts: ExpertProfile[] = [
       'Организовал программу развития аналитиков WWO Academy'
     ],
     availability: 'partial',
-    availabilityComment: 'Может вести до двух параллельных консалтинговых треков'
+    availabilityComment: 'Может вести до двух параллельных консалтинговых треков',
+    skills: [
+      {
+        id: 'wwo-analytics',
+        level: 'A',
+        proofStatus: 'verified',
+        usage: {
+          from: '2022-03-01',
+          to: '2024-03-25',
+          description: 'Разработка BI-дашбордов эффективности ремонтов'
+        },
+        artifacts: ['artifact-wwo-performance-dashboard'],
+        interest: 'high',
+        availableFte: 0.25
+      },
+      {
+        id: 'forecasting',
+        level: 'B',
+        proofStatus: 'in-review',
+        usage: {
+          from: '2023-02-01',
+          to: '2024-01-15',
+          description: 'Прогнозирование производственных эффектов от ремонтов'
+        },
+        artifacts: [],
+        interest: 'medium',
+        availableFte: 0.2
+      },
+      {
+        id: 'data-storytelling',
+        level: 'B',
+        proofStatus: 'self-reported',
+        usage: {
+          from: '2021-10-01',
+          description: 'Обучение аналитиков storytelling и презентации данных'
+        },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.15
+      }
+    ]
   }
 ];
 
@@ -1647,6 +2232,34 @@ export const artifacts: ArtifactNode[] = [
   }
 ];
 
+export const initiatives: InitiativeNode[] = [
+  {
+    id: 'initiative-ai-exploration',
+    name: 'ML-разведка новых месторождений',
+    description:
+      'Пилотный проект по внедрению ML-моделей для интерпретации геолого-геофизических данных и ускоренного выявления перспективных участков.',
+    status: 'pilot',
+    owner: 'Дирекция цифровой трансформации',
+    domainIds: ['seismic-interpretation', 'resource-evaluation'],
+    moduleIds: ['module-infraplan-datahub', 'module-infraplan-layout'],
+    startDate: '2024-Q1',
+    targetDate: '2024-Q4',
+    expectedImpact: 'Сокращение цикла анализа запасов на 30%'
+  },
+  {
+    id: 'initiative-digital-twin-expansion',
+    name: 'Расширение цифровых двойников добычи',
+    description:
+      'Масштабирование платформы цифровых двойников на новые промыслы с интеграцией мониторинга и предиктивной аналитики.',
+    status: 'scale',
+    owner: 'Проектный офис производственной эффективности',
+    domainIds: ['development-scenarios'],
+    moduleIds: ['module-dtwin-monitoring', 'module-dtwin-optimizer'],
+    startDate: '2023-Q3',
+    expectedImpact: 'Рост производственной эффективности на 12%'
+  }
+];
+
 
 export const artifactNameById: Record<string, string> = artifacts.reduce((acc, artifact) => {
   acc[artifact.id] = artifact.name;
@@ -1656,8 +2269,30 @@ export const artifactNameById: Record<string, string> = artifacts.reduce((acc, a
 export type GraphLink = {
   source: string;
   target: string;
-  type: 'domain' | 'dependency' | 'produces' | 'consumes';
+  type:
+    | 'domain'
+    | 'dependency'
+    | 'produces'
+    | 'consumes'
+    | 'initiative-domain'
+    | 'initiative-plan';
 };
+
+export const initiativeLinks: GraphLink[] = initiatives.flatMap((initiative) => {
+  const domainLinks: GraphLink[] = initiative.domains.map((domainId) => ({
+    source: initiative.id,
+    target: domainId,
+    type: 'initiative-domain'
+  }));
+
+  const moduleLinks: GraphLink[] = initiative.plannedModuleIds.map((moduleId) => ({
+    source: initiative.id,
+    target: moduleId,
+    type: 'initiative-plan'
+  }));
+
+  return [...domainLinks, ...moduleLinks];
+});
 
 const moduleById: Record<string, ModuleNode> = modules.reduce((acc, module) => {
   acc[module.id] = module;
@@ -1958,3 +2593,23 @@ export const reuseIndexHistory: ReuseTrendPoint[] = [
   { period: '2024-09', averageScore: 0.65 },
   { period: '2024-10', averageScore: 0.66 }
 ];
+
+export {
+  skills,
+  roleToSkillsMap,
+  getSkillsByRole,
+  getSkillIdsByRole,
+  getRolesForSkill,
+  skillLevels,
+  evidenceStatuses
+} from './data/skills';
+
+export type {
+  SkillDefinition,
+  SkillLevelDescriptor,
+  EvidenceStatusDescriptor,
+  SkillCategory,
+  SkillSource,
+  SkillLevelId,
+  EvidenceStatusId
+} from './data/skills';
