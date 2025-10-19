@@ -123,12 +123,31 @@ export type InitiativeCandidate = {
   scoreDetails: InitiativeCandidateScore[];
 };
 
+export type InitiativeRoleWork = {
+  id: string;
+  title: string;
+  description: string;
+  startDay: number;
+  durationDays: number;
+  effortDays: number;
+  assignedExpertId?: string;
+};
+
 export type InitiativeRolePlan = {
   id: string;
   role: TeamRole;
   required: number;
   pinnedExpertIds: string[];
   candidates: InitiativeCandidate[];
+  workItems?: InitiativeRoleWork[];
+};
+
+export type InitiativeCustomer = {
+  company: string;
+  unit: string;
+  representative: string;
+  contact: string;
+  comment?: string;
 };
 
 export type InitiativeRisk = {
@@ -149,6 +168,7 @@ export type Initiative = InitiativeNode & {
   potentialModules: string[];
   works: InitiativeWork[];
   requirements: InitiativeRequirement[];
+  customer?: InitiativeCustomer;
 };
 
 export type LibraryDependency = {

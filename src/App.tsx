@@ -59,6 +59,10 @@ import {
   type DomainNode,
   type GraphLink,
   type Initiative,
+  type InitiativeRequirement,
+  type InitiativeRolePlan,
+  type InitiativeRoleWork,
+  type InitiativeWork,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -67,6 +71,7 @@ import {
 import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
 import InitiativePlanner from './components/InitiativePlanner';
+import type { InitiativeCreationRequest } from './types/initiativeCreation';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -2287,6 +2292,100 @@ function App() {
     [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
   );
 
+  const handlePlannerCreateInitiative = useCallback(
+    (request: InitiativeCreationRequest): Initiative => {
+      const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
+      const initiativeId = createEntityId('initiative', request.name, existingIds);
+      const normalizedName = request.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
+      const normalizedDescription = request.description.trim() || 'Описание не заполнено';
+      const normalizedOwner = request.owner.trim() || 'Ответственный не указан';
+      const normalizedImpact = request.expectedImpact.trim() || 'Эффект не оценён';
+      const normalizedTarget = request.targetModuleName.trim() || normalizedName;
+      const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
+      const potentialModules = request.potentialModules.map((module) => module.trim()).filter(Boolean);
+
+      const roles: InitiativeRolePlan[] = request.roles.map((role, index) => {
+        const workItems: InitiativeRoleWork[] = role.workItems.map((item, workIndex) => ({
+          id: item.id || `${initiativeId}-role-${index + 1}-work-${workIndex + 1}`,
+          title: item.title.trim() || `Работа ${workIndex + 1}`,
+          description: item.description.trim() || 'Описание не заполнено',
+          startDay: Math.max(0, Math.round(item.startDay)),
+          durationDays: Math.max(1, Math.round(item.durationDays)),
+          effortDays: Math.max(1, Math.round(item.effortDays)),
+          assignedExpertId: item.assignedExpertId ?? undefined
+        }));
+
+        const pinnedExpertIds = Array.from(
+          new Set(
+            workItems
+              .map((item) => item.assignedExpertId)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0)
+          )
+        );
+
+        return {
+          id: role.id || `${initiativeId}-role-${index + 1}`,
+          role: role.role,
+          required: Math.max(1, Math.round(role.required)),
+          pinnedExpertIds,
+          candidates: [],
+          workItems
+        };
+      });
+
+      const works: InitiativeWork[] = roles.flatMap((role) =>
+        (role.workItems ?? []).map((item, index) => ({
+          id: `${role.id}-${item.id || index + 1}`,
+          title: item.title,
+          description: item.description,
+          effortHours: Math.max(0, Math.round(item.effortDays)) * 8
+        }))
+      );
+
+      const requirements: InitiativeRequirement[] = request.roles.map((role, index) => ({
+        id: role.id || `${initiativeId}-req-${index + 1}`,
+        role: role.role,
+        skills: role.skills.map((skill) => skill.trim()).filter(Boolean),
+        count: Math.max(1, Math.round(role.required)),
+        comment: role.comment?.trim() || undefined
+      }));
+
+      const initiative: Initiative = {
+        id: initiativeId,
+        name: normalizedName,
+        description: normalizedDescription,
+        domains,
+        plannedModuleIds: [],
+        requiredSkills: [],
+        workItems: [],
+        approvalStages: [],
+        status: request.status,
+        owner: normalizedOwner,
+        expectedImpact: normalizedImpact,
+        targetModuleName: normalizedTarget,
+        lastUpdated: new Date().toISOString(),
+        risks: [],
+        roles,
+        potentialModules,
+        works,
+        requirements,
+        customer: {
+          company: request.customer.company.trim(),
+          unit: request.customer.unit.trim(),
+          representative: request.customer.representative.trim(),
+          contact: request.customer.contact.trim(),
+          comment: request.customer.comment?.trim() || undefined
+        }
+      };
+
+      markGraphDirty();
+      setInitiativeData((prev) => [...prev, initiative]);
+      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
+      return initiative;
+    },
+    [initiativeData, markGraphDirty, showAdminNotice]
+  );
+
   const handleUpdateInitiative = useCallback(
     (initiativeId: string, draft: InitiativeDraftPayload) => {
       const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
@@ -2936,6 +3035,7 @@ function App() {
           onRemoveRisk={handleRemoveInitiativeRisk}
           onStatusChange={handleInitiativeStatusChange}
           onExport={handleInitiativeExport}
+          onCreateInitiative={handlePlannerCreateInitiative}
         />
       </main>
       <main

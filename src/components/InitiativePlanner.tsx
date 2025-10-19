@@ -5,13 +5,16 @@ import { Select } from '@consta/uikit/Select';
 import { Steps } from '@consta/uikit/Steps';
 import { Text } from '@consta/uikit/Text';
 import clsx from 'clsx';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   ExpertProfile,
   Initiative,
   InitiativeRisk,
   InitiativeStatus
 } from '../data';
+import InitiativeCreationModal from './InitiativeCreationModal';
+import InitiativeGanttChart, { type InitiativeGanttTask } from './InitiativeGanttChart';
+import type { InitiativeCreationRequest } from '../types/initiativeCreation';
 import styles from './InitiativePlanner.module.css';
 
 type SelectItem<Value extends string> = {
@@ -31,6 +34,7 @@ type InitiativePlannerProps = {
   onRemoveRisk: (initiativeId: string, riskId: string) => void;
   onStatusChange: (initiativeId: string, status: InitiativeStatus) => void;
   onExport: (initiativeId: string) => void;
+  onCreateInitiative: (draft: InitiativeCreationRequest) => Initiative | Promise<Initiative>;
 };
 
 type CandidateKey = `${string}:${string}`;
@@ -73,12 +77,16 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   onAddRisk,
   onRemoveRisk,
   onStatusChange,
-  onExport
+  onExport,
+  onCreateInitiative
 }) => {
   const [selectedId, setSelectedId] = useState<string | null>(() => initiatives[0]?.id ?? null);
   const [riskDescription, setRiskDescription] = useState('');
   const [riskSeverity, setRiskSeverity] = useState<InitiativeRisk['severity']>('medium');
   const [openCandidates, setOpenCandidates] = useState<Set<CandidateKey>>(new Set());
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
+  const [creationError, setCreationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedId && initiatives.length > 0) {
@@ -114,6 +122,50 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     });
     return map;
   }, [experts]);
+
+  const timelineTasks = useMemo<InitiativeGanttTask[]>(() => {
+    if (!selectedInitiative) {
+      return [];
+    }
+
+    return selectedInitiative.roles.flatMap((role) =>
+      (role.workItems ?? []).map((item) => ({
+        id: `${role.id}-${item.id}`,
+        role: role.role,
+        title: item.title,
+        startDay: item.startDay,
+        durationDays: item.durationDays,
+        effortDays: item.effortDays,
+        assignedExpert: item.assignedExpertId
+          ? expertMap.get(item.assignedExpertId)?.fullName ?? item.assignedExpertId
+          : undefined
+      }))
+    );
+  }, [expertMap, selectedInitiative]);
+
+  const handleOpenCreate = () => {
+    setCreationError(null);
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateInitiative = useCallback(
+    async (draft: InitiativeCreationRequest) => {
+      try {
+        setIsCreateSubmitting(true);
+        setCreationError(null);
+        const result = await Promise.resolve(onCreateInitiative(draft));
+        setIsCreateModalOpen(false);
+        setSelectedId(result.id);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Не удалось создать инициативу. Попробуйте ещё раз.';
+        setCreationError(message);
+      } finally {
+        setIsCreateSubmitting(false);
+      }
+    },
+    [onCreateInitiative]
+  );
 
   const handleToggleCandidateDetails = (candidateId: CandidateKey) => {
     setOpenCandidates((prev) => {
@@ -273,6 +325,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
           </div>
         </div>
         <div className={styles.headerControls}>
+          <Button size="s" view="secondary" label="Создать инициативу" onClick={handleOpenCreate} />
           <Select<SelectItem<string>>
             size="s"
             items={initiativeOptions}
@@ -307,6 +360,57 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
       </div>
       <div className={styles.contentGrid}>
         <section className={styles.rolesSection} aria-label="Роли и кандидаты">
+          <Card className={styles.timelineCard} verticalSpace="xl" horizontalSpace="xl">
+            <div className={styles.timelineHeader}>
+              <Text size="s" weight="semibold">
+                План работ
+              </Text>
+              <Text size="xs" view="secondary">
+                {timelineTasks.length > 0
+                  ? `Задач в расписании: ${timelineTasks.length}`
+                  : 'Диаграмма появится после добавления работ по ролям.'}
+              </Text>
+            </div>
+            <InitiativeGanttChart tasks={timelineTasks} />
+          </Card>
+          {selectedInitiative.customer && (
+            <Card className={styles.customerCard} verticalSpace="xl" horizontalSpace="xl">
+              <Text size="s" weight="semibold">
+                Параметры заказчика
+              </Text>
+              <div className={styles.customerGrid}>
+                <div>
+                  <Text size="xs" view="secondary">
+                    Компания
+                  </Text>
+                  <Text size="s">{selectedInitiative.customer.company || '—'}</Text>
+                </div>
+                <div>
+                  <Text size="xs" view="secondary">
+                    Подразделение
+                  </Text>
+                  <Text size="s">{selectedInitiative.customer.unit || '—'}</Text>
+                </div>
+                <div>
+                  <Text size="xs" view="secondary">
+                    Контактное лицо
+                  </Text>
+                  <Text size="s">{selectedInitiative.customer.representative || '—'}</Text>
+                </div>
+                <div>
+                  <Text size="xs" view="secondary">
+                    Контакты
+                  </Text>
+                  <Text size="s">{selectedInitiative.customer.contact || '—'}</Text>
+                </div>
+              </div>
+              {selectedInitiative.customer.comment && (
+                <Text size="xs" view="secondary" className={styles.customerComment}>
+                  {selectedInitiative.customer.comment}
+                </Text>
+              )}
+            </Card>
+          )}
           {selectedInitiative.roles.map((role) => renderRoleCard(role))}
         </section>
         <aside className={styles.riskSection} aria-label="Риски инициативы">
@@ -369,6 +473,17 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
           </Card>
         </aside>
       </div>
+      <InitiativeCreationModal
+        isOpen={isCreateModalOpen}
+        experts={experts}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setCreationError(null);
+        }}
+        onSubmit={handleCreateInitiative}
+        isSubmitting={isCreateSubmitting}
+        errorMessage={creationError}
+      />
     </section>
   );
 };
