@@ -263,6 +263,7 @@ function App() {
       setProductFilter(buildProductList(snapshot.modules));
       setCompanyFilter(null);
       setSelectedDomains(new Set(domainIds));
+      let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
       setLayoutPositions((prev) => {
         const serverPositions = snapshot.layout?.nodes ?? {};
         const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
@@ -270,8 +271,10 @@ function App() {
 
         if (!hasExistingLayout) {
           if (layoutsEqual(prev, prunedServerPositions)) {
+            resolvedLayoutPositions = prev;
             return prev;
           }
+          resolvedLayoutPositions = prunedServerPositions;
           return prunedServerPositions;
         }
 
@@ -289,9 +292,15 @@ function App() {
           }
         });
 
-        return layoutsEqual(prev, merged) ? prev : merged;
+        const nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        resolvedLayoutPositions = nextLayout;
+        return nextLayout;
       });
-      shouldCaptureEngineLayoutRef.current = true;
+      const nextLayoutPositions = resolvedLayoutPositions ?? {};
+      shouldCaptureEngineLayoutRef.current = needsEngineLayoutCapture(
+        nextLayoutPositions,
+        activeNodeIds
+      );
       hasLoadedSnapshotRef.current = true;
       hasPendingPersistRef.current = false;
     },
@@ -3495,6 +3504,28 @@ function buildProductList(modules: ModuleNode[]): string[] {
     }
   });
   return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function needsEngineLayoutCapture(
+  layout: Record<string, GraphLayoutNodePosition>,
+  activeIds: Set<string>
+): boolean {
+  for (const id of activeIds) {
+    const position = layout[id];
+    if (!position) {
+      return true;
+    }
+
+    if (typeof position.x !== 'number' || Number.isNaN(position.x)) {
+      return true;
+    }
+
+    if (typeof position.y !== 'number' || Number.isNaN(position.y)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function mergeLayoutPositions(
