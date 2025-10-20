@@ -75,6 +75,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const cameraStateRef = useRef<CameraState | null>(null);
   const captureTimeoutRef = useRef<number | null>(null);
   const lastFocusedNodeRef = useRef<string | null>(null);
+  const hasInitialFitRef = useRef(false);
   const viewportSizeRef = useRef({ width: 0, height: 0 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
@@ -428,6 +429,33 @@ const GraphView: React.FC<GraphViewProps> = ({
     graph.zoomToFit?.(400, 80);
     scheduleCameraCapture(450);
   }, [scheduleCameraCapture]);
+
+  useEffect(() => {
+    if (cameraStateRef.current || hasInitialFitRef.current) {
+      return;
+    }
+
+    if (highlightedNode) {
+      return;
+    }
+
+    const { width, height } = getViewportSize();
+    if (!graphRef.current || width <= 0 || height <= 0) {
+      return;
+    }
+
+    if (nodes.length === 0) {
+      return;
+    }
+
+    showEntireGraph();
+    hasInitialFitRef.current = true;
+  }, [
+    getViewportSize,
+    highlightedNode,
+    nodes,
+    showEntireGraph
+  ]);
 
   const handleNodeDoubleClick = useCallback(
     (node: ForceNode) => {
