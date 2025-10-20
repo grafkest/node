@@ -269,12 +269,10 @@ export function buildCandidatesFromReport(report: RoleMatchReport): InitiativeCa
   }
 
   const skillCount = report.matches[0]?.explanation.skillCoverage.length ?? 0;
-  const skillWeight = skillCount > 0 ? 0.6 / skillCount : 0;
+  const skillWeight = skillCount > 0 ? 1 / skillCount : 0;
 
   return report.matches.map((match) => {
     const skillScore = match.explanation.normalizedSkillScore;
-    const availability = match.explanation.availabilityMultiplier;
-    const fte = match.explanation.fteSaturation;
     const totalScore = Math.min(100, Math.max(0, Math.round(match.explanation.totalScore * 100)));
 
     const commentParts: string[] = [];
@@ -286,17 +284,6 @@ export function buildCandidatesFromReport(report: RoleMatchReport): InitiativeCa
       commentParts.push('Есть заметные пробелы по навыкам роли');
     }
 
-    if (availability >= 1 && fte >= 1) {
-      commentParts.push('Доступен для подключения в полном объёме');
-    } else {
-      if (availability < 1) {
-        commentParts.push('Доступность ограничена текущей загрузкой');
-      }
-      if (fte < 1) {
-        commentParts.push('Требуется подстраховка по FTE');
-      }
-    }
-
     if (match.explanation.risks.length > 0) {
       commentParts.push(match.explanation.risks[0]);
     }
@@ -304,26 +291,9 @@ export function buildCandidatesFromReport(report: RoleMatchReport): InitiativeCa
     const scoreDetails = match.explanation.skillCoverage.map((coverage) => ({
       criterion: coverage.skill.name,
       weight: Number(skillWeight.toFixed(2)),
-      value: Number(
-        (coverage.hasSkill ? coverage.levelFactor * coverage.freshnessFactor : 0).toFixed(2)
-      ),
+      value: Number((coverage.hasSkill ? 1 : 0).toFixed(2)),
       comment: coverage.gaps[0]
     }));
-
-    scoreDetails.push(
-      {
-        criterion: 'Доступность',
-        weight: 0.2,
-        value: Number(availability.toFixed(2)),
-        comment: availability < 1 ? 'Эксперт частично занят в других инициативах' : undefined
-      },
-      {
-        criterion: 'Покрытие FTE',
-        weight: 0.2,
-        value: Number(fte.toFixed(2)),
-        comment: fte < 1 ? 'Недостаточно часов для полного закрытия роли' : undefined
-      }
-    );
 
     const fitComment = commentParts.join('. ').replace(/\.+$/, '') + '.';
 
