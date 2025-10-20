@@ -49,7 +49,7 @@ function assertApproximately(actual: number, expected: number, epsilon = 1e-6) {
   );
 }
 
-test('scoreExpertForRole учитывает веса навыков, уровни, свежесть и доступность', () => {
+test('scoreExpertForRole даёт 100% при полном совпадении навыков', () => {
   const requirement: RoleRequirement = {
     roleId: 'role-ts',
     roleName: 'Frontend Lead',
@@ -73,50 +73,38 @@ test('scoreExpertForRole учитывает веса навыков, уровн�
 
   const { explanation } = scoreExpertForRole(requirement, expert);
 
-  const expectedTypeScriptFreshness = Math.exp((-Math.log(2) * 30) / 180);
-  const expectedReactFreshness = Math.exp((-Math.log(2) * 200) / 90);
-  const expectedSkillScore =
-    (0.6 * 1 * expectedTypeScriptFreshness + 0.4 * 1 * expectedReactFreshness) / 1;
-
-  assertApproximately(explanation.normalizedSkillScore, expectedSkillScore, 1e-6);
+  assertApproximately(explanation.normalizedSkillScore, 1, 1e-6);
   assertApproximately(explanation.availabilityMultiplier, 1);
   assertApproximately(explanation.fteSaturation, 1);
-  assertApproximately(explanation.totalScore, expectedSkillScore, 1e-6);
+  assertApproximately(explanation.totalScore, 1, 1e-6);
 
   const reactRisk = explanation.risks.find((risk) => risk.includes('React'));
   assert.ok(reactRisk, 'Ожидался риск по устареванию навыка React');
 });
 
-test('scoreExpertForRole снижает итоговый балл при неполной доступности по FTE', () => {
+test('scoreExpertForRole рассчитывает покрытие навыков по количеству совпадений', () => {
   const requirement: RoleRequirement = {
     roleId: 'role-data',
     roleName: 'Data Engineer',
     requiredFte: 1,
-    skills: [{ name: 'Python', weight: 1, requiredLevel: 'advanced', freshnessHalfLifeDays: 120 }]
+    skills: [
+      { name: 'Python', weight: 0.5, requiredLevel: 'advanced', freshnessHalfLifeDays: 120 },
+      { name: 'Airflow', weight: 0.5, requiredLevel: 'advanced', freshnessHalfLifeDays: 120 }
+    ]
   };
 
   const expert = createExpert({
     id: 'expert-partial',
-    availability: 'partial',
     skillEvidence: [{ id: 'python', name: 'Python', level: 'advanced', lastUsedDaysAgo: 10 }],
     competencies: ['Python']
   });
 
   const { explanation } = scoreExpertForRole(requirement, expert);
 
-  const expectedFreshness = Math.exp((-Math.log(2) * 10) / 120);
-  const expectedSkillScore = expectedFreshness; // levelFactor=1, weight=1
-  const expectedTotal = expectedSkillScore * 0.65 * 0.5;
-
-  assertApproximately(explanation.normalizedSkillScore, expectedSkillScore, 1e-6);
-  assertApproximately(explanation.availabilityMultiplier, 0.65, 1e-6);
-  assertApproximately(explanation.fteSaturation, 0.5, 1e-6);
-  assertApproximately(explanation.totalScore, expectedTotal, 1e-6);
-
-  assert.ok(
-    explanation.risks.includes('Недостаточная доступность по FTE для роли'),
-    'Должен сигнализироваться риск по FTE'
-  );
+  assertApproximately(explanation.normalizedSkillScore, 0.5, 1e-6);
+  assertApproximately(explanation.availabilityMultiplier, 1, 1e-6);
+  assertApproximately(explanation.fteSaturation, 1, 1e-6);
+  assertApproximately(explanation.totalScore, 0.5, 1e-6);
 });
 
 test('buildInitiativeMatchReport агрегирует оценки по ролям инициативы', () => {
@@ -165,16 +153,11 @@ test('buildInitiativeMatchReport агрегирует оценки по роля
 
   const dataOpsReport = report.roleReports[1];
   assert.equal(dataOpsReport.topMatch?.expert.id, 'expert-beta');
-  assert.ok(dataOpsReport.topMatch!.explanation.totalScore < 0.3);
+  assertApproximately(dataOpsReport.topMatch!.explanation.totalScore, 1, 1e-6);
 
   const expectedOverall =
     (frontendReport.topMatch!.explanation.totalScore +
       dataOpsReport.topMatch!.explanation.totalScore) /
     2;
   assertApproximately(report.overallScore, expectedOverall, 1e-6);
-
-  assert.ok(
-    report.overallRisks.some((risk) => risk.includes('Эксперт частично доступен для инициативы')),
-    'В совокупных рисках должна отображаться частичная доступность'
-  );
 });

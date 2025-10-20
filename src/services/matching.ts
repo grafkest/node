@@ -1,4 +1,4 @@
-import { type ExpertAvailability, type ExpertProfile } from '../data';
+import { type ExpertProfile } from '../data';
 
 const LEVEL_WEIGHTS = {
   novice: 0.4,
@@ -6,18 +6,6 @@ const LEVEL_WEIGHTS = {
   advanced: 0.9,
   expert: 1
 } as const;
-
-const AVAILABILITY_MULTIPLIERS: Record<ExpertAvailability, number> = {
-  available: 1,
-  partial: 0.65,
-  busy: 0.25
-};
-
-const AVAILABILITY_FTE: Record<ExpertAvailability, number> = {
-  available: 1,
-  partial: 0.5,
-  busy: 0.1
-};
 
 const DEFAULT_FRESHNESS_HALF_LIFE_DAYS = 180;
 
@@ -199,7 +187,7 @@ function calculateSkillCoverage(
     gaps.push(`Навык «${requirement.name}» есть в профиле, но без подтверждения уровня/свежести`);
   }
 
-  const coverageScore = requirement.weight * hasSkill * levelFactor * freshnessFactor;
+  const coverageScore = requirement.weight * (hasSkill ? 1 : 0);
 
   return {
     skill: requirement,
@@ -211,18 +199,8 @@ function calculateSkillCoverage(
   };
 }
 
-function calculateRisks(
-  coverage: SkillCoverageReport[],
-  availabilityMultiplier: number,
-  fteSaturation: number
-): string[] {
+function calculateRisks(coverage: SkillCoverageReport[]): string[] {
   const risks = coverage.flatMap((item) => item.gaps);
-  if (availabilityMultiplier < 1) {
-    risks.push('Эксперт частично доступен для инициативы');
-  }
-  if (fteSaturation < 1) {
-    risks.push('Недостаточная доступность по FTE для роли');
-  }
   return Array.from(new Set(risks));
 }
 
@@ -241,12 +219,11 @@ export function scoreExpertForRole(
       : coverageReports.reduce((sum, report) => sum + report.coverageScore, 0) /
         totalWeight;
 
-  const availabilityMultiplier = AVAILABILITY_MULTIPLIERS[expert.availability];
-  const expertFte = expert.fteCapacity ?? AVAILABILITY_FTE[expert.availability];
-  const fteSaturation = Math.min(expertFte / Math.max(requirement.requiredFte, 0.01), 1);
+  const availabilityMultiplier = 1;
+  const fteSaturation = 1;
 
-  const totalScore = normalizedSkillScore * availabilityMultiplier * fteSaturation;
-  const risks = calculateRisks(coverageReports, availabilityMultiplier, fteSaturation);
+  const totalScore = normalizedSkillScore;
+  const risks = calculateRisks(coverageReports);
 
   return {
     expert,
