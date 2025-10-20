@@ -3854,7 +3854,7 @@ function createDefaultInitiativeDraft(): InitiativeDraftPayload {
     name: '',
     description: '',
     owner: '',
-    status: 'idea',
+    status: 'initiated',
     expectedImpact: '',
     domainIds: [],
     moduleIds: [],

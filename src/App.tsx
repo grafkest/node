@@ -2276,12 +2276,25 @@ function App() {
     (draft: InitiativeDraftPayload) => {
       const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
       const initiativeId = createEntityId('initiative', draft.name, existingIds);
+      const fallbackName = draft.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
       const defaults = {
-        name: draft.name.trim() || `Новая инициатива ${existingIds.size + 1}`,
+        name: fallbackName,
         description: draft.description.trim() || 'Описание не заполнено',
         owner: draft.owner.trim() || 'Ответственный не указан',
         expectedImpact: draft.expectedImpact.trim() || 'Эффект не оценён',
-        status: draft.status
+        status: draft.status,
+        targetModuleName: fallbackName,
+        plannedModuleIds: [],
+        requiredSkills: [],
+        workItems: [],
+        approvalStages: [],
+        roles: [],
+        risks: [],
+        potentialModules: [],
+        works: [],
+        requirements: [],
+        lastUpdated: new Date().toISOString(),
+        customer: undefined
       } as const;
 
       const initiative = buildInitiativeFromDraft(
@@ -2420,7 +2433,19 @@ function App() {
         description: existing.description,
         owner: existing.owner,
         expectedImpact: existing.expectedImpact,
-        status: existing.status
+        status: existing.status,
+        targetModuleName: existing.targetModuleName,
+        plannedModuleIds: [...existing.plannedModuleIds],
+        requiredSkills: [...existing.requiredSkills],
+        workItems: [...existing.workItems],
+        approvalStages: [...existing.approvalStages],
+        roles: [...existing.roles],
+        risks: [...existing.risks],
+        potentialModules: [...existing.potentialModules],
+        works: [...existing.works],
+        requirements: [...existing.requirements],
+        lastUpdated: existing.lastUpdated,
+        customer: existing.customer
       } as const;
 
       const updated = buildInitiativeFromDraft(
@@ -3241,18 +3266,32 @@ function buildModuleFromDraft(
   return { module, consumedArtifactIds };
 }
 
+type InitiativeBuildDefaults = {
+  name: string;
+  description: string;
+  owner: string;
+  expectedImpact: string;
+  status: Initiative['status'];
+  targetModuleName?: string;
+  plannedModuleIds?: string[];
+  requiredSkills?: string[];
+  workItems?: Initiative['workItems'];
+  approvalStages?: Initiative['approvalStages'];
+  lastUpdated?: string;
+  risks?: Initiative['risks'];
+  roles?: Initiative['roles'];
+  potentialModules?: string[];
+  works?: Initiative['works'];
+  requirements?: Initiative['requirements'];
+  customer?: Initiative['customer'];
+};
+
 function buildInitiativeFromDraft(
   initiativeId: string,
   draft: InitiativeDraftPayload,
   allowedDomainIds: Set<string>,
   allowedModuleIds: Set<string>,
-  defaults: {
-    name: string;
-    description: string;
-    owner: string;
-    expectedImpact: string;
-    status: Initiative['status'];
-  }
+  defaults: InitiativeBuildDefaults
 ): Initiative {
   const normalizedName = draft.name.trim() || defaults.name;
   const normalizedDescription = draft.description.trim() || defaults.description;
@@ -3261,9 +3300,23 @@ function buildInitiativeFromDraft(
   const normalizedStatus = draft.status ?? defaults.status;
 
   const domains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
-  const potentialModules = deduplicateNonEmpty(draft.moduleIds).filter((id) => allowedModuleIds.has(id));
+  const draftModuleIds = deduplicateNonEmpty(draft.moduleIds).filter((id) =>
+    allowedModuleIds.has(id)
+  );
+  const potentialModules =
+    draftModuleIds.length > 0
+      ? draftModuleIds
+      : deduplicateNonEmpty(defaults.potentialModules ?? []).filter((id) =>
+          allowedModuleIds.has(id)
+        );
+  const plannedModuleIds =
+    draftModuleIds.length > 0
+      ? draftModuleIds
+      : deduplicateNonEmpty(defaults.plannedModuleIds ?? []).filter((id) =>
+          allowedModuleIds.has(id)
+        );
 
-  const works = draft.works.map((work, index) => {
+  const worksDraft = draft.works.map((work, index) => {
     const effortValue = Number(work.effortHours);
     const normalizedEffort = Number.isFinite(effortValue) ? Math.max(0, effortValue) : 0;
     return {
@@ -3273,8 +3326,12 @@ function buildInitiativeFromDraft(
       effortHours: normalizedEffort
     };
   });
+  const works =
+    worksDraft.length > 0
+      ? worksDraft
+      : (defaults.works ?? []).map((work) => ({ ...work }));
 
-  const requirements = draft.requirements.map((requirement, index) => {
+  const requirementsDraft = draft.requirements.map((requirement, index) => {
     const countValue = Number(requirement.count);
     const normalizedCount = Number.isFinite(countValue) ? Math.max(1, Math.round(countValue)) : 1;
     const skills = deduplicateNonEmpty(requirement.skills.map((skill) => skill.trim()));
@@ -3287,6 +3344,34 @@ function buildInitiativeFromDraft(
       comment: comment || undefined
     };
   });
+  const requirements =
+    requirementsDraft.length > 0
+      ? requirementsDraft
+      : (defaults.requirements ?? []).map((requirement) => ({
+          ...requirement,
+          skills: [...requirement.skills]
+        }));
+
+  const requiredSkillsDraft = deduplicateNonEmpty(
+    requirements.flatMap((requirement) => requirement.skills)
+  );
+  const requiredSkills =
+    requiredSkillsDraft.length > 0 ? requiredSkillsDraft : [...(defaults.requiredSkills ?? [])];
+
+  const normalizedTarget = defaults.targetModuleName?.trim() || normalizedName;
+  const workItems = (defaults.workItems ?? []).map((item) => ({ ...item }));
+  const approvalStages = (defaults.approvalStages ?? []).map((stage) => ({ ...stage }));
+  const risks = (defaults.risks ?? []).map((risk) => ({ ...risk }));
+  const roles = (defaults.roles ?? []).map((role) => ({
+    ...role,
+    pinnedExpertIds: [...role.pinnedExpertIds],
+    candidates: role.candidates.map((candidate) => ({
+      ...candidate,
+      scoreDetails: candidate.scoreDetails.map((detail) => ({ ...detail }))
+    })),
+    workItems: role.workItems?.map((item) => ({ ...item }))
+  }));
+  const customer = defaults.customer ? { ...defaults.customer } : undefined;
 
   return {
     id: initiativeId,
@@ -3296,9 +3381,18 @@ function buildInitiativeFromDraft(
     status: normalizedStatus,
     expectedImpact: normalizedImpact,
     domains,
+    plannedModuleIds,
+    requiredSkills,
+    workItems,
+    approvalStages,
+    targetModuleName: normalizedTarget,
+    lastUpdated: new Date().toISOString(),
+    risks,
+    roles,
     potentialModules,
     works,
-    requirements
+    requirements,
+    customer
   };
 }
 
