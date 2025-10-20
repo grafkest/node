@@ -96,16 +96,39 @@ function toMatchableExpert(expert: ExpertProfile): MatchableExpertProfile {
   };
 }
 
+function deduplicateSkills(skills: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  skills.forEach((skill) => {
+    const trimmed = skill.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const key = trimmed.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(trimmed);
+    }
+  });
+
+  return result;
+}
+
 function buildSkillRequirements(role: RolePlanningDraft): SkillRequirement[] {
-  const explicitSkills = role.skills.map((skill) => skill.trim()).filter(Boolean);
+  const explicitSkills = deduplicateSkills(role.skills);
+  const taskSkills = deduplicateSkills(role.workItems.flatMap((work) => work.tasks));
+  const providedSkills = deduplicateSkills([...explicitSkills, ...taskSkills]);
+
   const defaultSkills =
-    explicitSkills.length > 0
+    providedSkills.length > 0
       ? []
       : getSkillsByRole(role.role).map((skill) => skill.name).filter(Boolean);
 
-  const skillNames = Array.from(new Set([...explicitSkills, ...defaultSkills]));
-  const normalizedNames = skillNames.length > 0 ? skillNames : [`Экспертиза: ${role.role}`];
-  const weight = 1 / normalizedNames.length;
+  const allSkills = deduplicateSkills([...providedSkills, ...defaultSkills]);
+  const normalizedNames = allSkills.length > 0 ? allSkills : [`Экспертиза: ${role.role}`];
+  const weight = normalizedNames.length > 0 ? 1 / normalizedNames.length : 1;
   const level = defaultRoleLevel[role.role] ?? 'advanced';
 
   return normalizedNames.map((name) => ({
