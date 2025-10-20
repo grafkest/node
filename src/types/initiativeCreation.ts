@@ -1,5 +1,11 @@
 import type { InitiativeStatus, TeamRole } from '../data';
 
+export type InitiativeCreationWorkTaskDraft = {
+  id: string;
+  skill: string;
+  isCustom?: boolean;
+};
+
 export type InitiativeCreationWorkDraft = {
   id: string;
   title: string;
@@ -7,6 +13,7 @@ export type InitiativeCreationWorkDraft = {
   startDay: number;
   durationDays: number;
   effortDays: number;
+  tasks: InitiativeCreationWorkTaskDraft[];
 };
 
 export type InitiativeCreationRoleDraft = {
