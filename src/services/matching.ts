@@ -24,6 +24,7 @@ const DEFAULT_FRESHNESS_HALF_LIFE_DAYS = 180;
 export type SkillLevel = keyof typeof LEVEL_WEIGHTS;
 
 export type SkillRequirement = {
+  id?: string;
   name: string;
   weight: number;
   requiredLevel?: SkillLevel;
@@ -38,6 +39,7 @@ export type RoleRequirement = {
 };
 
 export type ExpertSkillEvidence = {
+  id: string;
   name: string;
   level: SkillLevel;
   lastUsedDaysAgo: number;
@@ -97,25 +99,48 @@ export type InitiativeMatchReport = {
 
 const LOG_2 = Math.log(2);
 
+function collectRequirementTargets(requirement: SkillRequirement): string[] {
+  const targets = new Set<string>();
+  if (requirement.id) {
+    targets.add(requirement.id.toLowerCase());
+  }
+  if (requirement.name) {
+    targets.add(requirement.name.toLowerCase());
+  }
+  return Array.from(targets);
+}
+
 function findEvidence(
   expert: MatchableExpertProfile,
-  skillName: string
+  requirement: SkillRequirement
 ): ExpertSkillEvidence | undefined {
-  return expert.skillEvidence?.find(
-    (item) => item.name.toLowerCase() === skillName.toLowerCase()
-  );
+  const targets = collectRequirementTargets(requirement);
+  if (targets.length === 0) {
+    return undefined;
+  }
+  return expert.skillEvidence?.find((item) => {
+    const evidenceValues = [item.id, item.name]
+      .filter(Boolean)
+      .map((value) => value.toLowerCase());
+    return evidenceValues.some((value) => targets.includes(value));
+  });
 }
 
 function hasSkillInProfile(
   expert: MatchableExpertProfile,
-  skillName: string
+  requirement: SkillRequirement
 ): boolean {
-  const lower = skillName.toLowerCase();
-  return (
-    expert.competencies.some((skill) => skill.toLowerCase() === lower) ||
-    expert.consultingSkills.some((skill) => skill.toLowerCase() === lower) ||
-    expert.focusAreas.some((skill) => skill.toLowerCase() === lower)
-  );
+  const targets = collectRequirementTargets(requirement);
+  if (targets.length === 0) {
+    return false;
+  }
+  const normalizedCompetencies = [
+    ...expert.competencies,
+    ...expert.consultingSkills,
+    ...expert.focusAreas
+  ].map((skill) => skill.toLowerCase());
+
+  return normalizedCompetencies.some((skill) => targets.includes(skill));
 }
 
 function calculateFreshnessFactor(
@@ -135,8 +160,8 @@ function calculateSkillCoverage(
   requirement: SkillRequirement,
   expert: MatchableExpertProfile
 ): SkillCoverageReport {
-  const evidence = findEvidence(expert, requirement.name);
-  const hasProfileSkill = hasSkillInProfile(expert, requirement.name);
+  const evidence = findEvidence(expert, requirement);
+  const hasProfileSkill = hasSkillInProfile(expert, requirement);
   const hasSkill = Boolean(evidence) || hasProfileSkill;
 
   const requiredLevelWeight = requirement.requiredLevel

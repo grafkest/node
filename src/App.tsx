@@ -79,6 +79,7 @@ import {
   selectPinnedExperts,
   type RolePlanningDraft
 } from './utils/initiativeMatching';
+import { preparePlannerModuleSelections } from './utils/initiativePlanner';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -2321,7 +2322,9 @@ function App() {
       const normalizedImpact = request.expectedImpact.trim() || 'Эффект не оценён';
       const normalizedTarget = request.targetModuleName.trim() || normalizedName;
       const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
-      const potentialModules = request.potentialModules.map((module) => module.trim()).filter(Boolean);
+      const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
+        request.potentialModules
+      );
       const roleEntries = request.roles.map((role, index) => {
         const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
         const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
@@ -2392,7 +2395,7 @@ function App() {
         name: normalizedName,
         description: normalizedDescription,
         domains,
-        plannedModuleIds: [],
+        plannedModuleIds,
         requiredSkills: [],
         workItems: [],
         approvalStages: [],

@@ -78,6 +78,7 @@ function toSkillEvidence(skill: ExpertSkill): ExpertSkillEvidence {
     : Math.max(0, Math.round((Date.now() - timestamp) / MS_IN_DAY));
 
   return {
+    id: skill.id,
     name,
     level: skillLevelMap[skill.level] ?? 'novice',
     lastUsedDaysAgo: daysAgo ?? 365
@@ -96,20 +97,117 @@ function toMatchableExpert(expert: ExpertProfile): MatchableExpertProfile {
   };
 }
 
-function buildSkillRequirements(role: RolePlanningDraft): SkillRequirement[] {
-  const explicitSkills = role.skills.map((skill) => skill.trim()).filter(Boolean);
-  const defaultSkills =
-    explicitSkills.length > 0
-      ? []
-      : getSkillsByRole(role.role).map((skill) => skill.name).filter(Boolean);
+type NormalizedSkill = {
+  id?: string;
+  name: string;
+};
 
-  const skillNames = Array.from(new Set([...explicitSkills, ...defaultSkills]));
-  const normalizedNames = skillNames.length > 0 ? skillNames : [`Экспертиза: ${role.role}`];
-  const weight = 1 / normalizedNames.length;
+const skillDefinitions = Object.values(skillCatalog);
+
+function slugToTitle(slug: string): string {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(' ');
+}
+
+function lookupSkillDefinition(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const direct = skillCatalog[trimmed];
+  if (direct) {
+    return direct;
+  }
+  const lower = trimmed.toLowerCase();
+  const lowerIdMatch = skillCatalog[lower];
+  if (lowerIdMatch) {
+    return lowerIdMatch;
+  }
+  return skillDefinitions.find((definition) => definition.name.toLowerCase() === lower);
+}
+
+function normalizeSkillInput(skill: string | NormalizedSkill): NormalizedSkill | null {
+  if (typeof skill !== 'string') {
+    const id = skill.id?.trim();
+    const name = skill.name.trim();
+    if (!id && !name) {
+      return null;
+    }
+    if (id) {
+      const definition = lookupSkillDefinition(id);
+      if (definition) {
+        return { id: definition.id, name: definition.name };
+      }
+      return { id, name: name || slugToTitle(id) };
+    }
+    const definition = lookupSkillDefinition(name);
+    if (definition) {
+      return { id: definition.id, name: definition.name };
+    }
+    return { name };
+  }
+
+  const trimmed = skill.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const definition = lookupSkillDefinition(trimmed);
+  if (definition) {
+    return { id: definition.id, name: definition.name };
+  }
+
+  if (/^[a-z0-9-]+$/i.test(trimmed)) {
+    return { id: trimmed.toLowerCase(), name: slugToTitle(trimmed) };
+  }
+
+  return { name: trimmed };
+}
+
+function normalizeSkillList(inputs: (string | NormalizedSkill)[]): NormalizedSkill[] {
+  const seen = new Set<string>();
+  const result: NormalizedSkill[] = [];
+
+  inputs.forEach((input) => {
+    const normalized = normalizeSkillInput(input);
+    if (!normalized) {
+      return;
+    }
+
+    const key = normalized.id?.toLowerCase() ?? normalized.name.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    result.push(normalized);
+  });
+
+  return result;
+}
+
+function buildSkillRequirements(role: RolePlanningDraft): SkillRequirement[] {
+  const explicitSkills = normalizeSkillList(role.skills);
+  const taskSkills = normalizeSkillList(role.workItems.flatMap((work) => work.tasks));
+  const providedSkills = normalizeSkillList([...explicitSkills, ...taskSkills]);
+
+  const defaultSkills =
+    providedSkills.length > 0
+      ? []
+      : getSkillsByRole(role.role).map((skill) => ({ id: skill.id, name: skill.name }));
+
+  const allSkills = normalizeSkillList([...providedSkills, ...defaultSkills]);
+  const normalizedSkills =
+    allSkills.length > 0 ? allSkills : [{ name: `Экспертиза: ${role.role}` }];
+  const weight = normalizedSkills.length > 0 ? 1 / normalizedSkills.length : 1;
   const level = defaultRoleLevel[role.role] ?? 'advanced';
 
-  return normalizedNames.map((name) => ({
-    name,
+  return normalizedSkills.map((skill) => ({
+    id: skill.id,
+    name: skill.name,
     weight,
     requiredLevel: level
   }));

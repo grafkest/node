@@ -7,8 +7,8 @@ import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { domainNameById, modules } from '../data';
-import type { ExpertProfile, InitiativeStatus, TeamRole } from '../data';
+import { domainNameById, domainTree, modules } from '../data';
+import type { DomainNode, ExpertProfile, InitiativeStatus, TeamRole } from '../data';
 import { getSkillsByRole } from '../data/skills';
 import InitiativeGanttChart from './InitiativeGanttChart';
 import type { InitiativeGanttTask } from './InitiativeGanttChart';
@@ -53,6 +53,27 @@ const COMPANY_CREATE_OPTION: OptionItem = {
   label: 'Создать нового',
   value: NEW_COMPANY_OPTION_ID
 };
+
+const collectGraphDomainIds = (domains: DomainNode[]): string[] => {
+  const result: string[] = [];
+
+  const visit = (nodes: DomainNode[]) => {
+    nodes.forEach((node) => {
+      const children = node.children ?? [];
+      if (!node.isCatalogRoot && children.length === 0) {
+        result.push(node.id);
+      }
+      if (children.length > 0) {
+        visit(children);
+      }
+    });
+  };
+
+  visit(domains);
+  return result;
+};
+
+const graphDomainIds = collectGraphDomainIds(domainTree);
 
 type RoleWorkTaskDraft = {
   id: string;
@@ -142,8 +163,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 }) => {
   const domainBaseItems = useMemo<OptionItem[]>(
     () =>
-      Object.entries(domainNameById)
-        .map(([id, label]) => ({ id, label, value: id }))
+      graphDomainIds
+        .map((id) => ({ id, label: domainNameById[id], value: id }))
         .sort((a, b) => a.label.localeCompare(b.label, 'ru')),
     []
   );
@@ -199,7 +220,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           .map((skill) => ({
             id: skill.id,
             label: skill.name,
-            value: skill.name
+            value: skill.id
           }))
           .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
         acc[option.value] = skillOptions;
