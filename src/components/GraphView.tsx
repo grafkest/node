@@ -1,6 +1,7 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Loader } from '@consta/uikit/Loader';
 import { useTheme } from '@consta/uikit/Theme';
+import { forceCollide } from 'd3-force-3d';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D, {
   ForceGraphMethods,
@@ -77,6 +78,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const lastFocusedNodeRef = useRef<string | null>(null);
   const hasInitialFitRef = useRef(false);
   const viewportSizeRef = useRef({ width: 0, height: 0 });
+  const maxNodeCountRef = useRef(0);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
 
@@ -234,8 +236,41 @@ const GraphView: React.FC<GraphViewProps> = ({
     [nodes, links]
   );
 
+  const nodeTypeMap = useMemo(() => {
+    const map = new Map<string, GraphNode['type']>();
+    nodes.forEach((node) => {
+      map.set(node.id, node.type);
+    });
+    return map;
+  }, [nodes]);
+
+  const connectionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    links.forEach((link) => {
+      counts.set(link.source, (counts.get(link.source) ?? 0) + 1);
+      counts.set(link.target, (counts.get(link.target) ?? 0) + 1);
+    });
+    return counts;
+  }, [links]);
+
+  const isolatedNodeIds = useMemo(() => {
+    const isolated = new Set<string>();
+    nodes.forEach((node) => {
+      if ((connectionCounts.get(node.id) ?? 0) === 0) {
+        isolated.add(node.id);
+      }
+    });
+    return isolated;
+  }, [connectionCounts, nodes]);
+
   const nodeCount = nodes.length;
   const linkCount = links.length;
+
+  useEffect(() => {
+    if (nodeCount > 0) {
+      maxNodeCountRef.current = Math.max(maxNodeCountRef.current, nodeCount);
+    }
+  }, [nodeCount]);
 
   useEffect(() => {
     if (import.meta.env.DEV && typeof window !== 'undefined' && graphRef.current) {
@@ -330,19 +365,126 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     if (saved) {
       if (typeof graph.zoom === 'function') {
-        graph.zoom(saved.zoom, 0);
+        graph.zoom(saved.zoom, 220);
       }
-      graph.centerAt(saved.center.x, saved.center.y, 0);
+      graph.centerAt(saved.center.x, saved.center.y, 220);
+      scheduleCameraCapture(260);
       return;
     }
 
-    graph.zoomToFit?.(0, 60);
-    scheduleCameraCapture(80);
+    graph.zoomToFit?.(240, 60);
+    scheduleCameraCapture(320);
   }, [getViewportSize, scheduleCameraCapture]);
 
   useEffect(() => {
     restoreCamera();
   }, [graphData, restoreCamera]);
+
+  const configureSimulation = useCallback(() => {
+    if (!graphRef.current || nodes.length === 0) {
+      return;
+    }
+
+    const graph = graphRef.current;
+    const maxNodes = Math.max(maxNodeCountRef.current, nodes.length);
+    const relativeDensity =
+      maxNodes > 0 ? clamp(Math.sqrt(nodes.length) / Math.sqrt(maxNodes), 0.5, 1) : 1;
+    const hasExplicitFilters =
+      visibleDomainIds.size > 0 || visibleModuleStatuses.size > 0 || nodes.length < maxNodes;
+    const filterScale = hasExplicitFilters ? 0.82 : 1;
+    const spacingFactor = relativeDensity * filterScale;
+
+    const baseLinkDistance = clamp(160 * spacingFactor, 58, 220);
+    const baseChargeStrength = -110 * spacingFactor;
+    const isolatedChargeStrength = -26 * filterScale;
+    const chargeDistanceMax = 480 * spacingFactor + (hasExplicitFilters ? 60 : 140);
+
+    const chargeForce = graph.d3Force('charge') as
+      | ((alpha: number) => void) &
+          {
+            strength?: (value?: number | ((node: ForceNode) => number)) => typeof chargeForce;
+            distanceMax?: (value?: number) => typeof chargeForce;
+            distanceMin?: (value?: number) => typeof chargeForce;
+          }
+      | undefined;
+
+    if (chargeForce?.strength && chargeForce.distanceMax && chargeForce.distanceMin) {
+      chargeForce
+        .strength((node: ForceNode) =>
+          isolatedNodeIds.has(node.id) ? isolatedChargeStrength : baseChargeStrength
+        )
+        .distanceMax(chargeDistanceMax)
+        .distanceMin(18);
+    }
+
+    const linkForce = graph.d3Force('link') as
+      | ((alpha: number) => void) &
+          {
+            distance?: (value?: number | ((link: ForceLink) => number)) => typeof linkForce;
+          }
+      | undefined;
+
+    if (linkForce?.distance) {
+      linkForce.distance((link: ForceLink) => {
+        const sourceId =
+          typeof link.source === 'object' && link.source
+            ? (link.source as ForceNode).id
+            : String(link.source);
+        const targetId =
+          typeof link.target === 'object' && link.target
+            ? (link.target as ForceNode).id
+            : String(link.target);
+
+        const sourceType = nodeTypeMap.get(sourceId);
+        const targetType = nodeTypeMap.get(targetId);
+
+        const involvesDomain = sourceType === 'domain' || targetType === 'domain';
+        const involvesInitiative = sourceType === 'initiative' || targetType === 'initiative';
+        const involvesArtifact = sourceType === 'artifact' || targetType === 'artifact';
+
+        let distance = baseLinkDistance;
+
+        if (involvesDomain && !involvesInitiative) {
+          distance *= 0.72;
+        } else if (involvesArtifact) {
+          distance *= 0.82;
+        } else if (involvesInitiative) {
+          distance *= 1.08;
+        }
+
+        return clamp(distance, 58, 220);
+      });
+    }
+
+    const collideForce = forceCollide<ForceNode>()
+      .radius((node) => {
+        switch (node.type) {
+          case 'initiative':
+            return 34;
+          case 'module':
+            return 26;
+          case 'domain':
+            return 22;
+          default:
+            return 20;
+        }
+      })
+      .strength(0.9)
+      .iterations(2);
+
+    graph.d3Force('collide', collideForce);
+    graph.d3ReheatSimulation?.();
+  }, [
+    isolatedNodeIds,
+    nodeTypeMap,
+    nodes.length,
+    visibleDomainIds,
+    visibleModuleStatuses
+  ]);
+
+  useEffect(() => {
+    configureSimulation();
+  }, [configureSimulation]);
 
   useEffect(() => {
     if (!highlightedNode) {
