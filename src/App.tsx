@@ -2330,7 +2330,10 @@ function App() {
           description: item.description.trim() || 'Описание не заполнено',
           startDay: Math.max(0, Math.round(item.startDay)),
           durationDays: Math.max(1, Math.round(item.durationDays)),
-          effortDays: Math.max(1, Math.round(item.effortDays))
+          effortDays: Math.max(1, Math.round(item.effortDays)),
+          tasks: (item.tasks ?? [])
+            .map((task) => task.skill.trim())
+            .filter(Boolean)
         }));
 
         return {

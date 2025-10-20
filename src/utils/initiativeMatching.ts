@@ -47,6 +47,7 @@ export type RolePlanningWorkDraft = {
   startDay: number;
   durationDays: number;
   effortDays: number;
+  tasks: string[];
 };
 
 export type RolePlanningDraft = {
@@ -268,6 +269,7 @@ export function assignExpertsToWorkItems(
     startDay: item.startDay,
     durationDays: item.durationDays,
     effortDays: item.effortDays,
+    tasks: item.tasks,
     assignedExpertId:
       expertIds.length > 0 ? expertIds[index % expertIds.length] : undefined
   }));

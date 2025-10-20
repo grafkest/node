@@ -6,9 +6,10 @@ import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { domainNameById, modules } from '../data';
 import type { ExpertProfile, InitiativeStatus, TeamRole } from '../data';
+import { getSkillsByRole } from '../data/skills';
 import InitiativeGanttChart from './InitiativeGanttChart';
 import type { InitiativeGanttTask } from './InitiativeGanttChart';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
@@ -53,6 +54,12 @@ const COMPANY_CREATE_OPTION: OptionItem = {
   value: NEW_COMPANY_OPTION_ID
 };
 
+type RoleWorkTaskDraft = {
+  id: string;
+  skill: string;
+  isCustom?: boolean;
+};
+
 type RoleWorkDraft = {
   id: string;
   title: string;
@@ -60,6 +67,7 @@ type RoleWorkDraft = {
   startDay: number;
   durationDays: number;
   effortDays: number;
+  tasks: RoleWorkTaskDraft[];
 };
 
 type RoleDraft = {
@@ -100,13 +108,19 @@ const roleOptions: SelectOption<TeamRole>[] = [
 
 const createId = () => `tmp-${Math.random().toString(36).slice(2, 11)}`;
 
-const createWorkDraft = (offset = 0): RoleWorkDraft => ({
+const createWorkTaskDraft = (): RoleWorkTaskDraft => ({
+  id: createId(),
+  skill: ''
+});
+
+const createWorkDraft = (offset = 0, tasksCount = 1): RoleWorkDraft => ({
   id: createId(),
   title: '',
   description: '',
   startDay: offset,
   durationDays: 5,
-  effortDays: 5
+  effortDays: 5,
+  tasks: Array.from({ length: Math.max(1, tasksCount) }, () => createWorkTaskDraft())
 });
 
 const createRoleDraft = (role: TeamRole): RoleDraft => ({
@@ -115,7 +129,7 @@ const createRoleDraft = (role: TeamRole): RoleDraft => ({
   required: 1,
   skillsInput: '',
   comment: '',
-  works: [createWorkDraft()]
+  works: [createWorkDraft(0, 1)]
 });
 
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
@@ -178,6 +192,32 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
   const [roles, setRoles] = useState<RoleDraft[]>([createRoleDraft('Аналитик')]);
+  const baseRoleSkillOptions = useMemo<Record<TeamRole, OptionItem[]>>(
+    () =>
+      roleOptions.reduce((acc, option) => {
+        const skillOptions = getSkillsByRole(option.value)
+          .map((skill) => ({
+            id: skill.id,
+            label: skill.name,
+            value: skill.name
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+        acc[option.value] = skillOptions;
+        return acc;
+      }, {} as Record<TeamRole, OptionItem[]>),
+    []
+  );
+  const createRoleSkillState = useCallback(
+    () =>
+      roleOptions.reduce((acc, option) => {
+        acc[option.value] = [...(baseRoleSkillOptions[option.value] ?? [])];
+        return acc;
+      }, {} as Record<TeamRole, OptionItem[]>),
+    [baseRoleSkillOptions]
+  );
+  const [roleSkillOptions, setRoleSkillOptions] = useState<Record<TeamRole, OptionItem[]>>(
+    () => createRoleSkillState()
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -204,8 +244,15 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setCustomerContact('');
       setCustomerComment('');
       setRoles([createRoleDraft('Аналитик')]);
+      setRoleSkillOptions(createRoleSkillState());
     }
-  }, [companyBaseItems, domainBaseItems, isOpen, moduleBaseItems]);
+  }, [
+    companyBaseItems,
+    createRoleSkillState,
+    domainBaseItems,
+    isOpen,
+    moduleBaseItems
+  ]);
 
   const handleDomainSelectionChange = (items: OptionItem[] | null) => {
     const nextItems = (items ?? []).filter((item) => item.id !== NEW_DOMAIN_OPTION_ID);
@@ -349,38 +396,57 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           description: work.description.trim() || 'Описание не заполнено',
           startDay: Math.max(0, Math.round(work.startDay)),
           durationDays: Math.max(1, Math.round(work.durationDays)),
-          effortDays: Math.max(1, Math.round(work.effortDays))
+          effortDays: Math.max(1, Math.round(work.effortDays)),
+          tasks: work.tasks.map((task) => task.skill.trim()).filter(Boolean)
         }))
       })),
     [roles]
   );
 
   const draftPayload = useMemo<InitiativeCreationRequest>(
-    () => ({
-      name: name.trim(),
-      description: description.trim(),
-      owner: owner.trim(),
-      expectedImpact: expectedImpact.trim(),
-      targetModuleName: targetModule.trim(),
-      status,
-      domains: selectedDomains.map((item) => item.value.trim()).filter(Boolean),
-      potentialModules: selectedModules.map((item) => item.value.trim()).filter(Boolean),
-      customer: {
-        company: selectedCompany?.value.trim() ?? '',
-        unit: customerUnit.trim(),
-        representative: customerRepresentative.trim(),
-        contact: customerContact.trim(),
-        comment: customerComment.trim() || undefined
-      },
-      roles: planningRoles.map((role, index) => ({
-        id: role.id,
-        role: role.role,
-        required: role.required,
-        skills: role.skills,
-        comment: roles[index]?.comment.trim() ? roles[index].comment.trim() : undefined,
-        workItems: role.workItems
-      }))
-    }),
+    () => {
+      const roleStateMap = new Map(roles.map((role) => [role.id, role]));
+      return {
+        name: name.trim(),
+        description: description.trim(),
+        owner: owner.trim(),
+        expectedImpact: expectedImpact.trim(),
+        targetModuleName: targetModule.trim(),
+        status,
+        domains: selectedDomains.map((item) => item.value.trim()).filter(Boolean),
+        potentialModules: selectedModules.map((item) => item.value.trim()).filter(Boolean),
+        customer: {
+          company: selectedCompany?.value.trim() ?? '',
+          unit: customerUnit.trim(),
+          representative: customerRepresentative.trim(),
+          contact: customerContact.trim(),
+          comment: customerComment.trim() || undefined
+        },
+        roles: planningRoles.map((role) => {
+          const sourceRole = roleStateMap.get(role.id);
+          const workItems = role.workItems.map((work) => {
+            const sourceWork = sourceRole?.works.find((candidate) => candidate.id === work.id);
+            const normalizedTasks =
+              sourceWork?.tasks.map((task) => {
+                const trimmedSkill = task.skill.trim();
+                const base = { id: task.id, skill: trimmedSkill };
+                return task.isCustom ? { ...base, isCustom: true as const } : base;
+              }) ?? [];
+            const filteredTasks = normalizedTasks.filter((task) => task.skill.length > 0);
+            return { ...work, tasks: filteredTasks };
+          });
+
+          return {
+            id: role.id,
+            role: role.role,
+            required: role.required,
+            skills: role.skills,
+            comment: sourceRole?.comment.trim() ? sourceRole.comment.trim() : undefined,
+            workItems
+          };
+        })
+      };
+    },
     [
       customerComment,
       customerContact,
@@ -420,8 +486,56 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     return lookup;
   }, [experts]);
 
+  const syncWorkTasks = useCallback(
+    (work: RoleWorkDraft, requiredCount: number, resetSkills = false): RoleWorkDraft => {
+      const normalizedCount = Math.max(1, Math.round(requiredCount));
+      const preservedTasks = work.tasks
+        .slice(0, normalizedCount)
+        .map((task) => ({
+          ...task,
+          skill: resetSkills ? '' : task.skill,
+          isCustom: resetSkills ? undefined : task.isCustom
+        }));
+      if (preservedTasks.length < normalizedCount) {
+        preservedTasks.push(
+          ...Array.from({ length: normalizedCount - preservedTasks.length }, () => createWorkTaskDraft())
+        );
+      }
+      return { ...work, tasks: preservedTasks };
+    },
+    []
+  );
+
   const handleRoleChange = (roleId: string, patch: Partial<RoleDraft>) => {
-    setRoles((prev) => prev.map((role) => (role.id === roleId ? { ...role, ...patch } : role)));
+    setRoles((prev) =>
+      prev.map((role) => {
+        if (role.id !== roleId) {
+          return role;
+        }
+
+        const nextRole: RoleDraft = { ...role, ...patch };
+        let shouldResetTasks = false;
+
+        if (patch.role && patch.role !== role.role) {
+          shouldResetTasks = true;
+          nextRole.skillsInput = patch.skillsInput ?? '';
+        }
+
+        if (patch.required !== undefined) {
+          const normalizedRequired = Math.max(1, Math.round(patch.required));
+          nextRole.required = normalizedRequired;
+        }
+
+        if (shouldResetTasks || patch.required !== undefined) {
+          const requiredCount = Math.max(1, Math.round(nextRole.required));
+          nextRole.works = nextRole.works.map((work) =>
+            syncWorkTasks(work, requiredCount, shouldResetTasks)
+          );
+        }
+
+        return nextRole;
+      })
+    );
   };
 
   const handleWorkChange = (roleId: string, workId: string, patch: Partial<RoleWorkDraft>) => {
@@ -442,11 +556,87 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
               nextWork.effortDays = normalizedEffort;
               nextWork.durationDays = normalizedEffort;
             }
-            return nextWork;
+          return nextWork;
+        })
+      };
+    })
+    );
+  };
+
+  const handleWorkTaskChange = (
+    roleId: string,
+    workId: string,
+    taskId: string,
+    nextSkill: string,
+    isCustom = false
+  ) => {
+    const normalizedSkill = nextSkill.trim();
+    setRoles((prev) =>
+      prev.map((role) => {
+        if (role.id !== roleId) {
+          return role;
+        }
+
+        return {
+          ...role,
+          works: role.works.map((work) => {
+            if (work.id !== workId) {
+              return work;
+            }
+
+            return {
+              ...work,
+              tasks: work.tasks.map((task) =>
+                task.id === taskId
+                  ? {
+                      ...task,
+                      skill: normalizedSkill,
+                      isCustom: isCustom ? true : undefined
+                    }
+                  : task
+              )
+            };
           })
         };
       })
     );
+  };
+
+  const handleWorkTaskCreate = (
+    teamRole: TeamRole,
+    roleId: string,
+    workId: string,
+    taskId: string,
+    label: string
+  ) => {
+    const trimmed = label.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    setRoleSkillOptions((prev) => {
+      const next = { ...prev };
+      const currentOptions = [...(prev[teamRole] ?? [])];
+      const existing = currentOptions.find(
+        (option) => option.label.toLowerCase() === trimmed.toLowerCase()
+      );
+
+      if (!existing) {
+        const option: OptionItem = {
+          id: `custom-skill-${createId()}`,
+          label: trimmed,
+          value: trimmed,
+          isCustom: true
+        };
+        currentOptions.push(option);
+        currentOptions.sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+      }
+
+      next[teamRole] = currentOptions;
+      return next;
+    });
+
+    handleWorkTaskChange(roleId, workId, taskId, trimmed, true);
   };
 
   const handleAddRole = () => {
@@ -461,7 +651,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     setRoles((prev) =>
       prev.map((role) =>
         role.id === roleId
-          ? { ...role, works: [...role.works, createWorkDraft(role.works.length * 5)] }
+          ? {
+              ...role,
+              works: [
+                ...role.works,
+                createWorkDraft(role.works.length * 5, Math.max(1, Math.round(role.required)))
+              ]
+            }
           : role
       )
     );
@@ -799,6 +995,43 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                             type="textarea"
                             minRows={2}
                           />
+                          <div className={styles.workTasks}>
+                            <Text size="xs" view="secondary">
+                              Назначьте задачи для {Math.max(1, Math.round(role.required))} специалиста(ов)
+                              по роли {role.role}
+                            </Text>
+                            <div className={styles.workTaskList}>
+                              {work.tasks.map((task, index) => {
+                                const skillOptionsForRole = roleSkillOptions[role.role] ?? [];
+                                const selectedOption =
+                                  skillOptionsForRole.find((option) => option.value === task.skill) ?? null;
+                                return (
+                                  <Combobox<OptionItem>
+                                    key={task.id}
+                                    size="s"
+                                    items={skillOptionsForRole}
+                                    value={selectedOption}
+                                    getItemLabel={(item) => item.label}
+                                    getItemKey={(item) => item.value}
+                                    placeholder="Выберите задачу из списка навыков"
+                                    label={`Задача для сотрудника ${index + 1}`}
+                                    onChange={(option) =>
+                                      handleWorkTaskChange(
+                                        role.id,
+                                        work.id,
+                                        task.id,
+                                        option?.value ?? ''
+                                      )
+                                    }
+                                    onCreate={(label) =>
+                                      handleWorkTaskCreate(role.role, role.id, work.id, task.id, label)
+                                    }
+                                    labelForCreate="Добавить новый навык"
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
                           <div className={styles.workGrid}>
                             <TextField
                               size="s"

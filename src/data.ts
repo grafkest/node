@@ -130,6 +130,7 @@ export type InitiativeRoleWork = {
   startDay: number;
   durationDays: number;
   effortDays: number;
+  tasks?: string[];
   assignedExpertId?: string;
 };
 
