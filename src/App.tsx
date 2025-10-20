@@ -146,6 +146,7 @@ function App() {
   const loadedGraphsRef = useRef(new Set<string>());
   const adminNoticeIdRef = useRef(0);
   const moduleDraftPrefillIdRef = useRef(0);
+  const shouldCaptureEngineLayoutRef = useRef(true);
   const [moduleDraftPrefill, setModuleDraftPrefill] = useState<ModuleDraftPrefillRequest | null>(null);
   const handleModuleDraftPrefillApplied = useCallback(() => {
     setModuleDraftPrefill(null);
@@ -262,6 +263,7 @@ function App() {
       setProductFilter(buildProductList(snapshot.modules));
       setCompanyFilter(null);
       setSelectedDomains(new Set(domainIds));
+      let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
       setLayoutPositions((prev) => {
         const serverPositions = snapshot.layout?.nodes ?? {};
         const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
@@ -269,8 +271,10 @@ function App() {
 
         if (!hasExistingLayout) {
           if (layoutsEqual(prev, prunedServerPositions)) {
+            resolvedLayoutPositions = prev;
             return prev;
           }
+          resolvedLayoutPositions = prunedServerPositions;
           return prunedServerPositions;
         }
 
@@ -288,8 +292,15 @@ function App() {
           }
         });
 
-        return layoutsEqual(prev, merged) ? prev : merged;
+        const nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        resolvedLayoutPositions = nextLayout;
+        return nextLayout;
       });
+      const nextLayoutPositions = resolvedLayoutPositions ?? {};
+      shouldCaptureEngineLayoutRef.current = needsEngineLayoutCapture(
+        nextLayoutPositions,
+        activeNodeIds
+      );
       hasLoadedSnapshotRef.current = true;
       hasPendingPersistRef.current = false;
     },
@@ -1530,6 +1541,15 @@ function App() {
 
   const handleLayoutChange = useCallback(
     (positions: Record<string, GraphLayoutNodePosition>, reason: 'drag' | 'engine') => {
+      if (reason === 'engine') {
+        if (!shouldCaptureEngineLayoutRef.current) {
+          return;
+        }
+        shouldCaptureEngineLayoutRef.current = false;
+      } else {
+        shouldCaptureEngineLayoutRef.current = true;
+      }
+
       let didChange = false;
       setLayoutPositions((prev) => {
         const merged = mergeLayoutPositions(prev, positions);
@@ -1617,6 +1637,7 @@ function App() {
           [moduleId]: initialPosition
         };
       });
+      shouldCaptureEngineLayoutRef.current = true;
       setSelectedDomains((prev) => {
         const next = new Set(prev);
         createdModule?.domains.forEach((domainId) => {
@@ -1773,6 +1794,7 @@ function App() {
         });
         return next;
       });
+      shouldCaptureEngineLayoutRef.current = true;
 
       setSelectedNode((prev) => {
         if (!prev) {
@@ -2009,6 +2031,7 @@ function App() {
         });
         return next;
       });
+      shouldCaptureEngineLayoutRef.current = true;
       setSelectedNode((prev) => (prev && removedIds.has(prev.id) ? null : prev));
       showAdminNotice(
         'success',
@@ -2265,6 +2288,7 @@ function App() {
         delete next[artifactId];
         return next;
       });
+      shouldCaptureEngineLayoutRef.current = true;
 
       setSelectedNode((prev) => (prev && prev.id === artifactId ? null : prev));
       showAdminNotice('success', `Артефакт «${existing.name}» удалён.`);
@@ -3480,6 +3504,28 @@ function buildProductList(modules: ModuleNode[]): string[] {
     }
   });
   return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function needsEngineLayoutCapture(
+  layout: Record<string, GraphLayoutNodePosition>,
+  activeIds: Set<string>
+): boolean {
+  for (const id of activeIds) {
+    const position = layout[id];
+    if (!position) {
+      return true;
+    }
+
+    if (typeof position.x !== 'number' || Number.isNaN(position.x)) {
+      return true;
+    }
+
+    if (typeof position.y !== 'number' || Number.isNaN(position.y)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function mergeLayoutPositions(
