@@ -879,7 +879,6 @@ function App() {
     initiativeData,
     domainData,
     moduleData,
-    initiativeData,
     isSyncAvailable,
     layoutPositions,
     activeGraphId
