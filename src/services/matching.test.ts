@@ -66,8 +66,8 @@ test('scoreExpertForRole учитывает веса навыков, уровн�
     competencies: ['TypeScript', 'React'],
     availability: 'available',
     skillEvidence: [
-      { name: 'TypeScript', level: 'expert', lastUsedDaysAgo: 30 },
-      { name: 'React', level: 'advanced', lastUsedDaysAgo: 200 }
+      { id: 'typescript', name: 'TypeScript', level: 'expert', lastUsedDaysAgo: 30 },
+      { id: 'react', name: 'React', level: 'advanced', lastUsedDaysAgo: 200 }
     ]
   });
 
@@ -98,7 +98,7 @@ test('scoreExpertForRole снижает итоговый балл при неп�
   const expert = createExpert({
     id: 'expert-partial',
     availability: 'partial',
-    skillEvidence: [{ name: 'Python', level: 'advanced', lastUsedDaysAgo: 10 }],
+    skillEvidence: [{ id: 'python', name: 'Python', level: 'advanced', lastUsedDaysAgo: 10 }],
     competencies: ['Python']
   });
 
@@ -124,14 +124,14 @@ test('buildInitiativeMatchReport агрегирует оценки по роля
     createExpert({
       id: 'expert-alpha',
       fullName: 'Frontend Специалист',
-      skillEvidence: [{ name: 'TypeScript', level: 'expert', lastUsedDaysAgo: 5 }],
+      skillEvidence: [{ id: 'typescript', name: 'TypeScript', level: 'expert', lastUsedDaysAgo: 5 }],
       competencies: ['TypeScript'],
       availability: 'available'
     }),
     createExpert({
       id: 'expert-beta',
       fullName: 'Data Аналитик',
-      skillEvidence: [{ name: 'DataOps', level: 'advanced', lastUsedDaysAgo: 400 }],
+      skillEvidence: [{ id: 'dataops', name: 'DataOps', level: 'advanced', lastUsedDaysAgo: 400 }],
       focusAreas: ['DataOps'],
       availability: 'partial'
     })

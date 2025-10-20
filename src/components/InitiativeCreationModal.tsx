@@ -199,7 +199,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           .map((skill) => ({
             id: skill.id,
             label: skill.name,
-            value: skill.name
+            value: skill.id
           }))
           .sort((a, b) => a.label.localeCompare(b.label, 'ru'));
         acc[option.value] = skillOptions;

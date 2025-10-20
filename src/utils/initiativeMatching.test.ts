@@ -58,12 +58,64 @@ describe('buildRoleMatchReports', () => {
     assert.deepEqual(report.requirement.skills.map((skill) => skill.name), [
       'Оптимизация размещения инфраструктуры'
     ]);
+    assert.deepEqual(report.requirement.skills.map((skill) => skill.id), ['layout-optimization']);
 
     const [match] = report.matches;
     assert.ok(match, 'Match should be calculated for the expert');
     assert.ok(
       match.explanation.normalizedSkillScore > 0,
       'Skill score should reflect provided task skill'
+    );
+  });
+
+  it('maps task identifiers to catalog skills for ranking', () => {
+    const role: RolePlanningDraft = {
+      id: 'role-2',
+      role: 'Аналитик',
+      required: 1,
+      skills: [],
+      workItems: [
+        {
+          id: 'work-2',
+          title: 'Нормализация',
+          description: 'Приведение источников к модели данных',
+          startDay: 0,
+          durationDays: 10,
+          effortDays: 10,
+          tasks: ['data-normalization']
+        }
+      ]
+    };
+
+    const expert: ExpertProfile = {
+      ...baseExpert,
+      id: 'expert-data',
+      skills: [
+        {
+          id: 'data-normalization',
+          level: 'A',
+          proofStatus: 'verified',
+          artifacts: [],
+          interest: 'high',
+          availableFte: 0.5,
+          usage: { from: '2024-01-01' }
+        }
+      ]
+    };
+
+    const [report] = buildRoleMatchReports([role], [expert]);
+    assert.ok(report.requirement.skills[0]?.id === 'data-normalization');
+    assert.equal(report.requirement.skills[0]?.name, 'Подготовка и нормализация данных');
+
+    const [match] = report.matches;
+    assert.ok(match, 'Match should exist for expert with matching skill evidence');
+    assert.ok(
+      match.explanation.normalizedSkillScore > 0.05,
+      'Expected skill score to be greater than zero for matching evidence'
+    );
+    assert.ok(
+      match.explanation.totalScore > 0.01,
+      'Total score should reflect matching skill and availability'
     );
   });
 });

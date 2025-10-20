@@ -220,6 +220,303 @@ export const skills: Record<string, SkillDefinition> = {
     recommendedLevel: 'W',
     evidenceStatus: 'observed',
     roles: ['Эксперт R&D', 'Владелец продукта']
+  },
+  'data-normalization': {
+    id: 'data-normalization',
+    name: 'Подготовка и нормализация данных',
+    description:
+      'Стандартизация источников, очистка и приведение к целевым моделям данных для аналитических решений.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Аналитик', 'Эксперт R&D']
+  },
+  'streaming-pipelines': {
+    id: 'streaming-pipelines',
+    name: 'Построение стриминговых пайплайнов',
+    description:
+      'Проектирование и эксплуатация потоковой обработки данных, обеспечение отказоустойчивости и SLA доставки.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'verified',
+    roles: ['Архитектор', 'Backend']
+  },
+  'data-governance': {
+    id: 'data-governance',
+    name: 'Управление качеством и владением данными',
+    description:
+      'Определение ролей владения, регламентов качества и процессов каталогизации корпоративных данных.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Аналитик', 'Руководитель проекта']
+  },
+  'layout-optimization': {
+    id: 'layout-optimization',
+    name: 'Оптимизация размещения инфраструктуры',
+    description:
+      'Применение математических моделей и ограничений для выбора оптимального расположения объектов.',
+    category: 'hard',
+    sources: ['INCOSE'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'observed',
+    roles: ['Архитектор', 'Эксперт R&D']
+  },
+  'geo-apis': {
+    id: 'geo-apis',
+    name: 'Геопространственные API и интеграции',
+    description:
+      'Разработка и интеграция геосервисов, работа с пространственными данными и ограничениями.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Backend', 'Архитектор']
+  },
+  'infrastructure-economics': {
+    id: 'infrastructure-economics',
+    name: 'Экономика инфраструктурных проектов',
+    description:
+      'Расчёт экономической эффективности, CAPEX/OPEX и оценка инвестиционных сценариев инфраструктуры.',
+    category: 'domain',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Аналитик', 'Владелец продукта']
+  },
+  'financial-modeling': {
+    id: 'financial-modeling',
+    name: 'Финансовое моделирование',
+    description:
+      'Построение финансовых моделей, стресс-сценариев и анализ чувствительности.',
+    category: 'hard',
+    sources: ['IIBA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Аналитик', 'Владелец продукта']
+  },
+  'scenario-planning': {
+    id: 'scenario-planning',
+    name: 'Сценарное планирование',
+    description:
+      'Подготовка и оценка альтернативных сценариев развития с учётом рисков и ограничений.',
+    category: 'soft',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Аналитик', 'Руководитель проекта']
+  },
+  'ma-support': {
+    id: 'ma-support',
+    name: 'Поддержка сделок M&A',
+    description:
+      'Сопровождение сделок по слияниям и поглощениям, анализ синергий и подготовка материалов.',
+    category: 'domain',
+    sources: ['IIBA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Аналитик', 'Владелец продукта']
+  },
+  'telemetry-streaming': {
+    id: 'telemetry-streaming',
+    name: 'Телеметрия и потоковая обработка',
+    description:
+      'Интеграция датчиков, построение конвейеров обработки и доставка телеметрии в режиме реального времени.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'verified',
+    roles: ['Архитектор', 'Backend']
+  },
+  'iot-integration': {
+    id: 'iot-integration',
+    name: 'Интеграция промышленного IoT',
+    description:
+      'Подключение IoT-устройств, управление протоколами связи и безопасность производственных систем.',
+    category: 'hard',
+    sources: ['INCOSE'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'observed',
+    roles: ['Архитектор', 'Эксперт R&D']
+  },
+  'sre-monitoring': {
+    id: 'sre-monitoring',
+    name: 'SRE и эксплуатационный мониторинг',
+    description:
+      'Настройка SLO/SLI, автоматизация мониторинга и инцидент-менеджмент высоконагруженных систем.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Архитектор', 'Backend']
+  },
+  'production-ml': {
+    id: 'production-ml',
+    name: 'ML для оптимизации добычи',
+    description:
+      'Разработка и внедрение моделей машинного обучения для управления добывающими активами.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'verified',
+    roles: ['Эксперт R&D', 'Аналитик']
+  },
+  'mlops-production': {
+    id: 'mlops-production',
+    name: 'MLOps в производстве',
+    description:
+      'Организация жизненного цикла ML-моделей, автоматизация деплоя и мониторинга в промышленных условиях.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'documented',
+    roles: ['Эксперт R&D', 'Backend']
+  },
+  'value-discovery': {
+    id: 'value-discovery',
+    name: 'Value Discovery',
+    description:
+      'Выявление бизнес-ценности инициатив, формирование гипотез и дорожных карт изменений.',
+    category: 'soft',
+    sources: ['IIBA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Владелец продукта', 'Аналитик']
+  },
+  'remote-ops-integration': {
+    id: 'remote-ops-integration',
+    name: 'Интеграция дистанционных операций',
+    description:
+      'Связка систем удалённого управления, потоков телеметрии и оперативного реагирования.',
+    category: 'hard',
+    sources: ['INCOSE'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'observed',
+    roles: ['Архитектор', 'Эксперт R&D']
+  },
+  'remote-ops-security': {
+    id: 'remote-ops-security',
+    name: 'Безопасность дистанционных операций',
+    description:
+      'Обеспечение кибербезопасности и устойчивости систем дистанционного управления производством.',
+    category: 'hard',
+    sources: ['INCOSE'],
+    recommendedLevel: 'Ad',
+    evidenceStatus: 'observed',
+    roles: ['Архитектор']
+  },
+  'change-management': {
+    id: 'change-management',
+    name: 'Управление изменениями',
+    description:
+      'Подготовка и проведение программ изменений, управление вовлечением и обучением команд.',
+    category: 'soft',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Руководитель проекта', 'Владелец продукта']
+  },
+  'wwo-planning': {
+    id: 'wwo-planning',
+    name: 'Планирование ГТМ и ремонтов скважин',
+    description:
+      'Формирование программ ГТМ/ТКРС, координация ресурсов и контроль исполнения.',
+    category: 'domain',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Руководитель проекта', 'Аналитик']
+  },
+  'contractor-management': {
+    id: 'contractor-management',
+    name: 'Управление подрядчиками',
+    description:
+      'Организация работы с подрядными организациями, контроль SLA и качества услуг.',
+    category: 'soft',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Руководитель проекта']
+  },
+  'process-digitization': {
+    id: 'process-digitization',
+    name: 'Цифровизация производственных процессов',
+    description:
+      'Перевод регламентов и операций в цифровые форматы, автоматизация и контроль исполнения.',
+    category: 'hard',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Руководитель проекта', 'Эксперт R&D']
+  },
+  'data-storytelling': {
+    id: 'data-storytelling',
+    name: 'Data Storytelling',
+    description:
+      'Подготовка аналитических историй, визуализаций и презентаций для вовлечения стейкхолдеров.',
+    category: 'soft',
+    sources: ['IIBA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Аналитик', 'Владелец продукта']
+  },
+  'field-dispatching': {
+    id: 'field-dispatching',
+    name: 'Диспетчеризация полевых работ',
+    description:
+      'Организация оперативного управления бригадами, координация ресурсов и логистики на месторождениях.',
+    category: 'domain',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Руководитель проекта', 'Аналитик']
+  },
+  forecasting: {
+    id: 'forecasting',
+    name: 'Прогнозирование производственных показателей',
+    description:
+      'Построение прогнозов на основе исторических данных, сценариев и сезонных факторов.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Аналитик', 'Эксперт R&D']
+  },
+  'mobile-solutions': {
+    id: 'mobile-solutions',
+    name: 'Мобильные решения для производства',
+    description:
+      'Проектирование и внедрение мобильных приложений для оперативного персонала и полевых команд.',
+    category: 'hard',
+    sources: ['SFIA'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Frontend', 'Владелец продукта']
+  },
+  'wwo-analytics': {
+    id: 'wwo-analytics',
+    name: 'Аналитика WWO-процессов',
+    description:
+      'Сбор и анализ показателей ремонтов скважин, подготовка рекомендаций по повышению эффективности.',
+    category: 'hard',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'documented',
+    roles: ['Аналитик', 'Эксперт R&D']
+  },
+  'hse-compliance': {
+    id: 'hse-compliance',
+    name: 'Соответствие требованиям HSE',
+    description:
+      'Контроль соблюдения стандартов промышленной безопасности, охраны труда и экологии.',
+    category: 'domain',
+    sources: ['INCOSE'],
+    recommendedLevel: 'P',
+    evidenceStatus: 'observed',
+    roles: ['Руководитель проекта', 'Эксперт R&D']
   }
 };
 
