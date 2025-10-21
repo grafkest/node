@@ -5,30 +5,39 @@
   height: 100%;
 }
 
-.header {
+
+.gridLayout {
   display: grid;
-  grid-template-columns: minmax(360px, 1.1fr) 1fr;
+  grid-template-columns: minmax(220px, 3fr) 120px 120px 100px 160px minmax(160px, 2fr) minmax(320px, 1fr);
   gap: 12px;
   align-items: stretch;
 }
 
-.tableHeader {
-  display: grid;
-  grid-template-columns: minmax(220px, 3fr) 120px 120px 100px 160px minmax(160px, 2fr);
-  gap: 12px;
-  padding: 8px 16px;
+.headerRow {
+  composes: gridLayout;
+  padding: 8px 12px;
   border-radius: 12px;
   background: var(--color-bg-secondary);
+}
+
+.headerCell {
+  display: flex;
   align-items: center;
 }
 
-.axis {
+.timelineHeader {
+  display: flex;
+  align-items: center;
+}
+
+.timelineAxis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
-  gap: 4px;
+  gap: 0;
+  width: 100%;
   padding: 8px 0;
-  border-radius: 12px;
-  background: var(--color-bg-secondary);
+  border-radius: 10px;
+  background: var(--color-bg-default);
 }
 
 .axisCell {
@@ -47,10 +56,7 @@
 }
 
 .row {
-  display: grid;
-  grid-template-columns: minmax(220px, 3fr) 120px 120px 100px 160px minmax(160px, 2fr) minmax(320px, 1fr);
-  gap: 12px;
-  align-items: stretch;
+  composes: gridLayout;
   padding: 8px 12px;
   border-radius: 12px;
   background: var(--color-bg-default);
@@ -82,13 +88,45 @@
   min-width: 0;
 }
 
-.treeMarker {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--color-bg-border);
-  margin-top: 6px;
-  flex-shrink: 0;
+.toggleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 6px;
+  background: var(--color-bg-default);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.toggleButton:hover {
+  background: var(--color-bg-ghost);
+}
+
+.toggleButton:focus-visible {
+  outline: 2px solid var(--color-bg-info);
+  outline-offset: 2px;
+}
+
+.toggleIcon {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-left: 2px solid var(--color-control-typo-ghost);
+  border-bottom: 2px solid var(--color-control-typo-ghost);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+
+.toggleIcon[data-collapsed='true'] {
+  transform: rotate(-45deg);
+}
+
+.toggleSpacer {
+  width: 24px;
+  height: 24px;
 }
 
 .nameTextGroup {
@@ -103,10 +141,6 @@
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-}
-
-.metaBadge {
-  white-space: nowrap;
 }
 
 .parallelCell,
@@ -180,24 +214,16 @@
 }
 
 @media (max-width: 1280px) {
-  .header {
-    grid-template-columns: 1fr;
+  .row {
+    grid-template-columns: minmax(220px, 3fr) 100px 100px 90px 140px minmax(140px, 2fr) minmax(260px, 1fr);
   }
 
-  .row {
+  .headerRow {
     grid-template-columns: minmax(220px, 3fr) 100px 100px 90px 140px minmax(140px, 2fr) minmax(260px, 1fr);
   }
 }
 
 @media (max-width: 960px) {
-  .tableHeader {
-    display: none;
-  }
-
-  .header {
-    grid-template-columns: 1fr;
-  }
-
   .row {
     grid-template-columns: minmax(220px, 3fr) minmax(0, 1fr);
     grid-template-areas:
@@ -212,5 +238,9 @@
   .roleCell,
   .resourceCell {
     display: none;
+  }
+
+  .headerRow {
+    grid-template-columns: minmax(220px, 3fr) minmax(0, 1fr);
   }
 }

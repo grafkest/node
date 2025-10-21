@@ -138,6 +138,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         const assignedExpertName = item.assignedExpertId
           ? expertMap.get(item.assignedExpertId)?.fullName ?? item.assignedExpertId
           : undefined;
+        const taskName = item.tasks && item.tasks.length > 0 ? item.tasks[0] : item.title;
         const resources: InitiativeGanttResource[] = assignedExpertName
           ? [
               {
@@ -172,7 +173,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
 
         return {
           id: `${role.id}-${item.id}`,
-          name: item.title,
+          name: taskName,
           role: role.role,
           projectId: selectedInitiative.id,
           projectName: selectedInitiative.name,
@@ -198,40 +199,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         } satisfies InitiativeGanttTask;
       });
 
-      const subTasks = workTasks.flatMap((task) => {
-        const workItem = role.workItems?.find((item) => `${role.id}-${item.id}` === task.id);
-        const tasks = workItem?.tasks ?? [];
-        if (tasks.length === 0) {
-          return [];
-        }
-        const sliceDuration = Math.max(1, Math.round(task.durationDays / tasks.length));
-        const sliceEffort = Math.max(1, Math.round(task.effortDays / tasks.length));
-        return tasks.map((taskName, idx) => ({
-          id: `${task.id}-sub-${idx + 1}`,
-          name: taskName,
-          role: task.role,
-          projectId: task.projectId,
-          projectName: task.projectName,
-          workId: task.workId,
-          workName: task.workName,
-          parentTaskId: task.id,
-          startDay: task.startDay + idx * sliceDuration,
-          durationDays: sliceDuration,
-          effortDays: sliceEffort,
-          minUnits: task.minUnits,
-          maxUnits: task.maxUnits,
-          canSplit: task.canSplit,
-          parallelAllowed: task.parallelAllowed,
-          durationMode: 'fixed-effort',
-          priority: task.priority,
-          wipLimitTag: task.wipLimitTag,
-          assignedExpert: task.assignedExpert,
-          resources: task.resources,
-          scenarioBranch: task.scenarioBranch
-        } satisfies InitiativeGanttTask));
-      });
-
-      return [...workTasks, ...subTasks];
+      return workTasks;
     });
   }, [expertMap, selectedInitiative]);
 

@@ -1,7 +1,6 @@
-import { Badge } from '@consta/uikit/Badge';
 import { Checkbox } from '@consta/uikit/Checkbox';
 import { Text } from '@consta/uikit/Text';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import type { TeamRole } from '../data';
 import styles from './InitiativeGanttChart.module.css';
 
@@ -92,6 +91,7 @@ type TimelineRow = {
   dependencies?: InitiativeGanttDependency[];
   blockers?: InitiativeGanttBlocker[];
   childIds?: string[];
+  parentId?: string;
 };
 
 const MIN_COLUMN_COUNT = 8;
@@ -155,7 +155,8 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
         durationDays: projectEnd === -Infinity ? 1 : Math.max(1, projectEnd - projectStart),
         constraints: projectTasks.flatMap((item) => item.constraints ?? []),
         blockers: projectTasks.flatMap((item) => item.blockers ?? []),
-        childIds: Array.from(project.workIds)
+        childIds: Array.from(project.workIds),
+        parentId: undefined
       });
 
       project.workIds.forEach((workId) => {
@@ -178,7 +179,8 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
           role: work.role,
           childIds: work.tasks.map((task) => task.id),
           blockers: work.tasks.flatMap((task) => task.blockers ?? []),
-          constraints: work.tasks.flatMap((task) => task.constraints ?? [])
+          constraints: work.tasks.flatMap((task) => task.constraints ?? []),
+          parentId: project.id
         });
 
         const parentChildMap = new Map<string, InitiativeGanttTask[]>();
@@ -190,7 +192,7 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
         });
 
         const rootTasks = parentChildMap.get('__root__') ?? [];
-        const addTaskRows = (taskList: InitiativeGanttTask[], level: number) => {
+        const addTaskRows = (taskList: InitiativeGanttTask[], level: number, parentId: string) => {
           taskList
             .slice()
             .sort((a, b) => a.startDay - b.startDay || a.name.localeCompare(b.name))
@@ -219,15 +221,16 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
                 resources: task.resources,
                 dependencies: task.dependencies,
                 blockers: task.blockers,
-                childIds: children.map((child) => child.id)
+                childIds: children.map((child) => child.id),
+                parentId
               });
               if (children.length > 0) {
-                addTaskRows(children, level + 1);
+                addTaskRows(children, level + 1, task.id);
               }
             });
         };
 
-        addTaskRows(rootTasks, 2);
+        addTaskRows(rootTasks, 2, work.id);
       });
     });
 
@@ -235,6 +238,47 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
 
     return { rows, totalDays };
   }, [tasks]);
+
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+
+  const rowLookup = useMemo(() => {
+    const map = new Map<string, TimelineRow>();
+    rows.forEach((row) => {
+      map.set(row.id, row);
+    });
+    return map;
+  }, [rows]);
+
+  const visibleRows = useMemo(() => {
+    if (collapsedIds.size === 0) {
+      return rows;
+    }
+
+    const isHiddenByAncestor = (row: TimelineRow) => {
+      let currentParent = row.parentId;
+      while (currentParent) {
+        if (collapsedIds.has(currentParent)) {
+          return true;
+        }
+        currentParent = rowLookup.get(currentParent)?.parentId;
+      }
+      return false;
+    };
+
+    return rows.filter((row) => !isHiddenByAncestor(row));
+  }, [collapsedIds, rowLookup, rows]);
+
+  const handleToggleRow = useCallback((rowId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  }, []);
 
   if (rows.length === 0) {
     return (
@@ -250,119 +294,86 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.tableHeader}>
+      <div className={styles.headerRow}>
+        <div className={styles.headerCell}>
           <Text size="xs" view="secondary">
             Проект / Работы / Задачи
           </Text>
+        </div>
+        <div className={styles.headerCell}>
           <Text size="xs" view="secondary">
             Параллельность
           </Text>
+        </div>
+        <div className={styles.headerCell}>
           <Text size="xs" view="secondary">
             Мин/Макс Units
           </Text>
+        </div>
+        <div className={styles.headerCell}>
           <Text size="xs" view="secondary">
             Приоритет
           </Text>
+        </div>
+        <div className={styles.headerCell}>
           <Text size="xs" view="secondary">
             Роль
           </Text>
+        </div>
+        <div className={styles.headerCell}>
           <Text size="xs" view="secondary">
             Ресурсы
           </Text>
         </div>
-        <div className={styles.axis}>
-          {Array.from({ length: totalDays }, (_, index) => (
-            <div key={index} className={styles.axisCell}>
-              <Text size="xs" view="secondary">
-                Д{index + 1}
-              </Text>
-            </div>
-          ))}
+        <div className={styles.timelineHeader}>
+          <div className={styles.timelineAxis}>
+            {Array.from({ length: totalDays }, (_, index) => (
+              <div key={index} className={styles.axisCell}>
+                <Text size="xs" view="secondary">
+                  Д{index + 1}
+                </Text>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       <div className={styles.body}>
-        {rows.map((row) => {
+        {visibleRows.map((row) => {
           const left = row.startDay * dayWidth;
           const width = Math.max(row.durationDays * dayWidth, dayWidth * 0.75);
           const hasActiveBlocker = (row.blockers ?? []).some((blocker) => blocker.active);
+          const canToggle = (row.childIds?.length ?? 0) > 0;
+          const isCollapsed = collapsedIds.has(row.id);
           return (
             <div key={row.id} className={styles.row}>
               <div className={styles.nameCell} data-level={row.level} data-type={row.type}>
                 <div className={styles.nameContent}>
-                  {row.type === 'project' && <span className={styles.treeMarker} />}
-                  {row.type === 'work' && <span className={styles.treeMarker} />}
-                  {row.type !== 'project' && row.type !== 'work' && <span className={styles.treeMarker} />}
+                  {canToggle ? (
+                    <button
+                      type="button"
+                      className={styles.toggleButton}
+                      onClick={() => handleToggleRow(row.id)}
+                      aria-label={isCollapsed ? 'Развернуть' : 'Свернуть'}
+                      aria-expanded={!isCollapsed}
+                    >
+                      <span className={styles.toggleIcon} data-collapsed={isCollapsed} />
+                    </button>
+                  ) : (
+                    <span className={styles.toggleSpacer} />
+                  )}
                   <div className={styles.nameTextGroup}>
                     <Text size="s" weight={row.type === 'project' ? 'bold' : 'semibold'} truncate>
                       {row.name}
                     </Text>
-                    <div className={styles.metaRow}>
-                      {row.typeTag === 'buffer' && (
-                        <Badge
-                          size="2xs"
-                          view="ghost"
-                          status="warning"
-                          label="Буфер"
-                          className={styles.metaBadge}
-                        />
-                      )}
-                      {row.durationMode && (
-                        <Badge
-                          size="2xs"
-                          view="ghost"
-                          status="system"
-                          label={row.durationMode === 'fixed-effort' ? 'Fixed Effort' : 'Fixed Duration'}
-                          className={styles.metaBadge}
-                        />
-                      )}
-                      {row.wipLimitTag && (
-                        <Badge
-                          size="2xs"
-                          view="ghost"
-                          status="alert"
-                          label={row.wipLimitTag}
-                          className={styles.metaBadge}
-                        />
-                      )}
-                      {row.scenarioBranch && (
-                        <Badge
-                          size="2xs"
-                          view="ghost"
-                          status="normal"
-                          label={`Сценарий: ${row.scenarioBranch}`}
-                          className={styles.metaBadge}
-                        />
-                      )}
-                    </div>
-                    {row.constraints && row.constraints.length > 0 && (
-                      <div className={styles.metaRow}>
-                        {row.constraints.slice(0, 3).map((constraint) => (
-                          <Badge
-                            key={`${row.id}-constraint-${constraint}`}
-                            size="2xs"
-                            view="ghost"
-                            status="secondary"
-                            label={constraint}
-                            className={styles.metaBadge}
-                          />
-                        ))}
-                      </div>
-                    )}
                     {hasActiveBlocker && (
                       <div className={styles.metaRow}>
                         {(row.blockers ?? [])
                           .filter((blocker) => blocker.active)
                           .slice(0, 2)
                           .map((blocker) => (
-                            <Badge
-                              key={blocker.id}
-                              size="2xs"
-                              view="filled"
-                              status="error"
-                              label={`Блокер: ${blocker.reason}`}
-                              className={styles.metaBadge}
-                            />
+                            <Text key={blocker.id} size="2xs" view="alert" truncate>
+                              Блокер: {blocker.reason}
+                            </Text>
                           ))}
                       </div>
                     )}
@@ -426,26 +437,6 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
                     <Text size="2xs" weight="semibold" truncate>
                       {row.effortDays ? `${row.name} · ${row.effortDays} дн.` : row.name}
                     </Text>
-                    {row.dependencies && row.dependencies.length > 0 && (
-                      <div className={styles.metaRow}>
-                        {row.dependencies.slice(0, 3).map((dependency) => (
-                          <Badge
-                            key={`${row.id}-${dependency.id}-${dependency.type}`}
-                            size="2xs"
-                            view="ghost"
-                            status="system"
-                            label={`${dependency.type}${
-                              dependency.lag
-                                ? ` ${dependency.lag > 0 ? '+' : ''}${dependency.lag}${
-                                    dependency.lagUnit === 'hours' ? 'ч' : 'д'
-                                  }`
-                                : ''
-                            }`}
-                            className={styles.metaBadge}
-                          />
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

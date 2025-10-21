@@ -408,6 +408,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       works.flatMap((work) => {
         const normalizedTitle = work.title.trim() || 'Задача';
         return work.assignments.flatMap((assignment, index) => {
+          const normalizedTaskName = assignment.task.trim() || normalizedTitle;
           const normalizedStart = Math.max(0, Math.round(assignment.startDay));
           const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
           const normalizedEffort = Math.max(1, Math.round(assignment.effortDays));
@@ -439,7 +440,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 
           const baseTask: InitiativeGanttTask = {
             id: `${work.id}-${assignment.id}`,
-            name: normalizedTitle,
+            name: normalizedTaskName,
             role: assignment.role,
             workId: work.id,
             workName: normalizedTitle,
@@ -466,30 +467,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
             calendarId: assignment.calendarId ?? 'project-calendar'
           };
 
-          const childTasks = (assignment.tasks ?? []).map((taskName, childIndex) => ({
-            id: `${baseTask.id}-sub-${childIndex + 1}`,
-            name: taskName,
-            role: assignment.role,
-            workId: baseTask.workId,
-            workName: baseTask.workName,
-            parentTaskId: baseTask.id,
-            startDay: normalizedStart + childIndex,
-            durationDays: Math.max(1, Math.round(normalizedDuration / (assignment.tasks?.length || 1))),
-            effortDays: Math.max(1, Math.round(normalizedEffort / (assignment.tasks?.length || 1))),
-            minUnits: baseTask.minUnits,
-            maxUnits: baseTask.maxUnits,
-            canSplit: baseTask.canSplit,
-            parallelAllowed: baseTask.parallelAllowed,
-            durationMode: baseTask.durationMode,
-            priority: baseTask.priority,
-            wipLimitTag: baseTask.wipLimitTag,
-            assignedExpert: baseTask.assignedExpert,
-            resources: baseTask.resources,
-            scenarioBranch: baseTask.scenarioBranch,
-            calendarId: baseTask.calendarId
-          } satisfies InitiativeGanttTask));
-
-          return [baseTask, ...childTasks];
+          return [baseTask];
         });
       }),
     [works]
