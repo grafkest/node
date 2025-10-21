@@ -136,12 +136,15 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .candidateTitle {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  word-break: break-word;
 }
 
 .candidateActions {
@@ -149,6 +152,7 @@
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .candidateDetails {
@@ -161,6 +165,8 @@
 
 .candidateComment {
   max-width: 640px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .scoreDetails {
@@ -173,12 +179,20 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  word-break: break-word;
 }
 
 .riskTagList {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.riskTag {
+  white-space: normal;
+  word-break: break-word;
+  text-align: left;
+  max-width: 100%;
 }
 
 .riskSection {
