@@ -75,13 +75,15 @@ const collectGraphDomainIds = (domains: DomainNode[]): string[] => {
 
 const graphDomainIds = collectGraphDomainIds(domainTree);
 
-type RoleWorkTaskDraft = {
+type WorkAssignmentDraft = {
   id: string;
-  skill: string;
+  role: TeamRole;
+  task: string;
+  description: string;
   isCustom?: boolean;
 };
 
-type RoleWorkDraft = {
+type WorkDraft = {
   id: string;
   title: string;
   description: string;
@@ -89,16 +91,7 @@ type RoleWorkDraft = {
   startDay: number;
   durationDays: number;
   effortDays: number;
-  tasks: RoleWorkTaskDraft[];
-};
-
-type RoleDraft = {
-  id: string;
-  role: TeamRole;
-  required: number;
-  skillsInput: string;
-  comment: string;
-  works: RoleWorkDraft[];
+  assignments: WorkAssignmentDraft[];
 };
 
 type CreationStep = 'details' | 'work' | 'team';
@@ -144,12 +137,14 @@ const creationStepDescriptions: Record<CreationStep, string> = {
 
 const createId = () => `tmp-${Math.random().toString(36).slice(2, 11)}`;
 
-const createWorkTaskDraft = (): RoleWorkTaskDraft => ({
+const createWorkAssignmentDraft = (role: TeamRole = roleOptions[0].value): WorkAssignmentDraft => ({
   id: createId(),
-  skill: ''
+  role,
+  task: '',
+  description: ''
 });
 
-const createWorkDraft = (offset = 0, tasksCount = 1): RoleWorkDraft => ({
+const createWorkDraft = (offset = 0): WorkDraft => ({
   id: createId(),
   title: '',
   description: '',
@@ -157,16 +152,7 @@ const createWorkDraft = (offset = 0, tasksCount = 1): RoleWorkDraft => ({
   startDay: offset,
   durationDays: 5,
   effortDays: 5,
-  tasks: Array.from({ length: Math.max(1, tasksCount) }, () => createWorkTaskDraft())
-});
-
-const createRoleDraft = (role: TeamRole): RoleDraft => ({
-  id: createId(),
-  role,
-  required: 1,
-  skillsInput: '',
-  comment: '',
-  works: [createWorkDraft(0, 1)]
+  assignments: [createWorkAssignmentDraft()]
 });
 
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
@@ -228,7 +214,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerRepresentative, setCustomerRepresentative] = useState('');
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
-  const [roles, setRoles] = useState<RoleDraft[]>([createRoleDraft('Аналитик')]);
+  const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft()]);
   const [activeStep, setActiveStep] = useState<CreationStep>('details');
   const baseRoleSkillOptions = useMemo<Record<TeamRole, OptionItem[]>>(
     () =>
@@ -281,7 +267,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setCustomerRepresentative('');
       setCustomerContact('');
       setCustomerComment('');
-      setRoles([createRoleDraft('Аналитик')]);
+      setWorks([createWorkDraft()]);
       setRoleSkillOptions(createRoleSkillState());
       setActiveStep('details');
     }
@@ -398,35 +384,43 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
     () =>
-      roles.flatMap((role) =>
-        role.works.map((work) => ({
-          id: work.id,
-          role: role.role,
-          title: work.title || 'Задача',
-          startDay: Math.max(0, Math.round(work.startDay)),
-          durationDays: Math.max(1, Math.round(work.durationDays)),
-          effortDays: Math.max(1, Math.round(work.effortDays))
-        }))
-      ),
-    [roles]
+      works.flatMap((work) => {
+        const normalizedTitle = work.title.trim() || 'Задача';
+        const normalizedStart = Math.max(0, Math.round(work.startDay));
+        const normalizedDuration = Math.max(1, Math.round(work.durationDays));
+        const normalizedEffortTotal = Math.max(1, Math.round(work.effortDays));
+        const perAssignmentEffort = Math.max(
+          1,
+          Math.round(normalizedEffortTotal / Math.max(1, work.assignments.length))
+        );
+
+        return work.assignments.map((assignment) => ({
+          id: `${work.id}-${assignment.id}`,
+          role: assignment.role,
+          title: normalizedTitle,
+          startDay: normalizedStart,
+          durationDays: normalizedDuration,
+          effortDays: perAssignmentEffort
+        }));
+      }),
+    [works]
   );
 
-  const totalEffortDays = ganttTasks.reduce((acc, task) => acc + task.effortDays, 0);
+  const totalEffortDays = works.reduce(
+    (acc, work) => acc + Math.max(1, Math.round(work.effortDays)),
+    0
+  );
 
   const isWorkPlanningReady = useMemo(
     () =>
-      roles.length > 0 &&
-      roles.every(
-        (role) =>
-          role.works.length > 0 &&
-          role.works.every(
-            (work) =>
-              work.title.trim().length > 0 &&
-              work.tasks.length > 0 &&
-              work.tasks.every((task) => task.skill.trim().length > 0)
-          )
+      works.length > 0 &&
+      works.every(
+        (work) =>
+          work.title.trim().length > 0 &&
+          work.assignments.length > 0 &&
+          work.assignments.every((assignment) => assignment.task.trim().length > 0)
       ),
-    [roles]
+    [works]
   );
 
   const isSubmitDisabled = !name.trim() || !isWorkPlanningReady;
@@ -442,36 +436,92 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const currentStepTitle = creationStepTitles[activeStep];
   const currentStepDescription = creationStepDescriptions[activeStep];
 
-  const parseList = (input: string) =>
-    input
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
+  const { planningRoles, roleAssignmentRefs } = useMemo(() => {
+    const accumulator = new Map<
+      TeamRole,
+      {
+        assignments: {
+          workId: string;
+          assignmentId: string;
+          workDraft: RolePlanningDraft['workItems'][number];
+        }[];
+        skills: Set<string>;
+      }
+    >();
 
-  const planningRoles = useMemo<RolePlanningDraft[]>(
-    () =>
-      roles.map((role) => ({
-        id: role.id,
-        role: role.role,
-        required: Math.max(1, Math.round(role.required)),
-        skills: parseList(role.skillsInput),
-        workItems: role.works.map((work) => ({
-          id: work.id,
-          title: work.title.trim() || 'Задача',
-          description: work.description.trim() || 'Описание не заполнено',
-          assumptions: work.assumptions.trim() || undefined,
-          startDay: Math.max(0, Math.round(work.startDay)),
-          durationDays: Math.max(1, Math.round(work.durationDays)),
-          effortDays: Math.max(1, Math.round(work.effortDays)),
-          tasks: work.tasks.map((task) => task.skill.trim()).filter(Boolean)
-        }))
-      })),
-    [roles]
-  );
+    works.forEach((work) => {
+      const normalizedTitle = work.title.trim() || 'Задача';
+      const normalizedDescription = work.description.trim();
+      const normalizedStart = Math.max(0, Math.round(work.startDay));
+      const normalizedDuration = Math.max(1, Math.round(work.durationDays));
+      const normalizedEffort = Math.max(1, Math.round(work.effortDays));
+
+      work.assignments.forEach((assignment) => {
+        const entry =
+          accumulator.get(assignment.role) ??
+          {
+            assignments: [],
+            skills: new Set<string>()
+          };
+        const trimmedTask = assignment.task.trim();
+        if (trimmedTask) {
+          entry.skills.add(trimmedTask);
+        }
+
+        const assignmentDescription = assignment.description.trim();
+
+        entry.assignments.push({
+          workId: work.id,
+          assignmentId: assignment.id,
+          workDraft: {
+            id: `${work.id}-${assignment.id}`,
+            title: normalizedTitle,
+            description:
+              assignmentDescription ||
+              normalizedDescription ||
+              'Описание не заполнено',
+            startDay: normalizedStart,
+            durationDays: normalizedDuration,
+            effortDays: normalizedEffort,
+            tasks: trimmedTask ? [trimmedTask] : []
+          }
+        });
+
+        accumulator.set(assignment.role, entry);
+      });
+    });
+
+    const assignmentRefs = new Map<
+      string,
+      { workId: string; assignmentId: string; workDraftId: string }[]
+    >();
+    const planning: RolePlanningDraft[] = Array.from(accumulator.entries()).map(
+      ([role, data]) => {
+        const id = role;
+        assignmentRefs.set(
+          id,
+          data.assignments.map((item) => ({
+            workId: item.workId,
+            assignmentId: item.assignmentId,
+            workDraftId: item.workDraft.id
+          }))
+        );
+        return {
+          id,
+          role,
+          required: data.assignments.length,
+          skills: Array.from(data.skills),
+          workItems: data.assignments.map((item) => item.workDraft)
+        };
+      }
+    );
+
+    return { planningRoles: planning, roleAssignmentRefs: assignmentRefs };
+  }, [works]);
 
   const draftPayload = useMemo<InitiativeCreationRequest>(
     () => {
-      const roleStateMap = new Map(roles.map((role) => [role.id, role]));
+      const workLookup = new Map(works.map((work) => [work.id, work]));
       return {
         name: name.trim(),
         description: description.trim(),
@@ -489,17 +539,27 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           comment: customerComment.trim() || undefined
         },
         roles: planningRoles.map((role) => {
-          const sourceRole = roleStateMap.get(role.id);
+          const assignmentRefs = roleAssignmentRefs.get(role.id) ?? [];
           const workItems = role.workItems.map((work) => {
-            const sourceWork = sourceRole?.works.find((candidate) => candidate.id === work.id);
-            const normalizedTasks =
-              sourceWork?.tasks.map((task) => {
-                const trimmedSkill = task.skill.trim();
-                const base = { id: task.id, skill: trimmedSkill };
-                return task.isCustom ? { ...base, isCustom: true as const } : base;
-              }) ?? [];
-            const filteredTasks = normalizedTasks.filter((task) => task.skill.length > 0);
-            return { ...work, tasks: filteredTasks };
+            const ref = assignmentRefs.find((item) => item.workDraftId === work.id);
+            const sourceWork = ref ? workLookup.get(ref.workId) : undefined;
+            const assignment = ref
+              ? sourceWork?.assignments.find((candidate) => candidate.id === ref.assignmentId)
+              : undefined;
+            const trimmedTask = assignment?.task.trim() ?? '';
+            const tasks = trimmedTask
+              ? [
+                  assignment?.isCustom
+                    ? { id: assignment.id, skill: trimmedTask, isCustom: true as const }
+                    : { id: assignment?.id ?? work.id, skill: trimmedTask }
+                ]
+              : [];
+
+            return {
+              ...work,
+              assumptions: sourceWork?.assumptions.trim() ? sourceWork.assumptions.trim() : undefined,
+              tasks
+            };
           });
 
           return {
@@ -507,7 +567,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
             role: role.role,
             required: role.required,
             skills: role.skills,
-            comment: sourceRole?.comment.trim() ? sourceRole.comment.trim() : undefined,
             workItems
           };
         })
@@ -523,12 +582,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       name,
       owner,
       planningRoles,
-      roles,
+      roleAssignmentRefs,
       selectedCompany,
       selectedDomains,
       selectedModules,
       status,
-      targetModule
+      targetModule,
+      works
     ]
   );
 
@@ -552,127 +612,92 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     return lookup;
   }, [experts]);
 
-  const syncWorkTasks = useCallback(
-    (work: RoleWorkDraft, requiredCount: number, resetSkills = false): RoleWorkDraft => {
-      const normalizedCount = Math.max(1, Math.round(requiredCount));
-      const preservedTasks = work.tasks
-        .slice(0, normalizedCount)
-        .map((task) => ({
-          ...task,
-          skill: resetSkills ? '' : task.skill,
-          isCustom: resetSkills ? undefined : task.isCustom
-        }));
-      if (preservedTasks.length < normalizedCount) {
-        preservedTasks.push(
-          ...Array.from({ length: normalizedCount - preservedTasks.length }, () => createWorkTaskDraft())
-        );
-      }
-      return { ...work, tasks: preservedTasks };
-    },
-    []
-  );
-
-  const handleRoleChange = (roleId: string, patch: Partial<RoleDraft>) => {
-    setRoles((prev) =>
-      prev.map((role) => {
-        if (role.id !== roleId) {
-          return role;
+  const handleWorkChange = (workId: string, patch: Partial<WorkDraft>) => {
+    setWorks((prev) =>
+      prev.map((work) => {
+        if (work.id !== workId) {
+          return work;
         }
 
-        const nextRole: RoleDraft = { ...role, ...patch };
-        let shouldResetTasks = false;
+        const nextWork: WorkDraft = { ...work, ...patch };
 
-        if (patch.role && patch.role !== role.role) {
-          shouldResetTasks = true;
-          nextRole.skillsInput = patch.skillsInput ?? '';
+        if (patch.startDay !== undefined) {
+          nextWork.startDay = Math.max(0, Math.round(patch.startDay));
         }
 
-        if (patch.required !== undefined) {
-          const normalizedRequired = Math.max(1, Math.round(patch.required));
-          nextRole.required = normalizedRequired;
+        if (patch.durationDays !== undefined) {
+          nextWork.durationDays = Math.max(1, Math.round(patch.durationDays));
         }
 
-        if (shouldResetTasks || patch.required !== undefined) {
-          const requiredCount = Math.max(1, Math.round(nextRole.required));
-          nextRole.works = nextRole.works.map((work) =>
-            syncWorkTasks(work, requiredCount, shouldResetTasks)
-          );
+        if (patch.effortDays !== undefined) {
+          const normalizedEffort = Math.max(1, Math.round(patch.effortDays));
+          nextWork.effortDays = normalizedEffort;
+          nextWork.durationDays = normalizedEffort;
         }
 
-        return nextRole;
+        return nextWork;
       })
     );
   };
 
-  const handleWorkChange = (roleId: string, workId: string, patch: Partial<RoleWorkDraft>) => {
-    setRoles((prev) =>
-      prev.map((role) => {
-        if (role.id !== roleId) {
-          return role;
-        }
-        return {
-          ...role,
-          works: role.works.map((work) => {
-            if (work.id !== workId) {
-              return work;
-            }
-            const nextWork = { ...work, ...patch };
-            if (patch.effortDays !== undefined) {
-              const normalizedEffort = Math.max(1, Math.round(patch.effortDays));
-              nextWork.effortDays = normalizedEffort;
-              nextWork.durationDays = normalizedEffort;
-            }
-          return nextWork;
-        })
-      };
-    })
-    );
-  };
-
-  const handleWorkTaskChange = (
-    roleId: string,
+  const handleAssignmentChange = (
     workId: string,
-    taskId: string,
-    nextSkill: string,
-    isCustom = false
+    assignmentId: string,
+    patch: Partial<WorkAssignmentDraft>
   ) => {
-    const normalizedSkill = nextSkill.trim();
-    setRoles((prev) =>
-      prev.map((role) => {
-        if (role.id !== roleId) {
-          return role;
+    setWorks((prev) =>
+      prev.map((work) => {
+        if (work.id !== workId) {
+          return work;
         }
 
         return {
-          ...role,
-          works: role.works.map((work) => {
-            if (work.id !== workId) {
-              return work;
-            }
-
-            return {
-              ...work,
-              tasks: work.tasks.map((task) =>
-                task.id === taskId
-                  ? {
-                      ...task,
-                      skill: normalizedSkill,
-                      isCustom: isCustom ? true : undefined
-                    }
-                  : task
-              )
-            };
-          })
+          ...work,
+          assignments: work.assignments.map((assignment) =>
+            assignment.id === assignmentId ? { ...assignment, ...patch } : assignment
+          )
         };
       })
     );
   };
 
-  const handleWorkTaskCreate = (
-    teamRole: TeamRole,
-    roleId: string,
+  const handleAssignmentRoleChange = (workId: string, assignmentId: string, role: TeamRole) => {
+    handleAssignmentChange(workId, assignmentId, { role, task: '', isCustom: undefined });
+  };
+
+  const handleAssignmentTaskChange = (
     workId: string,
-    taskId: string,
+    assignmentId: string,
+    nextSkill: string,
+    isCustom = false
+  ) => {
+    const normalizedSkill = nextSkill.trim();
+    setWorks((prev) =>
+      prev.map((work) => {
+        if (work.id !== workId) {
+          return work;
+        }
+
+        return {
+          ...work,
+          assignments: work.assignments.map((assignment) =>
+            assignment.id === assignmentId
+              ? {
+                  ...assignment,
+                  task: normalizedSkill,
+                  isCustom: isCustom ? true : undefined
+                }
+              : assignment
+          )
+        };
+      })
+    );
+  };
+
+  const handleAssignmentTaskCreate = (
+    teamRole: TeamRole,
+    workId: string,
+    assignmentId: string,
     label: string
   ) => {
     const trimmed = label.trim();
@@ -702,40 +727,46 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       return next;
     });
 
-    handleWorkTaskChange(roleId, workId, taskId, trimmed, true);
+    handleAssignmentTaskChange(workId, assignmentId, trimmed, true);
   };
 
-  const handleAddRole = () => {
-    setRoles((prev) => [...prev, createRoleDraft('Эксперт R&D')]);
+  const handleAddWork = () => {
+    setWorks((prev) => [...prev, createWorkDraft(prev.length * 5)]);
   };
 
-  const handleRemoveRole = (roleId: string) => {
-    setRoles((prev) => (prev.length <= 1 ? prev : prev.filter((role) => role.id !== roleId)));
+  const handleRemoveWork = (workId: string) => {
+    setWorks((prev) => (prev.length <= 1 ? prev : prev.filter((work) => work.id !== workId)));
   };
 
-  const handleAddWork = (roleId: string) => {
-    setRoles((prev) =>
-      prev.map((role) =>
-        role.id === roleId
+  const handleAddAssignment = (workId: string) => {
+    setWorks((prev) =>
+      prev.map((work) =>
+        work.id === workId
           ? {
-              ...role,
-              works: [
-                ...role.works,
-                createWorkDraft(role.works.length * 5, Math.max(1, Math.round(role.required)))
-              ]
+              ...work,
+              assignments: [...work.assignments, createWorkAssignmentDraft()]
             }
-          : role
+          : work
       )
     );
   };
 
-  const handleRemoveWork = (roleId: string, workId: string) => {
-    setRoles((prev) =>
-      prev.map((role) =>
-        role.id === roleId
-          ? { ...role, works: role.works.filter((work) => work.id !== workId) }
-          : role
-      )
+  const handleRemoveAssignment = (workId: string, assignmentId: string) => {
+    setWorks((prev) =>
+      prev.map((work) => {
+        if (work.id !== workId) {
+          return work;
+        }
+
+        if (work.assignments.length <= 1) {
+          return work;
+        }
+
+        return {
+          ...work,
+          assignments: work.assignments.filter((assignment) => assignment.id !== assignmentId)
+        };
+      })
     );
   };
 
@@ -992,174 +1023,154 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
               <section className={styles.section}>
                 <div className={styles.sectionHeader}>
                   <Text size="s" weight="semibold">
-                    Команда и план работ по ролям
+                    План работ и задачи сотрудников
                   </Text>
-                  <Button size="s" view="ghost" label="Добавить роль" onClick={handleAddRole} />
+                  <Button size="s" view="ghost" label="Добавить работу" onClick={handleAddWork} />
                 </div>
-                <div className={styles.roleList}>
-                  {roles.map((role) => {
-                    const roleOption =
-                      roleOptions.find((option) => option.value === role.role) ?? roleOptions[0];
-                    return (
-                      <Card key={role.id} className={styles.roleCard} verticalSpace="l" horizontalSpace="l">
-                        <div className={styles.roleHeader}>
-                          <Select<SelectOption<TeamRole>>
-                            size="s"
-                            items={roleOptions}
-                            value={roleOption}
-                            getItemLabel={(item) => item.label}
-                            getItemKey={(item) => item.value}
-                            onChange={(option) => option && handleRoleChange(role.id, { role: option.value })}
-                          />
-                          <div className={styles.roleHeaderActions}>
-                            <TextField
-                              size="s"
-                              label="Требуется"
-                              type="number"
-                              value={String(role.required)}
-                              onChange={(value) =>
-                                handleRoleChange(role.id, {
-                                  required: Number(value ?? role.required) || 1
-                                })
-                              }
-                            />
-                            <Button
-                              size="s"
-                              view="ghost"
-                              label="Удалить роль"
-                              onClick={() => handleRemoveRole(role.id)}
-                            />
-                          </div>
-                        </div>
-                        <div className={styles.roleMetaGrid}>
-                          <TextField
-                            size="s"
-                            label="Навыки (через запятую)"
-                            value={role.skillsInput}
-                            onChange={(value) =>
-                              handleRoleChange(role.id, { skillsInput: value ?? '' })
-                            }
-                          />
-                          <TextField
-                            size="s"
-                            label="Комментарий"
-                            value={role.comment}
-                            onChange={(value) => handleRoleChange(role.id, { comment: value ?? '' })}
-                          />
-                        </div>
-                        <div className={styles.workList}>
-                          {role.works.map((work) => (
-                            <div key={work.id} className={styles.workCard}>
-                              <div className={styles.workHeader}>
-                                <TextField
-                                  size="s"
-                                  label="Название работы"
-                                  placeholder="Например, Подготовка данных"
-                                  value={work.title}
-                                  onChange={(value) =>
-                                    handleWorkChange(role.id, work.id, { title: value ?? '' })
-                                  }
-                                />
-                                <Button
-                                  size="s"
-                                  view="ghost"
-                                  label="Удалить"
-                                  onClick={() => handleRemoveWork(role.id, work.id)}
-                                />
-                              </div>
-                              <TextField
-                                size="s"
-                                label="Описание"
-                                value={work.description}
-                                onChange={(value) =>
-                                  handleWorkChange(role.id, work.id, { description: value ?? '' })
-                                }
-                                type="textarea"
-                                minRows={2}
-                              />
-                              <TextField
-                                size="s"
-                                label="Допущения / ограничения"
-                                value={work.assumptions}
-                                onChange={(value) =>
-                                  handleWorkChange(role.id, work.id, { assumptions: value ?? '' })
-                                }
-                                type="textarea"
-                                minRows={2}
-                              />
-                              <div className={styles.workTasks}>
-                                <Text size="xs" view="secondary">
-                                  Назначьте задачи для {Math.max(1, Math.round(role.required))} специалиста(ов)
-                                  по роли {role.role}
-                                </Text>
-                                <div className={styles.workTaskList}>
-                                  {work.tasks.map((task, index) => {
-                                    const skillOptionsForRole = roleSkillOptions[role.role] ?? [];
-                                    const selectedOption =
-                                      skillOptionsForRole.find((option) => option.value === task.skill) ?? null;
-                                    return (
-                                      <Combobox<OptionItem>
-                                        key={task.id}
-                                        size="s"
-                                        items={skillOptionsForRole}
-                                        value={selectedOption}
-                                        getItemLabel={(item) => item.label}
-                                        getItemKey={(item) => item.value}
-                                        placeholder="Выберите задачу из списка навыков"
-                                        label={`Задача для сотрудника ${index + 1}`}
-                                        onChange={(option) =>
-                                          handleWorkTaskChange(
-                                            role.id,
-                                            work.id,
-                                            task.id,
-                                            option?.value ?? ''
-                                          )
-                                        }
-                                        onCreate={(label) =>
-                                          handleWorkTaskCreate(role.role, role.id, work.id, task.id, label)
-                                        }
-                                        labelForCreate="Добавить новый навык"
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                              <div className={styles.workGrid}>
-                                <TextField
-                                  size="s"
-                                  label="Старт (день)"
-                                  type="number"
-                                  value={String(work.startDay)}
-                                  onChange={(value) =>
-                                    handleWorkChange(role.id, work.id, {
-                                      startDay: Number(value ?? work.startDay) || 0
-                                    })
-                                  }
-                                />
-                                <TextField
-                                  size="s"
-                                  label="Трудозатраты (дней)"
-                                  type="number"
-                                  value={String(work.effortDays)}
-                                  onChange={(value) =>
-                                    handleWorkChange(role.id, work.id, {
-                                      effortDays: Number(value ?? work.effortDays) || 1
-                                    })
-                                  }
-                                />
-                              </div>
-                            </div>
-                          ))}
+                <div className={styles.workList}>
+                  {works.map((work) => (
+                    <Card key={work.id} className={styles.workCard} verticalSpace="l" horizontalSpace="l">
+                      <div className={styles.workHeader}>
+                        <TextField
+                          size="s"
+                          label="Название работы"
+                          placeholder="Например, Подготовка данных"
+                          value={work.title}
+                          onChange={(value) => handleWorkChange(work.id, { title: value ?? '' })}
+                        />
+                        <Button
+                          size="s"
+                          view="ghost"
+                          label="Удалить"
+                          onClick={() => handleRemoveWork(work.id)}
+                          disabled={works.length <= 1}
+                        />
+                      </div>
+                      <TextField
+                        size="s"
+                        label="Описание"
+                        value={work.description}
+                        onChange={(value) => handleWorkChange(work.id, { description: value ?? '' })}
+                        type="textarea"
+                        minRows={2}
+                      />
+                      <TextField
+                        size="s"
+                        label="Допущения / ограничения"
+                        value={work.assumptions}
+                        onChange={(value) => handleWorkChange(work.id, { assumptions: value ?? '' })}
+                        type="textarea"
+                        minRows={2}
+                      />
+                      <div className={styles.assignmentList}>
+                        <div className={styles.assignmentHeader}>
+                          <Text size="xs" view="secondary">
+                            Назначьте роли и выберите задачи для сотрудников.
+                          </Text>
                           <Button
-                            size="s"
+                            size="xs"
                             view="ghost"
-                            label="Добавить работу"
-                            onClick={() => handleAddWork(role.id)}
+                            label="Добавить сотрудника"
+                            onClick={() => handleAddAssignment(work.id)}
                           />
                         </div>
-                      </Card>
-                    );
-                  })}
+                        <div className={styles.assignmentGrid}>
+                          {work.assignments.map((assignment, index) => {
+                            const roleOption =
+                              roleOptions.find((option) => option.value === assignment.role) ?? roleOptions[0];
+                            const skillOptionsForRole = roleSkillOptions[assignment.role] ?? [];
+                            const selectedTask =
+                              skillOptionsForRole.find((option) => option.value === assignment.task) ?? null;
+                            return (
+                              <div key={assignment.id} className={styles.assignmentCard}>
+                                <div className={styles.assignmentRow}>
+                                  <Select<SelectOption<TeamRole>>
+                                    size="s"
+                                    label={`Роль сотрудника ${index + 1}`}
+                                    items={roleOptions}
+                                    value={roleOption}
+                                    getItemLabel={(item) => item.label}
+                                    getItemKey={(item) => item.value}
+                                    onChange={(option) =>
+                                      option && handleAssignmentRoleChange(work.id, assignment.id, option.value)
+                                    }
+                                  />
+                                  <Button
+                                    size="xs"
+                                    view="ghost"
+                                    label="Удалить"
+                                    onClick={() => handleRemoveAssignment(work.id, assignment.id)}
+                                    disabled={work.assignments.length <= 1}
+                                  />
+                                </div>
+                                <Combobox<OptionItem>
+                                  size="s"
+                                  items={skillOptionsForRole}
+                                  value={selectedTask}
+                                  getItemLabel={(item) => item.label}
+                                  getItemKey={(item) => item.value}
+                                  placeholder="Выберите задачу из списка навыков"
+                                  label={`Задача для сотрудника ${index + 1}`}
+                                  onChange={(option) =>
+                                    handleAssignmentTaskChange(
+                                      work.id,
+                                      assignment.id,
+                                      option?.value ?? ''
+                                    )
+                                  }
+                                  onCreate={(label) =>
+                                    handleAssignmentTaskCreate(
+                                      assignment.role,
+                                      work.id,
+                                      assignment.id,
+                                      label
+                                    )
+                                  }
+                                  labelForCreate="Добавить новую задачу"
+                                />
+                                <TextField
+                                  size="s"
+                                  label="Описание задачи"
+                                  value={assignment.description}
+                                  onChange={(value) =>
+                                    handleAssignmentChange(work.id, assignment.id, {
+                                      description: value ?? ''
+                                    })
+                                  }
+                                  type="textarea"
+                                  minRows={2}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className={styles.workGrid}>
+                        <TextField
+                          size="s"
+                          label="Старт (день)"
+                          type="number"
+                          value={String(work.startDay)}
+                          onChange={(value) =>
+                            handleWorkChange(work.id, {
+                              startDay: Number(value ?? work.startDay) || 0
+                            })
+                          }
+                        />
+                        <TextField
+                          size="s"
+                          label="Трудозатраты (дней)"
+                          type="number"
+                          value={String(work.effortDays)}
+                          onChange={(value) =>
+                            handleWorkChange(work.id, {
+                              effortDays: Number(value ?? work.effortDays) || 1
+                            })
+                          }
+                        />
+                      </div>
+                    </Card>
+                  ))}
                 </div>
               </section>
               <section className={styles.section}>

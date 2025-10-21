@@ -64,37 +64,6 @@
   flex-wrap: wrap;
 }
 
-.roleList {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.roleCard {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.roleHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.roleHeaderActions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.roleMetaGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-}
-
 .workList {
   display: flex;
   flex-direction: column;
@@ -123,16 +92,42 @@
   gap: 12px;
 }
 
-.workTasks {
+.assignmentList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.workTaskList {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+.assignmentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.assignmentGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.assignmentCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--color-bg-secondary);
+}
+
+.assignmentRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 
