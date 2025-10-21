@@ -80,6 +80,7 @@ type WorkAssignmentDraft = {
   role: TeamRole;
   task: string;
   description: string;
+  effortDays: number;
   isCustom?: boolean;
 };
 
@@ -90,7 +91,6 @@ type WorkDraft = {
   assumptions: string;
   startDay: number;
   durationDays: number;
-  effortDays: number;
   assignments: WorkAssignmentDraft[];
 };
 
@@ -141,7 +141,8 @@ const createWorkAssignmentDraft = (role: TeamRole = roleOptions[0].value): WorkA
   id: createId(),
   role,
   task: '',
-  description: ''
+  description: '',
+  effortDays: 5
 });
 
 const createWorkDraft = (offset = 0): WorkDraft => ({
@@ -151,7 +152,6 @@ const createWorkDraft = (offset = 0): WorkDraft => ({
   assumptions: '',
   startDay: offset,
   durationDays: 5,
-  effortDays: 5,
   assignments: [createWorkAssignmentDraft()]
 });
 
@@ -388,28 +388,28 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         const normalizedTitle = work.title.trim() || 'Задача';
         const normalizedStart = Math.max(0, Math.round(work.startDay));
         const normalizedDuration = Math.max(1, Math.round(work.durationDays));
-        const normalizedEffortTotal = Math.max(1, Math.round(work.effortDays));
-        const perAssignmentEffort = Math.max(
-          1,
-          Math.round(normalizedEffortTotal / Math.max(1, work.assignments.length))
-        );
-
-        return work.assignments.map((assignment) => ({
-          id: `${work.id}-${assignment.id}`,
-          role: assignment.role,
-          title: normalizedTitle,
-          startDay: normalizedStart,
-          durationDays: normalizedDuration,
-          effortDays: perAssignmentEffort
-        }));
+        return work.assignments.map((assignment) => {
+          const normalizedEffort = Math.max(1, Math.round(assignment.effortDays));
+          return {
+            id: `${work.id}-${assignment.id}`,
+            role: assignment.role,
+            title: normalizedTitle,
+            startDay: normalizedStart,
+            durationDays: normalizedDuration,
+            effortDays: normalizedEffort
+          };
+        });
       }),
     [works]
   );
 
-  const totalEffortDays = works.reduce(
-    (acc, work) => acc + Math.max(1, Math.round(work.effortDays)),
-    0
-  );
+  const totalEffortDays = works.reduce((acc, work) => {
+    const workEffort = work.assignments.reduce(
+      (assignmentAcc, assignment) => assignmentAcc + Math.max(1, Math.round(assignment.effortDays)),
+      0
+    );
+    return acc + workEffort;
+  }, 0);
 
   const isWorkPlanningReady = useMemo(
     () =>
@@ -454,8 +454,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       const normalizedDescription = work.description.trim();
       const normalizedStart = Math.max(0, Math.round(work.startDay));
       const normalizedDuration = Math.max(1, Math.round(work.durationDays));
-      const normalizedEffort = Math.max(1, Math.round(work.effortDays));
-
       work.assignments.forEach((assignment) => {
         const entry =
           accumulator.get(assignment.role) ??
@@ -469,6 +467,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         }
 
         const assignmentDescription = assignment.description.trim();
+        const assignmentEffort = Math.max(1, Math.round(assignment.effortDays));
 
         entry.assignments.push({
           workId: work.id,
@@ -482,7 +481,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
               'Описание не заполнено',
             startDay: normalizedStart,
             durationDays: normalizedDuration,
-            effortDays: normalizedEffort,
+            effortDays: assignmentEffort,
             tasks: trimmedTask ? [trimmedTask] : []
           }
         });
@@ -629,12 +628,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           nextWork.durationDays = Math.max(1, Math.round(patch.durationDays));
         }
 
-        if (patch.effortDays !== undefined) {
-          const normalizedEffort = Math.max(1, Math.round(patch.effortDays));
-          nextWork.effortDays = normalizedEffort;
-          nextWork.durationDays = normalizedEffort;
-        }
-
         return nextWork;
       })
     );
@@ -653,9 +646,19 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 
         return {
           ...work,
-          assignments: work.assignments.map((assignment) =>
-            assignment.id === assignmentId ? { ...assignment, ...patch } : assignment
-          )
+          assignments: work.assignments.map((assignment) => {
+            if (assignment.id !== assignmentId) {
+              return assignment;
+            }
+
+            const nextAssignment: WorkAssignmentDraft = { ...assignment, ...patch };
+
+            if (patch.effortDays !== undefined) {
+              nextAssignment.effortDays = Math.max(1, Math.round(patch.effortDays));
+            }
+
+            return nextAssignment;
+          })
         };
       })
     );
@@ -1140,6 +1143,17 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                   type="textarea"
                                   minRows={2}
                                 />
+                                <TextField
+                                  size="s"
+                                  label="Трудозатраты (дней)"
+                                  type="number"
+                                  value={String(assignment.effortDays)}
+                                  onChange={(value) =>
+                                    handleAssignmentChange(work.id, assignment.id, {
+                                      effortDays: Number(value ?? assignment.effortDays) || 1
+                                    })
+                                  }
+                                />
                               </div>
                             );
                           })}
@@ -1159,12 +1173,12 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                         />
                         <TextField
                           size="s"
-                          label="Трудозатраты (дней)"
+                          label="Длительность (дней)"
                           type="number"
-                          value={String(work.effortDays)}
+                          value={String(work.durationDays)}
                           onChange={(value) =>
                             handleWorkChange(work.id, {
-                              effortDays: Number(value ?? work.effortDays) || 1
+                              durationDays: Number(value ?? work.durationDays) || 1
                             })
                           }
                         />
