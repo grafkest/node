@@ -85,6 +85,7 @@ type RoleWorkDraft = {
   id: string;
   title: string;
   description: string;
+  assumptions: string;
   startDay: number;
   durationDays: number;
   effortDays: number;
@@ -99,6 +100,8 @@ type RoleDraft = {
   comment: string;
   works: RoleWorkDraft[];
 };
+
+type CreationStep = 'details' | 'work' | 'team';
 
 type InitiativeCreationModalProps = {
   isOpen: boolean;
@@ -127,6 +130,18 @@ const roleOptions: SelectOption<TeamRole>[] = [
   { label: 'UX', value: 'UX' }
 ];
 
+const creationStepOrder: CreationStep[] = ['details', 'work', 'team'];
+const creationStepTitles: Record<CreationStep, string> = {
+  details: 'Вводная информация',
+  work: 'Оценка работ',
+  team: 'Команда'
+};
+const creationStepDescriptions: Record<CreationStep, string> = {
+  details: 'Заполните данные о заказчике и основные параметры инициативы.',
+  work: 'Опишите работы по ролям, сформируйте план и уточните задачи.',
+  team: 'Сформируйте команду на основе ранжирования рекомендованных экспертов.'
+};
+
 const createId = () => `tmp-${Math.random().toString(36).slice(2, 11)}`;
 
 const createWorkTaskDraft = (): RoleWorkTaskDraft => ({
@@ -138,6 +153,7 @@ const createWorkDraft = (offset = 0, tasksCount = 1): RoleWorkDraft => ({
   id: createId(),
   title: '',
   description: '',
+  assumptions: '',
   startDay: offset,
   durationDays: 5,
   effortDays: 5,
@@ -213,6 +229,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
   const [roles, setRoles] = useState<RoleDraft[]>([createRoleDraft('Аналитик')]);
+  const [activeStep, setActiveStep] = useState<CreationStep>('details');
   const baseRoleSkillOptions = useMemo<Record<TeamRole, OptionItem[]>>(
     () =>
       roleOptions.reduce((acc, option) => {
@@ -266,6 +283,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setCustomerComment('');
       setRoles([createRoleDraft('Аналитик')]);
       setRoleSkillOptions(createRoleSkillState());
+      setActiveStep('details');
     }
   }, [
     companyBaseItems,
@@ -395,8 +413,34 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 
   const totalEffortDays = ganttTasks.reduce((acc, task) => acc + task.effortDays, 0);
 
-  const isSubmitDisabled =
-    !name.trim() || roles.length === 0 || roles.every((role) => role.works.length === 0);
+  const isWorkPlanningReady = useMemo(
+    () =>
+      roles.length > 0 &&
+      roles.every(
+        (role) =>
+          role.works.length > 0 &&
+          role.works.every(
+            (work) =>
+              work.title.trim().length > 0 &&
+              work.tasks.length > 0 &&
+              work.tasks.every((task) => task.skill.trim().length > 0)
+          )
+      ),
+    [roles]
+  );
+
+  const isSubmitDisabled = !name.trim() || !isWorkPlanningReady;
+
+  useEffect(() => {
+    if (activeStep === 'team' && !isWorkPlanningReady) {
+      setActiveStep('work');
+    }
+  }, [activeStep, isWorkPlanningReady]);
+
+  const totalSteps = creationStepOrder.length;
+  const currentStepIndex = creationStepOrder.indexOf(activeStep) + 1;
+  const currentStepTitle = creationStepTitles[activeStep];
+  const currentStepDescription = creationStepDescriptions[activeStep];
 
   const parseList = (input: string) =>
     input
@@ -415,6 +459,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           id: work.id,
           title: work.title.trim() || 'Задача',
           description: work.description.trim() || 'Описание не заполнено',
+          assumptions: work.assumptions.trim() || undefined,
           startDay: Math.max(0, Math.round(work.startDay)),
           durationDays: Math.max(1, Math.round(work.durationDays)),
           effortDays: Math.max(1, Math.round(work.effortDays)),
@@ -710,12 +755,15 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       >
         <div className={styles.container}>
           <header className={styles.header}>
-            <div>
+            <div className={styles.stepInfo}>
               <Text size="l" weight="bold">
                 Новая инициатива
               </Text>
+              <Text size="xs" view="secondary">
+                Шаг {currentStepIndex} из {totalSteps} · {currentStepTitle}
+              </Text>
               <Text size="s" view="secondary">
-                Заполните данные о заказчике, команде и план работ. Диаграмма обновляется автоматически.
+                {currentStepDescription}
               </Text>
             </div>
             <Select<SelectOption<InitiativeStatus>>
@@ -732,486 +780,556 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
               {errorMessage}
             </Text>
           )}
-          <section className={styles.section}>
-            <Text size="s" weight="semibold">
-              Основная информация
-            </Text>
-            <div className={styles.gridTwoCols}>
-              <TextField
-                size="s"
-                label="Название инициативы"
-                placeholder="Например, Пилот дистанционного мониторинга"
-                value={name}
-                onChange={(value) => setName(value ?? '')}
-              />
-              <TextField
-                size="s"
-                label="Ответственный"
-                placeholder="ФИО или роль владельца"
-                value={owner}
-                onChange={(value) => setOwner(value ?? '')}
-              />
-            </div>
-            <TextField
-              size="s"
-              label="Краткое описание"
-              placeholder="Опишите цель инициативы"
-              value={description}
-              onChange={(value) => setDescription(value ?? '')}
-              type="textarea"
-              minRows={3}
-            />
-            <div className={styles.gridTwoCols}>
-              <TextField
-                size="s"
-                label="Ожидаемый эффект"
-                placeholder="Например, рост точности прогноза на 15%"
-                value={expectedImpact}
-                onChange={(value) => setExpectedImpact(value ?? '')}
-              />
-              <TextField
-                size="s"
-                label="Целевой модуль"
-                placeholder="Укажите рабочее название модуля"
-                value={targetModule}
-                onChange={(value) => setTargetModule(value ?? '')}
-              />
-            </div>
-            <div className={styles.gridTwoCols}>
-              <Combobox<OptionItem>
-                size="s"
-                label="Домены"
-                placeholder="Выберите домены"
-                items={[...domainItems, DOMAIN_CREATE_OPTION]}
-                value={selectedDomains}
-                multiple
-                getItemLabel={(item) => item.label}
-                getItemKey={(item) => item.id}
-                onChange={handleDomainSelectionChange}
-              />
-              <Combobox<OptionItem>
-                size="s"
-                label="Потенциальные модули"
-                placeholder="Выберите модули"
-                items={[...moduleItems, MODULE_CREATE_OPTION]}
-                value={selectedModules}
-                multiple
-                getItemLabel={(item) => item.label}
-                getItemKey={(item) => item.id}
-                onChange={handleModuleSelectionChange}
-              />
-            </div>
-            {isCreatingDomain && (
-              <div className={styles.inlineCreateRow}>
+          {activeStep === 'details' && (
+            <>
+              <section className={styles.section}>
+                <Text size="s" weight="semibold">
+                  Основная информация
+                </Text>
+                <div className={styles.gridTwoCols}>
+                  <TextField
+                    size="s"
+                    label="Название инициативы"
+                    placeholder="Например, Пилот дистанционного мониторинга"
+                    value={name}
+                    onChange={(value) => setName(value ?? '')}
+                  />
+                  <TextField
+                    size="s"
+                    label="Ответственный"
+                    placeholder="ФИО или роль владельца"
+                    value={owner}
+                    onChange={(value) => setOwner(value ?? '')}
+                  />
+                </div>
                 <TextField
                   size="s"
-                  label="Новый домен"
-                  placeholder="Введите название домена"
-                  value={newDomainLabel}
-                  onChange={(value) => setNewDomainLabel(value ?? '')}
-                  className={styles.inlineCreateField}
+                  label="Краткое описание"
+                  placeholder="Опишите цель инициативы"
+                  value={description}
+                  onChange={(value) => setDescription(value ?? '')}
+                  type="textarea"
+                  minRows={3}
                 />
-                <Button
-                  size="s"
-                  view="primary"
-                  label="Добавить"
-                  onClick={handleAddCustomDomain}
-                  disabled={!newDomainLabel.trim()}
-                />
-                <Button
-                  size="s"
-                  view="ghost"
-                  label="Отмена"
-                  onClick={() => {
-                    setIsCreatingDomain(false);
-                    setNewDomainLabel('');
-                  }}
-                />
-              </div>
-            )}
-            {isCreatingModule && (
-              <div className={styles.inlineCreateRow}>
+                <div className={styles.gridTwoCols}>
+                  <TextField
+                    size="s"
+                    label="Ожидаемый эффект"
+                    placeholder="Например, рост точности прогноза на 15%"
+                    value={expectedImpact}
+                    onChange={(value) => setExpectedImpact(value ?? '')}
+                  />
+                  <TextField
+                    size="s"
+                    label="Целевой модуль"
+                    placeholder="Укажите рабочее название модуля"
+                    value={targetModule}
+                    onChange={(value) => setTargetModule(value ?? '')}
+                  />
+                </div>
+                <div className={styles.gridTwoCols}>
+                  <Combobox<OptionItem>
+                    size="s"
+                    label="Домены"
+                    placeholder="Выберите домены"
+                    items={[...domainItems, DOMAIN_CREATE_OPTION]}
+                    value={selectedDomains}
+                    multiple
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.id}
+                    onChange={handleDomainSelectionChange}
+                  />
+                  <Combobox<OptionItem>
+                    size="s"
+                    label="Потенциальные модули"
+                    placeholder="Выберите модули"
+                    items={[...moduleItems, MODULE_CREATE_OPTION]}
+                    value={selectedModules}
+                    multiple
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.id}
+                    onChange={handleModuleSelectionChange}
+                  />
+                </div>
+                {isCreatingDomain && (
+                  <div className={styles.inlineCreateRow}>
+                    <TextField
+                      size="s"
+                      label="Новый домен"
+                      placeholder="Введите название домена"
+                      value={newDomainLabel}
+                      onChange={(value) => setNewDomainLabel(value ?? '')}
+                      className={styles.inlineCreateField}
+                    />
+                    <Button
+                      size="s"
+                      view="primary"
+                      label="Добавить"
+                      onClick={handleAddCustomDomain}
+                      disabled={!newDomainLabel.trim()}
+                    />
+                    <Button
+                      size="s"
+                      view="ghost"
+                      label="Отмена"
+                      onClick={() => {
+                        setIsCreatingDomain(false);
+                        setNewDomainLabel('');
+                      }}
+                    />
+                  </div>
+                )}
+                {isCreatingModule && (
+                  <div className={styles.inlineCreateRow}>
+                    <TextField
+                      size="s"
+                      label="Новый модуль"
+                      placeholder="Введите название модуля"
+                      value={newModuleLabel}
+                      onChange={(value) => setNewModuleLabel(value ?? '')}
+                      className={styles.inlineCreateField}
+                    />
+                    <Button
+                      size="s"
+                      view="primary"
+                      label="Добавить"
+                      onClick={handleAddCustomModule}
+                      disabled={!newModuleLabel.trim()}
+                    />
+                    <Button
+                      size="s"
+                      view="ghost"
+                      label="Отмена"
+                      onClick={() => {
+                        setIsCreatingModule(false);
+                        setNewModuleLabel('');
+                      }}
+                    />
+                  </div>
+                )}
+              </section>
+              <section className={styles.section}>
+                <Text size="s" weight="semibold">
+                  Параметры заказчика
+                </Text>
+                <div className={styles.gridTwoCols}>
+                  <Combobox<OptionItem>
+                    size="s"
+                    label="Компания"
+                    placeholder="Выберите компанию заказчика"
+                    items={[...companyItems, COMPANY_CREATE_OPTION]}
+                    value={selectedCompany}
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.id}
+                    onChange={handleCompanySelectionChange}
+                  />
+                  <TextField
+                    size="s"
+                    label="Подразделение"
+                    placeholder="Укажите бизнес-единицу"
+                    value={customerUnit}
+                    onChange={(value) => setCustomerUnit(value ?? '')}
+                  />
+                </div>
+                {isCreatingCompany && (
+                  <div className={styles.inlineCreateRow}>
+                    <TextField
+                      size="s"
+                      label="Новая компания"
+                      placeholder="Введите название компании"
+                      value={newCompanyLabel}
+                      onChange={(value) => setNewCompanyLabel(value ?? '')}
+                      className={styles.inlineCreateField}
+                    />
+                    <Button
+                      size="s"
+                      view="primary"
+                      label="Добавить"
+                      onClick={handleAddCustomCompany}
+                      disabled={!newCompanyLabel.trim()}
+                    />
+                    <Button
+                      size="s"
+                      view="ghost"
+                      label="Отмена"
+                      onClick={() => {
+                        setIsCreatingCompany(false);
+                        setNewCompanyLabel('');
+                      }}
+                    />
+                  </div>
+                )}
+                <div className={styles.gridTwoCols}>
+                  <TextField
+                    size="s"
+                    label="Контакт заказчика"
+                    placeholder="ФИО ответственного"
+                    value={customerRepresentative}
+                    onChange={(value) => setCustomerRepresentative(value ?? '')}
+                  />
+                  <TextField
+                    size="s"
+                    label="Контакты"
+                    placeholder="Email или телефон"
+                    value={customerContact}
+                    onChange={(value) => setCustomerContact(value ?? '')}
+                  />
+                </div>
                 <TextField
                   size="s"
-                  label="Новый модуль"
-                  placeholder="Введите название модуля"
-                  value={newModuleLabel}
-                  onChange={(value) => setNewModuleLabel(value ?? '')}
-                  className={styles.inlineCreateField}
+                  label="Комментарий"
+                  placeholder="Дополнительная информация"
+                  value={customerComment}
+                  onChange={(value) => setCustomerComment(value ?? '')}
+                  type="textarea"
+                  minRows={2}
                 />
-                <Button
-                  size="s"
-                  view="primary"
-                  label="Добавить"
-                  onClick={handleAddCustomModule}
-                  disabled={!newModuleLabel.trim()}
-                />
-                <Button
-                  size="s"
-                  view="ghost"
-                  label="Отмена"
-                  onClick={() => {
-                    setIsCreatingModule(false);
-                    setNewModuleLabel('');
-                  }}
-                />
-              </div>
-            )}
-          </section>
-          <section className={styles.section}>
-            <Text size="s" weight="semibold">
-              Параметры заказчика
-            </Text>
-            <div className={styles.gridTwoCols}>
-              <Combobox<OptionItem>
-                size="s"
-                label="Компания"
-                placeholder="Выберите компанию заказчика"
-                items={[...companyItems, COMPANY_CREATE_OPTION]}
-                value={selectedCompany}
-                getItemLabel={(item) => item.label}
-                getItemKey={(item) => item.id}
-                onChange={handleCompanySelectionChange}
-              />
-              <TextField
-                size="s"
-                label="Подразделение"
-                placeholder="Укажите бизнес-единицу"
-                value={customerUnit}
-                onChange={(value) => setCustomerUnit(value ?? '')}
-              />
-            </div>
-            {isCreatingCompany && (
-              <div className={styles.inlineCreateRow}>
-                <TextField
-                  size="s"
-                  label="Новая компания"
-                  placeholder="Введите название компании"
-                  value={newCompanyLabel}
-                  onChange={(value) => setNewCompanyLabel(value ?? '')}
-                  className={styles.inlineCreateField}
-                />
-                <Button
-                  size="s"
-                  view="primary"
-                  label="Добавить"
-                  onClick={handleAddCustomCompany}
-                  disabled={!newCompanyLabel.trim()}
-                />
-                <Button
-                  size="s"
-                  view="ghost"
-                  label="Отмена"
-                  onClick={() => {
-                    setIsCreatingCompany(false);
-                    setNewCompanyLabel('');
-                  }}
-                />
-              </div>
-            )}
-            <div className={styles.gridTwoCols}>
-              <TextField
-                size="s"
-                label="Контакт заказчика"
-                placeholder="ФИО ответственного"
-                value={customerRepresentative}
-                onChange={(value) => setCustomerRepresentative(value ?? '')}
-              />
-              <TextField
-                size="s"
-                label="Контакты"
-                placeholder="Email или телефон"
-                value={customerContact}
-                onChange={(value) => setCustomerContact(value ?? '')}
-              />
-            </div>
-            <TextField
-              size="s"
-              label="Комментарий"
-              placeholder="Дополнительная информация"
-              value={customerComment}
-              onChange={(value) => setCustomerComment(value ?? '')}
-              type="textarea"
-              minRows={2}
-            />
-          </section>
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <Text size="s" weight="semibold">
-                Команда и план работ по ролям
-              </Text>
-              <Button size="s" view="ghost" label="Добавить роль" onClick={handleAddRole} />
-            </div>
-            <div className={styles.roleList}>
-              {roles.map((role) => {
-                const roleOption = roleOptions.find((option) => option.value === role.role) ?? roleOptions[0];
-                return (
-                  <Card key={role.id} className={styles.roleCard} verticalSpace="l" horizontalSpace="l">
-                    <div className={styles.roleHeader}>
-                      <Select<SelectOption<TeamRole>>
-                        size="s"
-                        items={roleOptions}
-                        value={roleOption}
-                        getItemLabel={(item) => item.label}
-                        getItemKey={(item) => item.value}
-                        onChange={(option) => option && handleRoleChange(role.id, { role: option.value })}
-                      />
-                      <div className={styles.roleHeaderActions}>
-                        <TextField
-                          size="s"
-                          label="Требуется"
-                          type="number"
-                          value={String(role.required)}
-                          onChange={(value) =>
-                            handleRoleChange(role.id, {
-                              required: Number(value ?? role.required) || 1
-                            })
-                          }
-                        />
-                        <Button
-                          size="s"
-                          view="ghost"
-                          label="Удалить роль"
-                          onClick={() => handleRemoveRole(role.id)}
-                        />
-                      </div>
-                    </div>
-                    <div className={styles.roleMetaGrid}>
-                      <TextField
-                        size="s"
-                        label="Навыки (через запятую)"
-                        value={role.skillsInput}
-                        onChange={(value) => handleRoleChange(role.id, { skillsInput: value ?? '' })}
-                      />
-                      <TextField
-                        size="s"
-                        label="Комментарий"
-                        value={role.comment}
-                        onChange={(value) => handleRoleChange(role.id, { comment: value ?? '' })}
-                      />
-                    </div>
-                    <div className={styles.workList}>
-                      {role.works.map((work) => (
-                        <div key={work.id} className={styles.workCard}>
-                          <div className={styles.workHeader}>
+              </section>
+            </>
+          )}
+          {activeStep === 'work' && (
+            <>
+              <section className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <Text size="s" weight="semibold">
+                    Команда и план работ по ролям
+                  </Text>
+                  <Button size="s" view="ghost" label="Добавить роль" onClick={handleAddRole} />
+                </div>
+                <div className={styles.roleList}>
+                  {roles.map((role) => {
+                    const roleOption =
+                      roleOptions.find((option) => option.value === role.role) ?? roleOptions[0];
+                    return (
+                      <Card key={role.id} className={styles.roleCard} verticalSpace="l" horizontalSpace="l">
+                        <div className={styles.roleHeader}>
+                          <Select<SelectOption<TeamRole>>
+                            size="s"
+                            items={roleOptions}
+                            value={roleOption}
+                            getItemLabel={(item) => item.label}
+                            getItemKey={(item) => item.value}
+                            onChange={(option) => option && handleRoleChange(role.id, { role: option.value })}
+                          />
+                          <div className={styles.roleHeaderActions}>
                             <TextField
                               size="s"
-                              label="Название работы"
-                              placeholder="Например, Подготовка данных"
-                              value={work.title}
-                              onChange={(value) => handleWorkChange(role.id, work.id, { title: value ?? '' })}
+                              label="Требуется"
+                              type="number"
+                              value={String(role.required)}
+                              onChange={(value) =>
+                                handleRoleChange(role.id, {
+                                  required: Number(value ?? role.required) || 1
+                                })
+                              }
                             />
                             <Button
                               size="s"
                               view="ghost"
-                              label="Удалить"
-                              onClick={() => handleRemoveWork(role.id, work.id)}
+                              label="Удалить роль"
+                              onClick={() => handleRemoveRole(role.id)}
                             />
                           </div>
+                        </div>
+                        <div className={styles.roleMetaGrid}>
                           <TextField
                             size="s"
-                            label="Описание"
-                            value={work.description}
-                            onChange={(value) => handleWorkChange(role.id, work.id, { description: value ?? '' })}
-                            type="textarea"
-                            minRows={2}
+                            label="Навыки (через запятую)"
+                            value={role.skillsInput}
+                            onChange={(value) =>
+                              handleRoleChange(role.id, { skillsInput: value ?? '' })
+                            }
                           />
-                          <div className={styles.workTasks}>
-                            <Text size="xs" view="secondary">
-                              Назначьте задачи для {Math.max(1, Math.round(role.required))} специалиста(ов)
-                              по роли {role.role}
-                            </Text>
-                            <div className={styles.workTaskList}>
-                              {work.tasks.map((task, index) => {
-                                const skillOptionsForRole = roleSkillOptions[role.role] ?? [];
-                                const selectedOption =
-                                  skillOptionsForRole.find((option) => option.value === task.skill) ?? null;
-                                return (
-                                  <Combobox<OptionItem>
-                                    key={task.id}
-                                    size="s"
-                                    items={skillOptionsForRole}
-                                    value={selectedOption}
-                                    getItemLabel={(item) => item.label}
-                                    getItemKey={(item) => item.value}
-                                    placeholder="Выберите задачу из списка навыков"
-                                    label={`Задача для сотрудника ${index + 1}`}
-                                    onChange={(option) =>
-                                      handleWorkTaskChange(
-                                        role.id,
-                                        work.id,
-                                        task.id,
-                                        option?.value ?? ''
-                                      )
-                                    }
-                                    onCreate={(label) =>
-                                      handleWorkTaskCreate(role.role, role.id, work.id, task.id, label)
-                                    }
-                                    labelForCreate="Добавить новый навык"
-                                  />
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <div className={styles.workGrid}>
-                            <TextField
-                              size="s"
-                              label="Старт (день)"
-                              type="number"
-                              value={String(work.startDay)}
-                              onChange={(value) =>
-                                handleWorkChange(role.id, work.id, {
-                                  startDay: Number(value ?? work.startDay) || 0
-                                })
-                              }
-                            />
-                            <TextField
-                              size="s"
-                              label="Трудозатраты (дней)"
-                              type="number"
-                              value={String(work.effortDays)}
-                              onChange={(value) =>
-                                handleWorkChange(role.id, work.id, {
-                                  effortDays: Number(value ?? work.effortDays) || 1
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-                      ))}
-                      <Button size="s" view="ghost" label="Добавить работу" onClick={() => handleAddWork(role.id)} />
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </section>
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <Text size="s" weight="semibold">
-                  Рекомендованные эксперты
-                </Text>
-                <Text size="xs" view="secondary">
-                  Система сравнила навыки роли и доступность специалистов.
-                </Text>
-              </div>
-            </div>
-            <div className={styles.recommendationList}>
-              {planningRoles.length === 0 ? (
-                <Text size="s" view="secondary">
-                  Добавьте роли и работы, чтобы увидеть подходящих экспертов.
-                </Text>
-              ) : (
-                planningRoles.map((role) => {
-                  const candidates = candidatePreviewMap.get(role.id) ?? [];
-                  const topCandidates = candidates.slice(0, 3);
-                  const bestScore = topCandidates[0]?.score;
-                  return (
-                    <Card
-                      key={role.id}
-                      className={styles.recommendationCard}
-                      verticalSpace="l"
-                      horizontalSpace="l"
-                    >
-                      <div className={styles.recommendationHeader}>
-                        <div className={styles.recommendationHeaderInfo}>
-                          <Text className={styles.recommendationRoleTitle} size="s" weight="semibold">
-                            {role.role}
-                          </Text>
-                          <Text size="xs" view="secondary">
-                            Требуется: {role.required} · Работ: {role.workItems.length}
-                          </Text>
-                        </div>
-                        {bestScore !== undefined && (
-                          <Badge
+                          <TextField
                             size="s"
-                            view="filled"
-                            status="system"
-                            label={`${bestScore} баллов`}
-                            className={styles.recommendationScoreBadge}
+                            label="Комментарий"
+                            value={role.comment}
+                            onChange={(value) => handleRoleChange(role.id, { comment: value ?? '' })}
                           />
-                        )}
-                      </div>
-                      {topCandidates.length === 0 ? (
-                        <Text size="xs" view="secondary">
-                          Уточните навыки роли, чтобы получить рекомендации.
-                        </Text>
-                      ) : (
-                        <div className={styles.recommendationCandidates}>
-                          {topCandidates.map((candidate) => {
-                            const expert = expertLookup.get(candidate.expertId);
-                            return (
-                              <div
-                                key={`${role.id}-${candidate.expertId}`}
-                                className={styles.recommendationCandidate}
-                              >
-                                <div className={styles.recommendationCandidateHeader}>
-                                  <div className={styles.recommendationCandidateInfo}>
-                                    <Text
-                                      size="s"
-                                      weight="semibold"
-                                      className={styles.recommendationCandidateName}
-                                    >
-                                      {expert?.name ?? candidate.expertId}
-                                    </Text>
-                                    <Text size="xs" view="secondary">
-                                      {expert?.title ?? 'Эксперт каталога'}
-                                    </Text>
-                                  </div>
-                                  <Badge
-                                    size="s"
-                                    view="stroked"
-                                    status="system"
-                                    label={`${candidate.score} баллов`}
-                                  />
-                                </div>
-                                <Text size="xs">{candidate.fitComment}</Text>
-                                {candidate.riskTags.length > 0 && (
-                                  <div className={styles.recommendationRisks}>
-                                    {candidate.riskTags.slice(0, 3).map((risk) => (
-                                      <Badge
-                                        key={`${candidate.expertId}-${risk}`}
-                                        size="2xs"
-                                        view="ghost"
-                                        label={risk}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
                         </div>
-                      )}
-                    </Card>
-                  );
-                })
-              )}
-            </div>
-          </section>
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <Text size="s" weight="semibold">
-                  Диаграмма Ганта
-                </Text>
-                <Text size="xs" view="secondary">
-                  Всего {totalEffortDays} человеко-дней по текущему плану.
-                </Text>
+                        <div className={styles.workList}>
+                          {role.works.map((work) => (
+                            <div key={work.id} className={styles.workCard}>
+                              <div className={styles.workHeader}>
+                                <TextField
+                                  size="s"
+                                  label="Название работы"
+                                  placeholder="Например, Подготовка данных"
+                                  value={work.title}
+                                  onChange={(value) =>
+                                    handleWorkChange(role.id, work.id, { title: value ?? '' })
+                                  }
+                                />
+                                <Button
+                                  size="s"
+                                  view="ghost"
+                                  label="Удалить"
+                                  onClick={() => handleRemoveWork(role.id, work.id)}
+                                />
+                              </div>
+                              <TextField
+                                size="s"
+                                label="Описание"
+                                value={work.description}
+                                onChange={(value) =>
+                                  handleWorkChange(role.id, work.id, { description: value ?? '' })
+                                }
+                                type="textarea"
+                                minRows={2}
+                              />
+                              <TextField
+                                size="s"
+                                label="Допущения / ограничения"
+                                value={work.assumptions}
+                                onChange={(value) =>
+                                  handleWorkChange(role.id, work.id, { assumptions: value ?? '' })
+                                }
+                                type="textarea"
+                                minRows={2}
+                              />
+                              <div className={styles.workTasks}>
+                                <Text size="xs" view="secondary">
+                                  Назначьте задачи для {Math.max(1, Math.round(role.required))} специалиста(ов)
+                                  по роли {role.role}
+                                </Text>
+                                <div className={styles.workTaskList}>
+                                  {work.tasks.map((task, index) => {
+                                    const skillOptionsForRole = roleSkillOptions[role.role] ?? [];
+                                    const selectedOption =
+                                      skillOptionsForRole.find((option) => option.value === task.skill) ?? null;
+                                    return (
+                                      <Combobox<OptionItem>
+                                        key={task.id}
+                                        size="s"
+                                        items={skillOptionsForRole}
+                                        value={selectedOption}
+                                        getItemLabel={(item) => item.label}
+                                        getItemKey={(item) => item.value}
+                                        placeholder="Выберите задачу из списка навыков"
+                                        label={`Задача для сотрудника ${index + 1}`}
+                                        onChange={(option) =>
+                                          handleWorkTaskChange(
+                                            role.id,
+                                            work.id,
+                                            task.id,
+                                            option?.value ?? ''
+                                          )
+                                        }
+                                        onCreate={(label) =>
+                                          handleWorkTaskCreate(role.role, role.id, work.id, task.id, label)
+                                        }
+                                        labelForCreate="Добавить новый навык"
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              <div className={styles.workGrid}>
+                                <TextField
+                                  size="s"
+                                  label="Старт (день)"
+                                  type="number"
+                                  value={String(work.startDay)}
+                                  onChange={(value) =>
+                                    handleWorkChange(role.id, work.id, {
+                                      startDay: Number(value ?? work.startDay) || 0
+                                    })
+                                  }
+                                />
+                                <TextField
+                                  size="s"
+                                  label="Трудозатраты (дней)"
+                                  type="number"
+                                  value={String(work.effortDays)}
+                                  onChange={(value) =>
+                                    handleWorkChange(role.id, work.id, {
+                                      effortDays: Number(value ?? work.effortDays) || 1
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          <Button
+                            size="s"
+                            view="ghost"
+                            label="Добавить работу"
+                            onClick={() => handleAddWork(role.id)}
+                          />
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </section>
+              <section className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <Text size="s" weight="semibold">
+                      Диаграмма Ганта
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      Всего {totalEffortDays} человеко-дней по текущему плану.
+                    </Text>
+                  </div>
+                </div>
+                <InitiativeGanttChart tasks={ganttTasks} />
+              </section>
+            </>
+          )}
+          {activeStep === 'team' && (
+            <section className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <div>
+                  <Text size="s" weight="semibold">
+                    Рекомендованные эксперты
+                  </Text>
+                  <Text size="xs" view="secondary">
+                    Система сравнила навыки роли и доступность специалистов.
+                  </Text>
+                </div>
               </div>
-            </div>
-            <InitiativeGanttChart tasks={ganttTasks} />
-          </section>
+              <div className={styles.recommendationList}>
+                {planningRoles.length === 0 ? (
+                  <Text size="s" view="secondary">
+                    Добавьте роли и работы, чтобы увидеть подходящих экспертов.
+                  </Text>
+                ) : (
+                  planningRoles.map((role) => {
+                    const candidates = candidatePreviewMap.get(role.id) ?? [];
+                    const topCandidates = candidates.slice(0, 3);
+                    const bestScore = topCandidates[0]?.score;
+                    return (
+                      <Card
+                        key={role.id}
+                        className={styles.recommendationCard}
+                        verticalSpace="l"
+                        horizontalSpace="l"
+                      >
+                        <div className={styles.recommendationHeader}>
+                          <div className={styles.recommendationHeaderInfo}>
+                            <Text className={styles.recommendationRoleTitle} size="s" weight="semibold">
+                              {role.role}
+                            </Text>
+                            <Text size="xs" view="secondary">
+                              Требуется: {role.required} · Работ: {role.workItems.length}
+                            </Text>
+                          </div>
+                          {bestScore !== undefined && (
+                            <Badge
+                              size="s"
+                              view="filled"
+                              status="system"
+                              label={`${bestScore} баллов`}
+                              className={styles.recommendationScoreBadge}
+                            />
+                          )}
+                        </div>
+                        {topCandidates.length === 0 ? (
+                          <Text size="xs" view="secondary">
+                            Уточните навыки роли, чтобы получить рекомендации.
+                          </Text>
+                        ) : (
+                          <div className={styles.recommendationCandidates}>
+                            {topCandidates.map((candidate) => {
+                              const expert = expertLookup.get(candidate.expertId);
+                              return (
+                                <div
+                                  key={`${role.id}-${candidate.expertId}`}
+                                  className={styles.recommendationCandidate}
+                                >
+                                  <div className={styles.recommendationCandidateHeader}>
+                                    <div className={styles.recommendationCandidateInfo}>
+                                      <Text
+                                        size="s"
+                                        weight="semibold"
+                                        className={styles.recommendationCandidateName}
+                                      >
+                                        {expert?.name ?? candidate.expertId}
+                                      </Text>
+                                      <Text size="xs" view="secondary">
+                                        {expert?.title ?? 'Эксперт каталога'}
+                                      </Text>
+                                    </div>
+                                    <Badge
+                                      size="s"
+                                      view="stroked"
+                                      status="system"
+                                      label={`${candidate.score} баллов`}
+                                    />
+                                  </div>
+                                  <Text size="xs">{candidate.fitComment}</Text>
+                                  {candidate.riskTags.length > 0 && (
+                                    <div className={styles.recommendationRisks}>
+                                      {candidate.riskTags.slice(0, 3).map((risk) => (
+                                        <Badge
+                                          key={`${candidate.expertId}-${risk}`}
+                                          size="2xs"
+                                          view="ghost"
+                                          label={risk}
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+          )}
           <footer className={styles.footer}>
             <Button size="s" view="ghost" label="Отмена" onClick={onClose} disabled={isSubmitting} />
-            <Button
-              size="s"
-              view="primary"
-              label="Создать инициативу"
-              onClick={handleSubmit}
-              disabled={isSubmitDisabled || isSubmitting}
-            />
+            {activeStep === 'details' && (
+              <Button
+                size="s"
+                view="primary"
+                label="Оценка работ"
+                onClick={() => setActiveStep('work')}
+                disabled={isSubmitting}
+              />
+            )}
+            {activeStep === 'work' && (
+              <>
+                <Button
+                  size="s"
+                  view="ghost"
+                  label="Назад"
+                  onClick={() => setActiveStep('details')}
+                  disabled={isSubmitting}
+                />
+                <Button
+                  size="s"
+                  view="primary"
+                  label="Сформировать команду"
+                  onClick={() => setActiveStep('team')}
+                  disabled={!isWorkPlanningReady || isSubmitting}
+                />
+              </>
+            )}
+            {activeStep === 'team' && (
+              <>
+                <Button
+                  size="s"
+                  view="ghost"
+                  label="Назад"
+                  onClick={() => setActiveStep('work')}
+                  disabled={isSubmitting}
+                />
+                <Button
+                  size="s"
+                  view="primary"
+                  label="Создать инициативу"
+                  onClick={handleSubmit}
+                  disabled={isSubmitDisabled || isSubmitting}
+                />
+              </>
+            )}
           </footer>
         </div>
       </Modal>

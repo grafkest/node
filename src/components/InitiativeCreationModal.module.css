@@ -21,6 +21,13 @@
   align-items: flex-start;
 }
 
+.stepInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 720px;
+}
+
 .section {
   display: flex;
   flex-direction: column;
