@@ -286,7 +286,13 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
                     {candidate.riskTags.length > 0 && (
                       <div className={styles.riskTagList}>
                         {candidate.riskTags.map((tag) => (
-                          <Badge key={`${candidateKey}-${tag}`} size="xs" view="stroked" label={tag} />
+                          <Badge
+                            key={`${candidateKey}-${tag}`}
+                            size="xs"
+                            view="stroked"
+                            label={tag}
+                            className={styles.riskTag}
+                          />
                         ))}
                       </div>
                     )}
