@@ -10,8 +10,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { domainNameById, domainTree, modules } from '../data';
 import type { DomainNode, ExpertProfile, InitiativeStatus, TeamRole } from '../data';
 import { getSkillsByRole } from '../data/skills';
-import InitiativeGanttChart from './InitiativeGanttChart';
-import type { InitiativeGanttTask } from './InitiativeGanttChart';
+import InitiativeGanttChart, {
+  type InitiativeGanttBlocker,
+  type InitiativeGanttDependency,
+  type InitiativeGanttResource,
+  type InitiativeGanttTask
+} from './InitiativeGanttChart';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
 import {
   buildCandidatesFromReport,
@@ -84,6 +88,19 @@ type WorkAssignmentDraft = {
   startDay: number;
   durationDays: number;
   isCustom?: boolean;
+  tasks?: string[];
+  minUnits?: number;
+  maxUnits?: number;
+  roleUnits?: number;
+  canSplit?: boolean;
+  parallel?: boolean;
+  durationMode?: 'fixed-effort' | 'fixed-duration';
+  constraints?: { id: string; label: string }[];
+  priority?: number;
+  wipLimitTag?: string;
+  branchLabel?: string;
+  calendarId?: string;
+  assignedExpertId?: string;
 };
 
 type WorkDraft = {
@@ -390,18 +407,89 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     () =>
       works.flatMap((work) => {
         const normalizedTitle = work.title.trim() || 'Задача';
-        return work.assignments.map((assignment) => {
+        return work.assignments.flatMap((assignment, index) => {
           const normalizedStart = Math.max(0, Math.round(assignment.startDay));
           const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
           const normalizedEffort = Math.max(1, Math.round(assignment.effortDays));
-          return {
+          const resources: InitiativeGanttResource[] = assignment.assignedExpertId
+            ? [
+                {
+                  id: assignment.assignedExpertId,
+                  name: assignment.assignedExpertId,
+                  role: assignment.role,
+                  units: 1
+                }
+              ]
+            : [];
+          const blockers: InitiativeGanttBlocker[] = assignment.assignedExpertId
+            ? []
+            : [
+                {
+                  id: `${work.id}-${assignment.id}-blocker`,
+                  scope: 'task',
+                  reason: 'Не выбран исполнитель',
+                  active: true
+                }
+              ];
+          const dependencies: InitiativeGanttDependency[] = [];
+          if (index > 0) {
+            const previous = work.assignments[index - 1];
+            dependencies.push({ id: `${work.id}-${previous.id}`, type: 'FS' });
+          }
+
+          const baseTask: InitiativeGanttTask = {
             id: `${work.id}-${assignment.id}`,
+            name: normalizedTitle,
             role: assignment.role,
-            title: normalizedTitle,
+            workId: work.id,
+            workName: normalizedTitle,
             startDay: normalizedStart,
             durationDays: normalizedDuration,
-            effortDays: normalizedEffort
+            effortDays: normalizedEffort,
+            effortHours: normalizedEffort * 8,
+            minUnits: Math.max(1, Math.round(assignment.minUnits ?? 1)),
+            maxUnits: Math.max(1, Math.round(assignment.maxUnits ?? assignment.roleUnits ?? 1)),
+            canSplit: Boolean(assignment.canSplit ?? true),
+            parallelAllowed: Boolean(assignment.parallel ?? true),
+            durationMode: assignment.durationMode ?? 'fixed-effort',
+            constraints:
+              normalizedStart > 0
+                ? [`SNET D${normalizedStart + 1}`]
+                : assignment.constraints?.map((constraint) => constraint.label),
+            priority: assignment.priority ?? index + 1,
+            wipLimitTag: assignment.wipLimitTag,
+            assignedExpert: assignment.assignedExpertId,
+            resources,
+            dependencies,
+            blockers,
+            scenarioBranch: assignment.branchLabel ?? 'Черновик',
+            calendarId: assignment.calendarId ?? 'project-calendar'
           };
+
+          const childTasks = (assignment.tasks ?? []).map((taskName, childIndex) => ({
+            id: `${baseTask.id}-sub-${childIndex + 1}`,
+            name: taskName,
+            role: assignment.role,
+            workId: baseTask.workId,
+            workName: baseTask.workName,
+            parentTaskId: baseTask.id,
+            startDay: normalizedStart + childIndex,
+            durationDays: Math.max(1, Math.round(normalizedDuration / (assignment.tasks?.length || 1))),
+            effortDays: Math.max(1, Math.round(normalizedEffort / (assignment.tasks?.length || 1))),
+            minUnits: baseTask.minUnits,
+            maxUnits: baseTask.maxUnits,
+            canSplit: baseTask.canSplit,
+            parallelAllowed: baseTask.parallelAllowed,
+            durationMode: baseTask.durationMode,
+            priority: baseTask.priority,
+            wipLimitTag: baseTask.wipLimitTag,
+            assignedExpert: baseTask.assignedExpert,
+            resources: baseTask.resources,
+            scenarioBranch: baseTask.scenarioBranch,
+            calendarId: baseTask.calendarId
+          } satisfies InitiativeGanttTask));
+
+          return [baseTask, ...childTasks];
         });
       }),
     [works]

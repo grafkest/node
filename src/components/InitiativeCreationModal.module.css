@@ -205,7 +205,9 @@
 }
 
 .recommendationScoreBadge {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .recommendationCandidates {
