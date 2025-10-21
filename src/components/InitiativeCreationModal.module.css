@@ -67,9 +67,21 @@
 
 .workPlanningGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-columns: minmax(380px, 520px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
+}
+
+@media (max-width: 1280px) {
+  .workPlanningGrid {
+    grid-template-columns: minmax(340px, 480px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1120px) {
+  .workPlanningGrid {
+    grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  }
 }
 
 .workColumn {
