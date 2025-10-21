@@ -10,6 +10,7 @@ export type InitiativeCreationWorkDraft = {
   id: string;
   title: string;
   description: string;
+  assumptions?: string;
   startDay: number;
   durationDays: number;
   effortDays: number;
