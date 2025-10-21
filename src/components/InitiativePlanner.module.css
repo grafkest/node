@@ -67,10 +67,19 @@
   gap: 16px;
 }
 
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
 .timelineCard {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1 1 auto;
+  min-height: 360px;
 }
 
 .timelineHeader {
@@ -79,6 +88,12 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.timelineBody {
+  flex: 1 1 auto;
+  min-height: 320px;
+  overflow: auto;
 }
 
 .customerCard {
@@ -198,6 +213,7 @@
 .riskSection {
   position: sticky;
   top: 0;
+  align-self: flex-start;
 }
 
 .riskCard {
@@ -252,7 +268,19 @@
     grid-template-columns: 1fr;
   }
 
+  .sideColumn {
+    order: -1;
+  }
+
   .riskSection {
     position: static;
+  }
+
+  .timelineCard {
+    min-height: 320px;
+  }
+
+  .timelineBody {
+    min-height: 260px;
   }
 }

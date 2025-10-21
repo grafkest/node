@@ -366,19 +366,6 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
       </div>
       <div className={styles.contentGrid}>
         <section className={styles.rolesSection} aria-label="Роли и кандидаты">
-          <Card className={styles.timelineCard} verticalSpace="xl" horizontalSpace="xl">
-            <div className={styles.timelineHeader}>
-              <Text size="s" weight="semibold">
-                План работ
-              </Text>
-              <Text size="xs" view="secondary">
-                {timelineTasks.length > 0
-                  ? `Задач в расписании: ${timelineTasks.length}`
-                  : 'Диаграмма появится после добавления работ по ролям.'}
-              </Text>
-            </div>
-            <InitiativeGanttChart tasks={timelineTasks} />
-          </Card>
           {selectedInitiative.customer && (
             <Card className={styles.customerCard} verticalSpace="xl" horizontalSpace="xl">
               <Text size="s" weight="semibold">
@@ -419,65 +406,82 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
           )}
           {selectedInitiative.roles.map((role) => renderRoleCard(role))}
         </section>
-        <aside className={styles.riskSection} aria-label="Риски инициативы">
-          <Card verticalSpace="xl" horizontalSpace="xl" className={styles.riskCard}>
-            <Text size="s" weight="semibold">
-              Риски
-            </Text>
-            {selectedInitiative.risks.length === 0 ? (
-              <Text size="xs" view="secondary">
-                Риски не зафиксированы.
+        <div className={styles.sideColumn}>
+          <Card className={styles.timelineCard} verticalSpace="xl" horizontalSpace="xl">
+            <div className={styles.timelineHeader}>
+              <Text size="s" weight="semibold">
+                План работ
               </Text>
-            ) : (
-              <ul className={styles.riskList}>
-                {selectedInitiative.risks.map((risk) => {
-                  const meta = severityBadgeMeta[risk.severity];
-                  return (
-                    <li key={risk.id} className={styles.riskItem}>
-                      <div className={styles.riskHeader}>
-                        <Badge size="xs" status={meta.status} label={meta.label} />
-                        <Text size="xs" view="secondary">
-                          {new Date(risk.createdAt).toLocaleString('ru-RU')}
-                        </Text>
-                      </div>
-                      <Text size="xs">{risk.description}</Text>
-                      <Button
-                        size="xs"
-                        view="ghost"
-                        label="Удалить"
-                        onClick={() => onRemoveRisk(selectedInitiative.id, risk.id)}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <div className={styles.riskForm}>
-              <Select<SeverityOption>
-                size="s"
-                items={severityOptions}
-                value={severitySelectValue}
-                getItemKey={(item) => item.value}
-                getItemLabel={(item) => item.label}
-                onChange={(option) => option && setRiskSeverity(option.value)}
-              />
-              <textarea
-                className={styles.riskTextarea}
-                rows={3}
-                placeholder="Опишите риск или блокирующий фактор"
-                value={riskDescription}
-                onChange={(event) => setRiskDescription(event.target.value)}
-              />
-              <Button
-                size="s"
-                view="secondary"
-                label="Зафиксировать риск"
-                disabled={riskDescription.trim().length === 0}
-                onClick={handleAddRisk}
-              />
+              <Text size="xs" view="secondary">
+                {timelineTasks.length > 0
+                  ? `Задач в расписании: ${timelineTasks.length}`
+                  : 'Диаграмма появится после добавления работ по ролям.'}
+              </Text>
+            </div>
+            <div className={styles.timelineBody}>
+              <InitiativeGanttChart tasks={timelineTasks} />
             </div>
           </Card>
-        </aside>
+          <aside className={styles.riskSection} aria-label="Риски инициативы">
+            <Card verticalSpace="xl" horizontalSpace="xl" className={styles.riskCard}>
+              <Text size="s" weight="semibold">
+                Риски
+              </Text>
+              {selectedInitiative.risks.length === 0 ? (
+                <Text size="xs" view="secondary">
+                  Риски не зафиксированы.
+                </Text>
+              ) : (
+                <ul className={styles.riskList}>
+                  {selectedInitiative.risks.map((risk) => {
+                    const meta = severityBadgeMeta[risk.severity];
+                    return (
+                      <li key={risk.id} className={styles.riskItem}>
+                        <div className={styles.riskHeader}>
+                          <Badge size="xs" status={meta.status} label={meta.label} />
+                          <Text size="xs" view="secondary">
+                            {new Date(risk.createdAt).toLocaleString('ru-RU')}
+                          </Text>
+                        </div>
+                        <Text size="xs">{risk.description}</Text>
+                        <Button
+                          size="xs"
+                          view="ghost"
+                          label="Удалить"
+                          onClick={() => onRemoveRisk(selectedInitiative.id, risk.id)}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <div className={styles.riskForm}>
+                <Select<SeverityOption>
+                  size="s"
+                  items={severityOptions}
+                  value={severitySelectValue}
+                  getItemKey={(item) => item.value}
+                  getItemLabel={(item) => item.label}
+                  onChange={(option) => option && setRiskSeverity(option.value)}
+                />
+                <textarea
+                  className={styles.riskTextarea}
+                  rows={3}
+                  placeholder="Опишите риск или блокирующий фактор"
+                  value={riskDescription}
+                  onChange={(event) => setRiskDescription(event.target.value)}
+                />
+                <Button
+                  size="s"
+                  view="secondary"
+                  label="Зафиксировать риск"
+                  disabled={riskDescription.trim().length === 0}
+                  onClick={handleAddRisk}
+                />
+              </div>
+            </Card>
+          </aside>
+        </div>
       </div>
       <InitiativeCreationModal
         isOpen={isCreateModalOpen}
