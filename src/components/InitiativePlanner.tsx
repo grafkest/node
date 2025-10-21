@@ -21,6 +21,7 @@ import InitiativeGanttChart, {
 } from './InitiativeGanttChart';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
 import styles from './InitiativePlanner.module.css';
+import { getSkillNameById } from '../data/skills';
 
 type SelectItem<Value extends string> = {
   label: string;
@@ -59,6 +60,18 @@ const statusBadgeMeta: Record<InitiativeStatus, { label: string; view: 'system' 
   initiated: { label: 'Инициирована', view: 'warning' },
   'in-progress': { label: 'В работе', view: 'system' },
   converted: { label: 'Конвертирована', view: 'success' }
+};
+
+const resolveWorkItemTaskName = (taskIds: string[] | undefined, fallback: string): string => {
+  if (!taskIds || taskIds.length === 0) {
+    return fallback;
+  }
+  const candidate = taskIds.find((task) => task.trim().length > 0);
+  if (!candidate) {
+    return fallback;
+  }
+  const trimmed = candidate.trim();
+  return getSkillNameById(trimmed) ?? trimmed;
 };
 
 const severityOptions: SeverityOption[] = [
@@ -138,7 +151,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         const assignedExpertName = item.assignedExpertId
           ? expertMap.get(item.assignedExpertId)?.fullName ?? item.assignedExpertId
           : undefined;
-        const taskName = item.tasks && item.tasks.length > 0 ? item.tasks[0] : item.title;
+        const taskName = resolveWorkItemTaskName(item.tasks, item.title);
         const resources: InitiativeGanttResource[] = assignedExpertName
           ? [
               {

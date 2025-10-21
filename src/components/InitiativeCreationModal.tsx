@@ -9,7 +9,7 @@ import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { domainNameById, domainTree, modules } from '../data';
 import type { DomainNode, ExpertProfile, InitiativeStatus, TeamRole } from '../data';
-import { getSkillsByRole } from '../data/skills';
+import { getSkillNameById, getSkillsByRole } from '../data/skills';
 import InitiativeGanttChart, {
   type InitiativeGanttBlocker,
   type InitiativeGanttDependency,
@@ -153,6 +153,14 @@ const creationStepDescriptions: Record<CreationStep, string> = {
 };
 
 const createId = () => `tmp-${Math.random().toString(36).slice(2, 11)}`;
+
+const resolveTaskLabel = (rawValue: string, fallback: string): string => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  return getSkillNameById(trimmed) ?? trimmed;
+};
 
 const createWorkAssignmentDraft = (
   role: TeamRole = roleOptions[0].value,
@@ -408,7 +416,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       works.flatMap((work) => {
         const normalizedTitle = work.title.trim() || 'Задача';
         return work.assignments.flatMap((assignment, index) => {
-          const normalizedTaskName = assignment.task.trim() || normalizedTitle;
+          const normalizedTaskName = resolveTaskLabel(assignment.task, normalizedTitle);
           const normalizedStart = Math.max(0, Math.round(assignment.startDay));
           const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
           const normalizedEffort = Math.max(1, Math.round(assignment.effortDays));

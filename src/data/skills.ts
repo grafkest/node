@@ -541,3 +541,5 @@ export const getSkillsByRole = (role: TeamRole): SkillDefinition[] => {
 export const getSkillIdsByRole = (role: TeamRole): string[] => roleToSkillsMap[role] ?? [];
 
 export const getRolesForSkill = (skillId: string): TeamRole[] => skills[skillId]?.roles ?? [];
+
+export const getSkillNameById = (skillId: string): string | undefined => skills[skillId]?.name;
