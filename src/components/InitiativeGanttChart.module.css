@@ -1,17 +1,34 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   height: 100%;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: minmax(220px, 3fr) 120px 120px 100px 160px minmax(160px, 2fr);
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+  align-items: center;
 }
 
 .axis {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(48px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 4px;
+  padding: 8px 0;
+  border-radius: 12px;
   background: var(--color-bg-secondary);
-  border-radius: 8px;
-  padding: 4px 0;
 }
 
 .axisCell {
@@ -19,37 +36,110 @@
   justify-content: center;
 }
 
-.rows {
+.body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 0;
+  padding-right: 4px;
 }
 
 .row {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 3fr) 120px 120px 100px 160px minmax(160px, 2fr) minmax(320px, 1fr);
   gap: 12px;
   align-items: stretch;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--color-bg-default);
+  border: 1px solid var(--color-bg-border);
 }
 
-.roleCell {
+.nameCell {
   display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.nameCell[data-level='1'] {
+  padding-left: 16px;
+}
+
+.nameCell[data-level='2'] {
+  padding-left: 28px;
+}
+
+.nameCell[data-level='3'] {
+  padding-left: 40px;
+}
+
+.nameContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.treeMarker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-bg-border);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.nameTextGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   align-items: center;
 }
 
-.timeline {
+.metaBadge {
+  white-space: nowrap;
+}
+
+.parallelCell,
+.unitsCell,
+.priorityCell,
+.roleCell,
+.resourceCell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.resourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timelineCell {
   position: relative;
-  min-height: 64px;
+  min-height: 72px;
+}
+
+.timelineLane {
+  position: absolute;
+  inset: 0;
   border-radius: 12px;
   background: var(--color-bg-secondary);
   overflow: hidden;
 }
 
-.task {
+.timelineBar {
   position: absolute;
   top: 8px;
   display: flex;
@@ -60,6 +150,26 @@
   background: rgba(37, 110, 255, 0.16);
   border: 1px solid rgba(37, 110, 255, 0.35);
   box-shadow: 0 4px 12px rgba(18, 51, 121, 0.15);
+  min-width: 56px;
+}
+
+.timelineBar[data-type='project'] {
+  background: rgba(23, 162, 184, 0.14);
+  border-color: rgba(23, 162, 184, 0.4);
+}
+
+.timelineBar[data-type='work'] {
+  background: rgba(86, 148, 255, 0.14);
+  border-color: rgba(86, 148, 255, 0.4);
+}
+
+.timelineBar[data-buffer='true'] {
+  border-style: dashed;
+}
+
+.timelineBar[data-blocked='true'] {
+  background: rgba(217, 69, 80, 0.18);
+  border-color: rgba(217, 69, 80, 0.5);
 }
 
 .emptyState {
@@ -67,4 +177,40 @@
   border-radius: 12px;
   border: 1px dashed var(--color-bg-border);
   background: var(--color-bg-default);
+}
+
+@media (max-width: 1280px) {
+  .header {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    grid-template-columns: minmax(220px, 3fr) 100px 100px 90px 140px minmax(140px, 2fr) minmax(260px, 1fr);
+  }
+}
+
+@media (max-width: 960px) {
+  .tableHeader {
+    display: none;
+  }
+
+  .header {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    grid-template-columns: minmax(220px, 3fr) minmax(0, 1fr);
+    grid-template-areas:
+      'name timeline'
+      'meta timeline';
+    row-gap: 8px;
+  }
+
+  .parallelCell,
+  .unitsCell,
+  .priorityCell,
+  .roleCell,
+  .resourceCell {
+    display: none;
+  }
 }

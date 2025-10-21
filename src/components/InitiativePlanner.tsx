@@ -13,7 +13,12 @@ import type {
   InitiativeStatus
 } from '../data';
 import InitiativeCreationModal from './InitiativeCreationModal';
-import InitiativeGanttChart, { type InitiativeGanttTask } from './InitiativeGanttChart';
+import InitiativeGanttChart, {
+  type InitiativeGanttBlocker,
+  type InitiativeGanttDependency,
+  type InitiativeGanttResource,
+  type InitiativeGanttTask
+} from './InitiativeGanttChart';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
 import styles from './InitiativePlanner.module.css';
 
@@ -128,19 +133,106 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
       return [];
     }
 
-    return selectedInitiative.roles.flatMap((role) =>
-      (role.workItems ?? []).map((item) => ({
-        id: `${role.id}-${item.id}`,
-        role: role.role,
-        title: item.title,
-        startDay: item.startDay,
-        durationDays: item.durationDays,
-        effortDays: item.effortDays,
-        assignedExpert: item.assignedExpertId
+    return selectedInitiative.roles.flatMap((role) => {
+      const workTasks = (role.workItems ?? []).map((item, index) => {
+        const assignedExpertName = item.assignedExpertId
           ? expertMap.get(item.assignedExpertId)?.fullName ?? item.assignedExpertId
-          : undefined
-      }))
-    );
+          : undefined;
+        const resources: InitiativeGanttResource[] = assignedExpertName
+          ? [
+              {
+                id: item.assignedExpertId ?? `${role.id}-${item.id}-resource`,
+                name: assignedExpertName,
+                role: role.role,
+                units: 1
+              }
+            ]
+          : [];
+        const blockers: InitiativeGanttBlocker[] = assignedExpertName
+          ? []
+          : [
+              {
+                id: `${role.id}-${item.id}-blocker`,
+                scope: 'task',
+                reason: 'Нет назначенного эксперта',
+                active: true
+              }
+            ];
+
+        const dependencies: InitiativeGanttDependency[] = [];
+        if (index > 0) {
+          const previous = role.workItems?.[index - 1];
+          if (previous) {
+            dependencies.push({
+              id: `${role.id}-${previous.id}`,
+              type: 'FS'
+            });
+          }
+        }
+
+        return {
+          id: `${role.id}-${item.id}`,
+          name: item.title,
+          role: role.role,
+          projectId: selectedInitiative.id,
+          projectName: selectedInitiative.name,
+          workId: role.id,
+          workName: role.role,
+          startDay: item.startDay,
+          durationDays: item.durationDays,
+          effortDays: item.effortDays,
+          effortHours: item.effortDays * 8,
+          minUnits: 1,
+          maxUnits: Math.max(1, role.required),
+          canSplit: role.required > 1,
+          parallelAllowed: role.required > 1,
+          durationMode: 'fixed-effort',
+          constraints: item.startDay > 0 ? [`SNET D${item.startDay + 1}`] : undefined,
+          priority: index + 1,
+          wipLimitTag: role.role,
+          assignedExpert: assignedExpertName,
+          resources,
+          dependencies,
+          blockers,
+          scenarioBranch: 'Базовый план'
+        } satisfies InitiativeGanttTask;
+      });
+
+      const subTasks = workTasks.flatMap((task) => {
+        const workItem = role.workItems?.find((item) => `${role.id}-${item.id}` === task.id);
+        const tasks = workItem?.tasks ?? [];
+        if (tasks.length === 0) {
+          return [];
+        }
+        const sliceDuration = Math.max(1, Math.round(task.durationDays / tasks.length));
+        const sliceEffort = Math.max(1, Math.round(task.effortDays / tasks.length));
+        return tasks.map((taskName, idx) => ({
+          id: `${task.id}-sub-${idx + 1}`,
+          name: taskName,
+          role: task.role,
+          projectId: task.projectId,
+          projectName: task.projectName,
+          workId: task.workId,
+          workName: task.workName,
+          parentTaskId: task.id,
+          startDay: task.startDay + idx * sliceDuration,
+          durationDays: sliceDuration,
+          effortDays: sliceEffort,
+          minUnits: task.minUnits,
+          maxUnits: task.maxUnits,
+          canSplit: task.canSplit,
+          parallelAllowed: task.parallelAllowed,
+          durationMode: 'fixed-effort',
+          priority: task.priority,
+          wipLimitTag: task.wipLimitTag,
+          assignedExpert: task.assignedExpert,
+          resources: task.resources,
+          scenarioBranch: task.scenarioBranch
+        } satisfies InitiativeGanttTask));
+      });
+
+      return [...workTasks, ...subTasks];
+    });
   }, [expertMap, selectedInitiative]);
 
   const handleOpenCreate = () => {
