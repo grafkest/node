@@ -177,6 +177,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .recommendationCandidate {
@@ -209,10 +212,23 @@
   word-break: break-word;
 }
 
+.recommendationCandidateComment {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .recommendationRisks {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: flex-start;
+}
+
+.recommendationRiskTag {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
+  text-align: left;
 }
 
 .footer {
