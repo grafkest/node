@@ -86,10 +86,10 @@
   gap: 12px;
 }
 
-.workGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
+.workTiming {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .assignmentList {
@@ -128,6 +128,12 @@
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
+}
+
+.assignmentTimingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
 }
 
 

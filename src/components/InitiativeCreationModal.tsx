@@ -81,6 +81,8 @@ type WorkAssignmentDraft = {
   task: string;
   description: string;
   effortDays: number;
+  startDay: number;
+  durationDays: number;
   isCustom?: boolean;
 };
 
@@ -89,8 +91,6 @@ type WorkDraft = {
   title: string;
   description: string;
   assumptions: string;
-  startDay: number;
-  durationDays: number;
   assignments: WorkAssignmentDraft[];
 };
 
@@ -137,12 +137,18 @@ const creationStepDescriptions: Record<CreationStep, string> = {
 
 const createId = () => `tmp-${Math.random().toString(36).slice(2, 11)}`;
 
-const createWorkAssignmentDraft = (role: TeamRole = roleOptions[0].value): WorkAssignmentDraft => ({
+const createWorkAssignmentDraft = (
+  role: TeamRole = roleOptions[0].value,
+  startDay = 0,
+  durationDays = 5
+): WorkAssignmentDraft => ({
   id: createId(),
   role,
   task: '',
   description: '',
-  effortDays: 5
+  effortDays: 5,
+  startDay,
+  durationDays
 });
 
 const createWorkDraft = (offset = 0): WorkDraft => ({
@@ -150,9 +156,7 @@ const createWorkDraft = (offset = 0): WorkDraft => ({
   title: '',
   description: '',
   assumptions: '',
-  startDay: offset,
-  durationDays: 5,
-  assignments: [createWorkAssignmentDraft()]
+  assignments: [createWorkAssignmentDraft(roleOptions[0].value, offset)]
 });
 
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
@@ -386,9 +390,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     () =>
       works.flatMap((work) => {
         const normalizedTitle = work.title.trim() || 'Задача';
-        const normalizedStart = Math.max(0, Math.round(work.startDay));
-        const normalizedDuration = Math.max(1, Math.round(work.durationDays));
         return work.assignments.map((assignment) => {
+          const normalizedStart = Math.max(0, Math.round(assignment.startDay));
+          const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
           const normalizedEffort = Math.max(1, Math.round(assignment.effortDays));
           return {
             id: `${work.id}-${assignment.id}`,
@@ -452,9 +456,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     works.forEach((work) => {
       const normalizedTitle = work.title.trim() || 'Задача';
       const normalizedDescription = work.description.trim();
-      const normalizedStart = Math.max(0, Math.round(work.startDay));
-      const normalizedDuration = Math.max(1, Math.round(work.durationDays));
       work.assignments.forEach((assignment) => {
+        const assignmentStart = Math.max(0, Math.round(assignment.startDay));
+        const assignmentDuration = Math.max(1, Math.round(assignment.durationDays));
         const entry =
           accumulator.get(assignment.role) ??
           {
@@ -479,8 +483,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
               assignmentDescription ||
               normalizedDescription ||
               'Описание не заполнено',
-            startDay: normalizedStart,
-            durationDays: normalizedDuration,
+            startDay: assignmentStart,
+            durationDays: assignmentDuration,
             effortDays: assignmentEffort,
             tasks: trimmedTask ? [trimmedTask] : []
           }
@@ -618,17 +622,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           return work;
         }
 
-        const nextWork: WorkDraft = { ...work, ...patch };
-
-        if (patch.startDay !== undefined) {
-          nextWork.startDay = Math.max(0, Math.round(patch.startDay));
-        }
-
-        if (patch.durationDays !== undefined) {
-          nextWork.durationDays = Math.max(1, Math.round(patch.durationDays));
-        }
-
-        return nextWork;
+        return { ...work, ...patch };
       })
     );
   };
@@ -655,6 +649,14 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 
             if (patch.effortDays !== undefined) {
               nextAssignment.effortDays = Math.max(1, Math.round(patch.effortDays));
+            }
+
+            if (patch.startDay !== undefined) {
+              nextAssignment.startDay = Math.max(0, Math.round(patch.startDay));
+            }
+
+            if (patch.durationDays !== undefined) {
+              nextAssignment.durationDays = Math.max(1, Math.round(patch.durationDays));
             }
 
             return nextAssignment;
@@ -745,10 +747,29 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     setWorks((prev) =>
       prev.map((work) =>
         work.id === workId
-          ? {
-              ...work,
-              assignments: [...work.assignments, createWorkAssignmentDraft()]
-            }
+          ? (() => {
+              const existing = work.assignments;
+              const lastAssignment = existing[existing.length - 1];
+              const nextStart = existing.reduce((maxEnd, assignment) => {
+                const normalizedStart = Math.max(0, Math.round(assignment.startDay));
+                const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
+                return Math.max(maxEnd, normalizedStart + normalizedDuration);
+              }, 0);
+              const defaultDuration = Math.max(
+                1,
+                Math.round(lastAssignment?.durationDays ?? 5)
+              );
+              const nextAssignment = createWorkAssignmentDraft(
+                lastAssignment?.role ?? roleOptions[0].value,
+                nextStart,
+                defaultDuration
+              );
+
+              return {
+                ...work,
+                assignments: [...existing, nextAssignment]
+              };
+            })()
           : work
       )
     );
@@ -1031,52 +1052,84 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   <Button size="s" view="ghost" label="Добавить работу" onClick={handleAddWork} />
                 </div>
                 <div className={styles.workList}>
-                  {works.map((work) => (
-                    <Card key={work.id} className={styles.workCard} verticalSpace="l" horizontalSpace="l">
-                      <div className={styles.workHeader}>
-                        <TextField
-                          size="s"
-                          label="Название работы"
-                          placeholder="Например, Подготовка данных"
-                          value={work.title}
-                          onChange={(value) => handleWorkChange(work.id, { title: value ?? '' })}
-                        />
-                        <Button
-                          size="s"
-                          view="ghost"
-                          label="Удалить"
-                          onClick={() => handleRemoveWork(work.id)}
-                          disabled={works.length <= 1}
-                        />
-                      </div>
-                      <TextField
-                        size="s"
-                        label="Описание"
-                        value={work.description}
-                        onChange={(value) => handleWorkChange(work.id, { description: value ?? '' })}
-                        type="textarea"
-                        minRows={2}
-                      />
-                      <TextField
-                        size="s"
-                        label="Допущения / ограничения"
-                        value={work.assumptions}
-                        onChange={(value) => handleWorkChange(work.id, { assumptions: value ?? '' })}
-                        type="textarea"
-                        minRows={2}
-                      />
-                      <div className={styles.assignmentList}>
-                        <div className={styles.assignmentHeader}>
-                          <Text size="xs" view="secondary">
-                            Назначьте роли и выберите задачи для сотрудников.
-                          </Text>
+                  {works.map((work) => {
+                    const scheduleBounds = work.assignments.map((assignment) => {
+                      const normalizedStart = Math.max(0, Math.round(assignment.startDay));
+                      const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
+                      return {
+                        start: normalizedStart,
+                        end: normalizedStart + normalizedDuration
+                      };
+                    });
+                    const hasAssignments = scheduleBounds.length > 0;
+                    const workStart = hasAssignments
+                      ? scheduleBounds.reduce((min, current) => Math.min(min, current.start), Infinity)
+                      : 0;
+                    const workEnd = hasAssignments
+                      ? scheduleBounds.reduce((max, current) => Math.max(max, current.end), 0)
+                      : 0;
+                    const displayStart = Number.isFinite(workStart) ? workStart : 0;
+                    const displayEnd = hasAssignments
+                      ? Math.max(displayStart + 1, workEnd)
+                      : displayStart + 1;
+                    const workDuration = hasAssignments ? Math.max(1, displayEnd - displayStart) : 0;
+
+                    return (
+                      <Card
+                        key={work.id}
+                        className={styles.workCard}
+                        verticalSpace="l"
+                        horizontalSpace="l"
+                      >
+                        <div className={styles.workHeader}>
+                          <TextField
+                            size="s"
+                            label="Название работы"
+                            placeholder="Например, Подготовка данных"
+                            value={work.title}
+                            onChange={(value) => handleWorkChange(work.id, { title: value ?? '' })}
+                          />
                           <Button
-                            size="xs"
+                            size="s"
                             view="ghost"
-                            label="Добавить сотрудника"
-                            onClick={() => handleAddAssignment(work.id)}
+                            label="Удалить"
+                            onClick={() => handleRemoveWork(work.id)}
+                            disabled={works.length <= 1}
                           />
                         </div>
+                        <TextField
+                          size="s"
+                          label="Описание"
+                          value={work.description}
+                          onChange={(value) => handleWorkChange(work.id, { description: value ?? '' })}
+                          type="textarea"
+                          minRows={2}
+                        />
+                        <TextField
+                          size="s"
+                          label="Допущения / ограничения"
+                          value={work.assumptions}
+                          onChange={(value) => handleWorkChange(work.id, { assumptions: value ?? '' })}
+                          type="textarea"
+                          minRows={2}
+                        />
+                        <Text size="xs" view="secondary" className={styles.workTiming}>
+                          {hasAssignments
+                            ? `Период: Д${displayStart + 1} – Д${displayEnd} · Длительность: ${workDuration} дн.`
+                            : 'Назначьте сотрудников, чтобы определить период работы.'}
+                        </Text>
+                        <div className={styles.assignmentList}>
+                          <div className={styles.assignmentHeader}>
+                            <Text size="xs" view="secondary">
+                              Назначьте роли и выберите задачи для сотрудников.
+                            </Text>
+                            <Button
+                              size="xs"
+                              view="ghost"
+                              label="Добавить сотрудника"
+                              onClick={() => handleAddAssignment(work.id)}
+                            />
+                          </div>
                         <div className={styles.assignmentGrid}>
                           {work.assignments.map((assignment, index) => {
                             const roleOption =
@@ -1143,48 +1196,49 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                   type="textarea"
                                   minRows={2}
                                 />
-                                <TextField
-                                  size="s"
-                                  label="Трудозатраты (дней)"
-                                  type="number"
-                                  value={String(assignment.effortDays)}
-                                  onChange={(value) =>
-                                    handleAssignmentChange(work.id, assignment.id, {
-                                      effortDays: Number(value ?? assignment.effortDays) || 1
-                                    })
-                                  }
-                                />
+                                <div className={styles.assignmentTimingGrid}>
+                                  <TextField
+                                    size="s"
+                                    label="Старт (день)"
+                                    type="number"
+                                    value={String(assignment.startDay)}
+                                    onChange={(value) =>
+                                      handleAssignmentChange(work.id, assignment.id, {
+                                        startDay: Number(value ?? assignment.startDay) || 0
+                                      })
+                                    }
+                                  />
+                                  <TextField
+                                    size="s"
+                                    label="Длительность (дней)"
+                                    type="number"
+                                    value={String(assignment.durationDays)}
+                                    onChange={(value) =>
+                                      handleAssignmentChange(work.id, assignment.id, {
+                                        durationDays: Number(value ?? assignment.durationDays) || 1
+                                      })
+                                    }
+                                  />
+                                  <TextField
+                                    size="s"
+                                    label="Трудозатраты (дней)"
+                                    type="number"
+                                    value={String(assignment.effortDays)}
+                                    onChange={(value) =>
+                                      handleAssignmentChange(work.id, assignment.id, {
+                                        effortDays: Number(value ?? assignment.effortDays) || 1
+                                      })
+                                    }
+                                  />
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                       </div>
-                      <div className={styles.workGrid}>
-                        <TextField
-                          size="s"
-                          label="Старт (день)"
-                          type="number"
-                          value={String(work.startDay)}
-                          onChange={(value) =>
-                            handleWorkChange(work.id, {
-                              startDay: Number(value ?? work.startDay) || 0
-                            })
-                          }
-                        />
-                        <TextField
-                          size="s"
-                          label="Длительность (дней)"
-                          type="number"
-                          value={String(work.durationDays)}
-                          onChange={(value) =>
-                            handleWorkChange(work.id, {
-                              durationDays: Number(value ?? work.durationDays) || 1
-                            })
-                          }
-                        />
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    );
+                  })}
                 </div>
               </section>
               <section className={styles.section}>
