@@ -1337,7 +1337,12 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                       label={`${candidate.score} баллов`}
                                     />
                                   </div>
-                                  <Text size="xs">{candidate.fitComment}</Text>
+                                  <Text
+                                    size="xs"
+                                    className={styles.recommendationCandidateComment}
+                                  >
+                                    {candidate.fitComment}
+                                  </Text>
                                   {candidate.riskTags.length > 0 && (
                                     <div className={styles.recommendationRisks}>
                                       {candidate.riskTags.slice(0, 3).map((risk) => (
@@ -1345,6 +1350,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                           key={`${candidate.expertId}-${risk}`}
                                           size="2xs"
                                           view="ghost"
+                                          className={styles.recommendationRiskTag}
                                           label={risk}
                                         />
                                       ))}
