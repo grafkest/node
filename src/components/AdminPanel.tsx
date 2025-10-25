@@ -2129,7 +2129,9 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
         <Switch
           size="s"
           checked={draft.licenseServerIntegrated}
-          onChange={({ checked }) => handleBasicFieldChange('licenseServerIntegrated', !!checked)}
+          onChange={({ target }) =>
+            handleBasicFieldChange('licenseServerIntegrated', target.checked)
+          }
         />
       </div>
       <div className={styles.subSection}>
@@ -2513,7 +2515,9 @@ const DomainForm: React.FC<DomainFormProps> = ({
           <Switch
             size="s"
             checked={draft.isCatalogRoot}
-            onChange={({ checked }) => onChange({ ...draft, isCatalogRoot: !!checked })}
+            onChange={({ target }) =>
+              onChange({ ...draft, isCatalogRoot: target.checked })
+            }
           />
         </label>
       </div>
