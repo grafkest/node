@@ -1649,19 +1649,19 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
         </div>
         {onDelete && <Button size="s" view="clear" label="Удалить модуль" onClick={onDelete} />}
       </div>
-      {moduleSections.map((section, index) => (
+      {moduleSections.map(({ id }, index) => (
         <Collapse
-          key={section}
+          key={id}
           isOpen={current === index}
           onClick={() => goToStep(index)}
           label={
             <div className={styles.collapseLabel}>
               <Text size="s" weight="semibold">
-                {section === 'general'
+                {id === 'general'
                   ? 'Основные сведения'
-                  : section === 'calculation'
+                  : id === 'calculation'
                     ? 'Показатели'
-                    : section === 'technical'
+                    : id === 'technical'
                       ? 'Технические детали'
                       : 'Нефункциональные требования'}
               </Text>
@@ -1672,10 +1672,10 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           }
         >
           <div className={styles.sectionContent}>
-            {section === 'general' && renderGeneralSection()}
-            {section === 'calculation' && renderCalculationSection()}
-            {section === 'technical' && renderTechnicalSection()}
-            {section === 'nonFunctional' && renderNonFunctionalSection()}
+            {id === 'general' && renderGeneralSection()}
+            {id === 'calculation' && renderCalculationSection()}
+            {id === 'technical' && renderTechnicalSection()}
+            {id === 'nonFunctional' && renderNonFunctionalSection()}
           </div>
           <div className={styles.stepActions}>
             {index > 0 && (
