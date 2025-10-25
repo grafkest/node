@@ -83,6 +83,7 @@ import { preparePlannerModuleSelections } from './utils/initiativePlanner';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
+const MAX_LAYOUT_SPAN = 1800;
 
 const StatsDashboard = lazy(async () => ({
   default: (await import('./components/StatsDashboard')).default
@@ -152,6 +153,7 @@ function App() {
     setModuleDraftPrefill(null);
   }, []);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
+  const [layoutNormalizationRequest, setLayoutNormalizationRequest] = useState(0);
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
@@ -264,6 +266,7 @@ function App() {
       setCompanyFilter(null);
       setSelectedDomains(new Set(domainIds));
       let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
+      let shouldRequestLayoutNormalization = false;
       setLayoutPositions((prev) => {
         const serverPositions = snapshot.layout?.nodes ?? {};
         const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
@@ -273,6 +276,14 @@ function App() {
           if (layoutsEqual(prev, prunedServerPositions)) {
             resolvedLayoutPositions = prev;
             return prev;
+          }
+          const { positions: normalizedInitial, changed: initialAdjusted } = normalizeLayoutPositions(
+            prunedServerPositions
+          );
+          if (initialAdjusted) {
+            shouldRequestLayoutNormalization = true;
+            resolvedLayoutPositions = normalizedInitial;
+            return normalizedInitial;
           }
           resolvedLayoutPositions = prunedServerPositions;
           return prunedServerPositions;
@@ -292,17 +303,39 @@ function App() {
           }
         });
 
-        const nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        let nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        const layoutNodeCount = Object.keys(nextLayout).length;
+        if (layoutNodeCount !== activeNodeIds.size) {
+          shouldRequestLayoutNormalization = true;
+        }
+
+        const { positions: normalizedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
+          nextLayout
+        );
+
+        if (layoutAdjusted) {
+          shouldRequestLayoutNormalization = true;
+          resolvedLayoutPositions = normalizedLayout;
+          return normalizedLayout;
+        }
+
         resolvedLayoutPositions = nextLayout;
         return nextLayout;
       });
       const nextLayoutPositions = resolvedLayoutPositions ?? {};
-      shouldCaptureEngineLayoutRef.current = needsEngineLayoutCapture(
-        nextLayoutPositions,
-        activeNodeIds
-      );
+      const needsEngineCapture = needsEngineLayoutCapture(nextLayoutPositions, activeNodeIds);
+      shouldCaptureEngineLayoutRef.current = needsEngineCapture;
+      if (needsEngineCapture) {
+        shouldRequestLayoutNormalization = true;
+      }
+      if (shouldRequestLayoutNormalization) {
+        hasPendingPersistRef.current = true;
+        setLayoutNormalizationRequest((prev) => prev + 1);
+      }
       hasLoadedSnapshotRef.current = true;
-      hasPendingPersistRef.current = false;
+      if (!shouldRequestLayoutNormalization) {
+        hasPendingPersistRef.current = false;
+      }
     },
     []
   );
@@ -829,6 +862,16 @@ function App() {
 
     hasPendingPersistRef.current = false;
 
+    const { positions: constrainedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
+      layoutPositions
+    );
+
+    if (layoutAdjusted) {
+      setLayoutPositions(constrainedLayout);
+      hasPendingPersistRef.current = true;
+      return;
+    }
+
     const controller = new AbortController();
     let cancelled = false;
 
@@ -851,7 +894,7 @@ function App() {
         domains: domainData,
         artifacts: artifactData,
         initiatives: initiativeData,
-        layout: { nodes: layoutPositions }
+        layout: { nodes: constrainedLayout }
       },
       controller.signal
     )
@@ -1556,13 +1599,21 @@ function App() {
         const ensuredActiveIds = new Set(activeNodeIds);
         Object.keys(positions).forEach((id) => ensuredActiveIds.add(id));
         const pruned = pruneLayoutPositions(merged, ensuredActiveIds);
-        if (layoutsEqual(prev, pruned)) {
+        const { positions: constrained, changed: adjusted } = normalizeLayoutPositions(pruned);
+        const nextLayout = adjusted ? constrained : pruned;
+        if (layoutsEqual(prev, nextLayout)) {
           return prev;
         }
         didChange = true;
-        return pruned;
+        if (adjusted) {
+          setLayoutNormalizationRequest((value) => value + 1);
+        }
+        return nextLayout;
       });
 
+      if (didChange) {
+        hasPendingPersistRef.current = true;
+      }
       if (didChange && reason === 'drag') {
         markGraphDirty();
       }
@@ -3048,6 +3099,7 @@ function App() {
                 visibleDomainIds={relevantDomainIds}
                 visibleModuleStatuses={statusFilters}
                 layoutPositions={layoutPositions}
+                normalizationRequest={layoutNormalizationRequest}
                 onLayoutChange={handleLayoutChange}
               />
             </div>
@@ -3504,6 +3556,104 @@ function buildProductList(modules: ModuleNode[]): string[] {
     }
   });
   return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function normalizeLayoutPositions(
+  positions: Record<string, GraphLayoutNodePosition>,
+  maxSpan = MAX_LAYOUT_SPAN
+): { positions: Record<string, GraphLayoutNodePosition>; changed: boolean } {
+  const entries = Object.entries(positions);
+  if (entries.length === 0) {
+    return { positions, changed: false };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  entries.forEach(([, position]) => {
+    if (!position) {
+      return;
+    }
+
+    if (typeof position.x === 'number' && Number.isFinite(position.x)) {
+      minX = Math.min(minX, position.x);
+      maxX = Math.max(maxX, position.x);
+    }
+
+    if (typeof position.y === 'number' && Number.isFinite(position.y)) {
+      minY = Math.min(minY, position.y);
+      maxY = Math.max(maxY, position.y);
+    }
+  });
+
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+    return { positions, changed: false };
+  }
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const span = Math.max(width, height);
+
+  if (!Number.isFinite(span) || span <= 0 || span <= maxSpan) {
+    return { positions, changed: false };
+  }
+
+  const scale = maxSpan / span;
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return { positions, changed: false };
+  }
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  let changed = false;
+  const normalized: Record<string, GraphLayoutNodePosition> = {};
+
+  entries.forEach(([id, position]) => {
+    if (!position) {
+      return;
+    }
+
+    const { x, y, fx, fy } = position;
+    if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+      normalized[id] = position;
+      return;
+    }
+
+    const normalizedX = roundCoordinate(centerX + (x - centerX) * scale);
+    const normalizedY = roundCoordinate(centerY + (y - centerY) * scale);
+    const next: GraphLayoutNodePosition = { x: normalizedX, y: normalizedY };
+
+    if (typeof fx === 'number' && Number.isFinite(fx)) {
+      const normalizedFx = roundCoordinate(centerX + (fx - centerX) * scale);
+      next.fx = normalizedFx;
+      if (normalizedFx !== fx) {
+        changed = true;
+      }
+    }
+
+    if (typeof fy === 'number' && Number.isFinite(fy)) {
+      const normalizedFy = roundCoordinate(centerY + (fy - centerY) * scale);
+      next.fy = normalizedFy;
+      if (normalizedFy !== fy) {
+        changed = true;
+      }
+    }
+
+    if (normalizedX !== x || normalizedY !== y) {
+      changed = true;
+    }
+
+    normalized[id] = next;
+  });
+
+  if (!changed) {
+    return { positions, changed: false };
+  }
+
+  return { positions: normalized, changed: true };
 }
 
 function needsEngineLayoutCapture(
