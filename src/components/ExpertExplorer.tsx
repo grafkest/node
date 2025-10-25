@@ -984,6 +984,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const isHighlighted = highlightNodeIds.has(typed.id);
       const fillColor = isHighlighted || isSolid ? baseColor : withAlpha(baseColor, 0.22);
       const accentTextColor = getReadableTextColor(baseColor, palette);
+      const labelTextColor = getReadableTextColor(palette.background, palette);
+      const solidTextColor = accentTextColor === labelTextColor ? accentTextColor : labelTextColor;
 
       const fontSizeBase =
         typed.type === 'expert'
@@ -1019,14 +1021,12 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         ctx.lineWidth = Math.max(2, fontSize / 3);
         ctx.strokeStyle = withAlpha(palette.background, 0.9);
         ctx.strokeText(typed.label, node.x ?? 0, textY);
-        ctx.fillStyle = accentTextColor;
-        ctx.globalAlpha = 1;
-      } else if (isSolid) {
-        ctx.fillStyle = accentTextColor;
-        ctx.globalAlpha = 1;
+        ctx.fillStyle = solidTextColor;
       } else {
-        ctx.fillStyle = palette.text;
-        ctx.globalAlpha = Math.min(0.95, 0.55 + globalScale * 0.2);
+        ctx.fillStyle = isSolid ? solidTextColor : labelTextColor;
+        if (!isSolid) {
+          ctx.globalAlpha = Math.min(0.95, 0.55 + globalScale * 0.2);
+        }
       }
 
       ctx.fillText(typed.label, node.x ?? 0, textY);
