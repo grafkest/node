@@ -622,22 +622,6 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return () => window.clearTimeout(timeout);
   }, [filteredExperts, graphDimensions.height, graphDimensions.width, viewMode]);
 
-  useEffect(() => {
-    if (viewMode !== 'roles') {
-      return;
-    }
-
-    if (!roleGraphRef.current) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      roleGraphRef.current?.zoomToFit(400, 40);
-    }, 250);
-
-    return () => window.clearTimeout(timeout);
-  }, [roleGraphData, roleGraphDimensions.height, roleGraphDimensions.width, viewMode]);
-
   const graphData = useMemo(() => {
     const nodes: ForceNode[] = [];
     const links: ForceLink[] = [];
@@ -788,6 +772,22 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     return { nodes, links };
   }, [selectedRoleAggregate]);
+
+  useEffect(() => {
+    if (viewMode !== 'roles') {
+      return;
+    }
+
+    if (!roleGraphRef.current) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      roleGraphRef.current?.zoomToFit(400, 40);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [roleGraphData, roleGraphDimensions.height, roleGraphDimensions.width, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'graph') {
