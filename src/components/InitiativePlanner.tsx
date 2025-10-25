@@ -494,13 +494,21 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
                   <Text size="xs" view="secondary">
                     Компания
                   </Text>
-                  <Text size="s">{selectedInitiative.customer.company || '—'}</Text>
+                  <Text size="s">
+                    {selectedInitiative.customer.companies.length > 0
+                      ? selectedInitiative.customer.companies.join(', ')
+                      : '—'}
+                  </Text>
                 </div>
                 <div>
                   <Text size="xs" view="secondary">
                     Подразделение
                   </Text>
-                  <Text size="s">{selectedInitiative.customer.unit || '—'}</Text>
+                  <Text size="s">
+                    {selectedInitiative.customer.units.length > 0
+                      ? selectedInitiative.customer.units.join(', ')
+                      : '—'}
+                  </Text>
                 </div>
                 <div>
                   <Text size="xs" view="secondary">
