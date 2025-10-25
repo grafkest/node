@@ -57,6 +57,7 @@ import {
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
+  type ExpertSkill,
   type GraphLink,
   type Initiative,
   type InitiativeApprovalStage,
@@ -119,7 +120,7 @@ function App() {
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
   const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
-  const [expertProfiles] = useState(initialExperts);
+  const [expertProfiles, setExpertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
   );
@@ -174,6 +175,11 @@ function App() {
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
+  const handleUpdateExpertSkills = useCallback((expertId: string, skills: ExpertSkill[]) => {
+    setExpertProfiles((prev) =>
+      prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
+    );
+  }, []);
   useLayoutEffect(() => {
     const element = sidebarRef.current;
     if (!element) {
@@ -3238,6 +3244,7 @@ function App() {
           moduleNameMap={moduleNameMap}
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
+          onUpdateExpertSkills={handleUpdateExpertSkills}
         />
       </main>
       <main
