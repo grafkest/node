@@ -57,9 +57,50 @@
 
 .contentGrid {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex: 1 1 auto;
+  padding: 48px 24px;
+}
+
+.emptyCard {
+  max-width: 720px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: center;
+  text-align: center;
+}
+
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.emptyHints {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.emptyHintItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
 }
 
 .rolesSection {
@@ -94,6 +135,27 @@
   flex: 1 1 auto;
   min-height: 320px;
   overflow: auto;
+}
+
+@media (max-width: 1200px) {
+  .contentGrid {
+    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 960px) {
+  .contentGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .emptyCard {
+    text-align: left;
+    align-items: stretch;
+  }
+
+  .emptyHintItem {
+    justify-content: flex-start;
+  }
 }
 
 .customerCard {
