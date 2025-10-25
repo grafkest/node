@@ -114,6 +114,22 @@ type ModuleSection = {
   title: string;
 };
 
+type InlineStringCreation = {
+  value: string;
+  previous: string;
+};
+
+type IndexedStringCreation = {
+  index: number;
+  value: string;
+  previous: string;
+};
+
+type TechnologyCreationState = {
+  value: string;
+  previous: string[];
+};
+
 const moduleSections: ModuleSection[] = [
   { id: 'general', title: 'Общая информация' },
   { id: 'calculation', title: 'Расчётный узел' },
@@ -270,7 +286,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setArtifactDataTypes((prev) => mergeStringCollections(prev, knownArtifactDataTypes));
   }, [knownArtifactDataTypes]);
 
-  const attachableDomainIds = useMemo(() => collectAttachableDomainIds(domains), [domains]);
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
   const catalogDomainIds = useMemo(() => collectCatalogDomainIds(domains), [domains]);
   const parentDomainIds = useMemo(
@@ -640,7 +655,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedModuleId === '__new__' ? 'create' : 'edit'}
             draft={moduleDraft}
             step={moduleStep}
-            domainItems={attachableDomainIds}
+            domainItems={leafDomainIds}
             domainLabelMap={domainLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
@@ -810,36 +825,132 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     []
   );
 
-  const localizationItems = useMemo<SelectItem<string>[]>(() => {
-    const values = new Set(localizations);
-    if (draft.localization.trim()) {
-      values.add(draft.localization.trim());
+  const teamRoleItems = useMemo<SelectItem<TeamRole>[]>(
+    () =>
+      ([
+        'Владелец продукта',
+        'Эксперт R&D',
+        'Аналитик',
+        'Backend',
+        'Frontend',
+        'Архитектор',
+        'Тестировщик',
+        'Руководитель проекта',
+        'UX'
+      ] satisfies TeamRole[]).map((role) => ({ label: role, value: role })),
+    []
+  );
+
+  const CREATE_PRODUCT_OPTION = '__create_product__';
+  const CREATE_CREATOR_COMPANY_OPTION = '__create_creator_company__';
+  const CREATE_LOCALIZATION_OPTION = '__create_localization__';
+  const CREATE_RID_COMPANY_OPTION = '__create_rid_company__';
+  const CREATE_RID_DIVISION_OPTION = '__create_rid_division__';
+  const CREATE_TECHNOLOGY_OPTION = '__create_technology__';
+  const CREATE_COMPANY_USAGE_OPTION = '__create_company_usage__';
+  const CREATE_LIBRARY_OPTION = '__create_library__';
+  const CREATE_LIBRARY_VERSION_OPTION = '__create_library_version__';
+
+  const [productCreation, setProductCreation] = useState<InlineStringCreation | null>(null);
+  const [creatorCompanyCreation, setCreatorCompanyCreation] = useState<InlineStringCreation | null>(
+    null
+  );
+  const [localizationCreation, setLocalizationCreation] = useState<InlineStringCreation | null>(null);
+  const [ridCompanyCreation, setRidCompanyCreation] = useState<InlineStringCreation | null>(null);
+  const [ridDivisionCreation, setRidDivisionCreation] = useState<InlineStringCreation | null>(null);
+  const [technologyCreation, setTechnologyCreation] = useState<TechnologyCreationState | null>(null);
+  const [companyUsageCreation, setCompanyUsageCreation] = useState<IndexedStringCreation | null>(null);
+  const [libraryCreation, setLibraryCreation] = useState<IndexedStringCreation | null>(null);
+  const [libraryVersionCreation, setLibraryVersionCreation] = useState<IndexedStringCreation | null>(
+    null
+  );
+
+  useEffect(() => {
+    setProductCreation(null);
+    setCreatorCompanyCreation(null);
+    setLocalizationCreation(null);
+    setRidCompanyCreation(null);
+    setRidDivisionCreation(null);
+    setTechnologyCreation(null);
+    setCompanyUsageCreation(null);
+    setLibraryCreation(null);
+    setLibraryVersionCreation(null);
+  }, [moduleKey]);
+
+  const buildItems = (values: Iterable<string>, extra?: string) => {
+    const set = new Set<string>();
+    for (const value of values) {
+      const trimmed = value.trim();
+      if (trimmed) {
+        set.add(trimmed);
+      }
     }
-    return Array.from(values)
-      .sort((a, b) => a.localeCompare(b, 'ru'))
-      .map<SelectItem<string>>((value) => ({ label: value || 'ru', value: value || 'ru' }));
+    if (extra) {
+      const trimmed = extra.trim();
+      if (trimmed) {
+        set.add(trimmed);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+  };
+
+  const productItems = useMemo(
+    () => [...buildItems(productNames, draft.productName), CREATE_PRODUCT_OPTION],
+    [draft.productName, productNames]
+  );
+
+  const creatorCompanyItems = useMemo(
+    () => [...buildItems(creatorCompanies, draft.creatorCompany), CREATE_CREATOR_COMPANY_OPTION],
+    [creatorCompanies, draft.creatorCompany]
+  );
+
+  const localizationItems = useMemo(() => {
+    const base = buildItems(localizations, draft.localization);
+    if (!base.includes('ru')) {
+      base.push('ru');
+    }
+    base.sort((a, b) => a.localeCompare(b, 'ru'));
+    base.push(CREATE_LOCALIZATION_OPTION);
+    return base;
   }, [draft.localization, localizations]);
 
-  const ridCompanies = useMemo<SelectItem<string>[]>(() => {
-    const values = new Set<string>([...Object.keys(ridCompanyRegistry)]);
-    if (draft.ridOwner.company.trim()) {
-      values.add(draft.ridOwner.company.trim());
-    }
-    return Array.from(values)
-      .sort((a, b) => a.localeCompare(b, 'ru'))
-      .map((value) => ({ label: value, value }));
-  }, [draft.ridOwner.company, ridCompanyRegistry]);
+  const ridCompanyItems = useMemo(
+    () => [...buildItems(Object.keys(ridCompanyRegistry), draft.ridOwner.company), CREATE_RID_COMPANY_OPTION],
+    [draft.ridOwner.company, ridCompanyRegistry]
+  );
 
-  const ridDivisions = useMemo<SelectItem<string>[]>(() => {
+  const ridDivisionItems = useMemo(() => {
     const company = draft.ridOwner.company.trim();
-    const values = new Set<string>(company ? ridCompanyRegistry[company] ?? [] : []);
-    if (draft.ridOwner.division.trim()) {
-      values.add(draft.ridOwner.division.trim());
+    const base = company ? buildItems(ridCompanyRegistry[company] ?? [], draft.ridOwner.division) : [];
+    if (company) {
+      base.push(CREATE_RID_DIVISION_OPTION);
     }
-    return Array.from(values)
-      .sort((a, b) => a.localeCompare(b, 'ru'))
-      .map((value) => ({ label: value, value }));
+    return base;
   }, [draft.ridOwner.company, draft.ridOwner.division, ridCompanyRegistry]);
+
+  const technologyItems = useMemo(() => {
+    const base = buildItems([...technologyOptions, ...draft.technologyStack]);
+    base.push(CREATE_TECHNOLOGY_OPTION);
+    return base;
+  }, [draft.technologyStack, technologyOptions]);
+
+  const companyUsageItems = useMemo(() => {
+    const base = buildItems([
+      ...companyNames,
+      ...draft.userStats.companies.map((company) => company.name)
+    ]);
+    base.push(CREATE_COMPANY_USAGE_OPTION);
+    return base;
+  }, [companyNames, draft.userStats.companies]);
+
+  const libraryItems = useMemo(() => {
+    const base = buildItems([
+      ...Object.keys(libraryRegistry),
+      ...draft.libraries.map((library) => library.name)
+    ]);
+    base.push(CREATE_LIBRARY_OPTION);
+    return base;
+  }, [draft.libraries, libraryRegistry]);
 
   const handleBasicFieldChange = <Key extends keyof ModuleDraftPayload>(
     key: Key,
@@ -858,40 +969,240 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     }
   };
 
-  const handleTechnologyChange = (value: string) => {
-    const items = value
-      .split(/[,\n]/)
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-    items.forEach((item) => handleRegisterIfNeeded(item, technologyOptions, onRegisterTechnology));
-    onChange({ ...draft, technologyStack: items });
+  const handleProductSelection = (value: string | null) => {
+    if (!value) {
+      setProductCreation(null);
+      handleBasicFieldChange('productName', '');
+      return;
+    }
+    if (value === CREATE_PRODUCT_OPTION) {
+      setProductCreation({ value: '', previous: draft.productName });
+      return;
+    }
+    setProductCreation(null);
+    handleRegisterIfNeeded(value, productNames, onRegisterProduct);
+    handleBasicFieldChange('productName', value);
   };
 
-  const handleLibrariesChange = (index: number, patch: Partial<LibraryDependency>) => {
-    const next = draft.libraries.map((library, libraryIndex) =>
-      libraryIndex === index ? { ...library, ...patch } : library
+  const confirmProductCreation = () => {
+    if (!productCreation) {
+      return;
+    }
+    const next = productCreation.value.trim();
+    if (!next) {
+      setProductCreation(null);
+      return;
+    }
+    onRegisterProduct(next);
+    handleBasicFieldChange('productName', next);
+    setProductCreation(null);
+  };
+
+  const cancelProductCreation = () => {
+    if (!productCreation) {
+      return;
+    }
+    handleBasicFieldChange('productName', productCreation.previous);
+    setProductCreation(null);
+  };
+
+  const handleCreatorCompanySelection = (value: string | null) => {
+    if (!value) {
+      setCreatorCompanyCreation(null);
+      handleBasicFieldChange('creatorCompany', '');
+      return;
+    }
+    if (value === CREATE_CREATOR_COMPANY_OPTION) {
+      setCreatorCompanyCreation({ value: '', previous: draft.creatorCompany });
+      return;
+    }
+    setCreatorCompanyCreation(null);
+    handleRegisterIfNeeded(value, creatorCompanies, onRegisterCreatorCompany);
+    handleBasicFieldChange('creatorCompany', value);
+  };
+
+  const confirmCreatorCompanyCreation = () => {
+    if (!creatorCompanyCreation) {
+      return;
+    }
+    const next = creatorCompanyCreation.value.trim();
+    if (!next) {
+      setCreatorCompanyCreation(null);
+      return;
+    }
+    onRegisterCreatorCompany(next);
+    handleBasicFieldChange('creatorCompany', next);
+    setCreatorCompanyCreation(null);
+  };
+
+  const cancelCreatorCompanyCreation = () => {
+    if (!creatorCompanyCreation) {
+      return;
+    }
+    handleBasicFieldChange('creatorCompany', creatorCompanyCreation.previous);
+    setCreatorCompanyCreation(null);
+  };
+
+  const handleLocalizationSelection = (value: string | null) => {
+    if (!value) {
+      setLocalizationCreation(null);
+      handleBasicFieldChange('localization', 'ru');
+      return;
+    }
+    if (value === CREATE_LOCALIZATION_OPTION) {
+      setLocalizationCreation({ value: '', previous: draft.localization });
+      return;
+    }
+    setLocalizationCreation(null);
+    handleRegisterIfNeeded(value, localizations, onRegisterLocalization);
+    handleBasicFieldChange('localization', value);
+  };
+
+  const confirmLocalizationCreation = () => {
+    if (!localizationCreation) {
+      return;
+    }
+    const next = localizationCreation.value.trim() || 'ru';
+    onRegisterLocalization(next);
+    handleBasicFieldChange('localization', next);
+    setLocalizationCreation(null);
+  };
+
+  const cancelLocalizationCreation = () => {
+    if (!localizationCreation) {
+      return;
+    }
+    handleBasicFieldChange('localization', localizationCreation.previous || 'ru');
+    setLocalizationCreation(null);
+  };
+
+  const handleRidCompanySelection = (value: string | null) => {
+    if (!value) {
+      setRidCompanyCreation(null);
+      setRidDivisionCreation(null);
+      onChange({ ...draft, ridOwner: { company: '', division: '' } });
+      return;
+    }
+    if (value === CREATE_RID_COMPANY_OPTION) {
+      setRidCompanyCreation({ value: '', previous: draft.ridOwner.company });
+      return;
+    }
+    setRidCompanyCreation(null);
+    setRidDivisionCreation(null);
+    handleRegisterIfNeeded(value, Object.keys(ridCompanyRegistry), onRegisterRidCompany);
+    onChange({ ...draft, ridOwner: { company: value, division: '' } });
+  };
+
+  const confirmRidCompanyCreation = () => {
+    if (!ridCompanyCreation) {
+      return;
+    }
+    const next = ridCompanyCreation.value.trim();
+    if (!next) {
+      setRidCompanyCreation(null);
+      return;
+    }
+    onRegisterRidCompany(next);
+    onChange({ ...draft, ridOwner: { company: next, division: '' } });
+    setRidCompanyCreation(null);
+    setRidDivisionCreation(null);
+  };
+
+  const cancelRidCompanyCreation = () => {
+    if (!ridCompanyCreation) {
+      return;
+    }
+    onChange({ ...draft, ridOwner: { ...draft.ridOwner, company: ridCompanyCreation.previous } });
+    setRidCompanyCreation(null);
+  };
+
+  const handleRidDivisionSelection = (value: string | null) => {
+    if (!value) {
+      setRidDivisionCreation(null);
+      onChange({ ...draft, ridOwner: { ...draft.ridOwner, division: '' } });
+      return;
+    }
+    if (value === CREATE_RID_DIVISION_OPTION) {
+      setRidDivisionCreation({ value: '', previous: draft.ridOwner.division });
+      return;
+    }
+    setRidDivisionCreation(null);
+    const company = draft.ridOwner.company.trim();
+    if (company) {
+      onRegisterRidDivision(company, value);
+    }
+    onChange({ ...draft, ridOwner: { ...draft.ridOwner, division: value } });
+  };
+
+  const confirmRidDivisionCreation = () => {
+    if (!ridDivisionCreation) {
+      return;
+    }
+    const next = ridDivisionCreation.value.trim();
+    if (!next) {
+      setRidDivisionCreation(null);
+      return;
+    }
+    const company = draft.ridOwner.company.trim();
+    if (company) {
+      onRegisterRidDivision(company, next);
+    }
+    onChange({ ...draft, ridOwner: { ...draft.ridOwner, division: next } });
+    setRidDivisionCreation(null);
+  };
+
+  const cancelRidDivisionCreation = () => {
+    if (!ridDivisionCreation) {
+      return;
+    }
+    onChange({ ...draft, ridOwner: { ...draft.ridOwner, division: ridDivisionCreation.previous } });
+    setRidDivisionCreation(null);
+  };
+
+  const handleTechnologySelection = (values: string[] | null) => {
+    const nextValues = values ?? [];
+    if (nextValues.includes(CREATE_TECHNOLOGY_OPTION)) {
+      setTechnologyCreation({ value: '', previous: draft.technologyStack });
+      return;
+    }
+    const normalized = Array.from(
+      new Set(
+        nextValues
+          .map((item) => item.trim())
+          .filter((item) => item && item !== CREATE_TECHNOLOGY_OPTION)
+      )
     );
-    const target = next[index];
-    if (patch.name !== undefined) {
-      handleRegisterIfNeeded(patch.name, Object.keys(libraryRegistry), onRegisterLibrary);
-    }
-    if (patch.version !== undefined && target.name.trim()) {
-      onRegisterLibraryVersion(target.name.trim(), patch.version.trim());
-    }
-    onChange({ ...draft, libraries: next });
+    normalized.forEach((item) => handleRegisterIfNeeded(item, technologyOptions, onRegisterTechnology));
+    onChange({ ...draft, technologyStack: normalized });
   };
 
-  const handleAddLibrary = () => {
-    onChange({
-      ...draft,
-      libraries: [...draft.libraries, { name: '', version: '' }]
-    });
+  const confirmTechnologyCreation = () => {
+    if (!technologyCreation) {
+      return;
+    }
+    const next = technologyCreation.value.trim();
+    if (!next) {
+      setTechnologyCreation(null);
+      return;
+    }
+    onRegisterTechnology(next);
+    const updated = Array.from(new Set([...technologyCreation.previous, next]));
+    onChange({ ...draft, technologyStack: updated });
+    setTechnologyCreation(null);
   };
 
-  const handleRemoveLibrary = (index: number) => {
+  const cancelTechnologyCreation = () => {
+    if (!technologyCreation) {
+      return;
+    }
+    onChange({ ...draft, technologyStack: technologyCreation.previous });
+    setTechnologyCreation(null);
+  };
+
+  const handleRemoveTechnology = (value: string) => {
     onChange({
       ...draft,
-      libraries: draft.libraries.filter((_, libraryIndex) => libraryIndex !== index)
+      technologyStack: draft.technologyStack.filter((item) => item !== value)
     });
   };
 
@@ -934,13 +1245,51 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     const next = draft.userStats.companies.map((company, companyIndex) =>
       companyIndex === index ? { ...company, ...patch } : company
     );
-    if (patch.name !== undefined) {
-      handleRegisterIfNeeded(patch.name, companyNames, onRegisterCompany);
-    }
     onChange({
       ...draft,
       userStats: { companies: next }
     });
+  };
+
+  const handleCompanyUsageSelection = (index: number, value: string | null) => {
+    if (!value) {
+      setCompanyUsageCreation((prev) => (prev?.index === index ? null : prev));
+      handleUserCompanyChange(index, { name: '' });
+      return;
+    }
+    if (value === CREATE_COMPANY_USAGE_OPTION) {
+      setCompanyUsageCreation({
+        index,
+        value: '',
+        previous: draft.userStats.companies[index]?.name ?? ''
+      });
+      return;
+    }
+    setCompanyUsageCreation((prev) => (prev?.index === index ? null : prev));
+    handleRegisterIfNeeded(value, companyNames, onRegisterCompany);
+    handleUserCompanyChange(index, { name: value });
+  };
+
+  const confirmCompanyUsageCreation = () => {
+    if (!companyUsageCreation) {
+      return;
+    }
+    const next = companyUsageCreation.value.trim();
+    if (!next) {
+      setCompanyUsageCreation(null);
+      return;
+    }
+    onRegisterCompany(next);
+    handleUserCompanyChange(companyUsageCreation.index, { name: next });
+    setCompanyUsageCreation(null);
+  };
+
+  const cancelCompanyUsageCreation = () => {
+    if (!companyUsageCreation) {
+      return;
+    }
+    handleUserCompanyChange(companyUsageCreation.index, { name: companyUsageCreation.previous });
+    setCompanyUsageCreation(null);
   };
 
   const handleAddUserCompany = () => {
@@ -961,6 +1310,118 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
             ? draft.userStats.companies
             : draft.userStats.companies.filter((_, companyIndex) => companyIndex !== index)
       }
+    });
+  };
+
+  const handleLibrariesChange = (index: number, patch: Partial<LibraryDependency>) => {
+    const next = draft.libraries.map((library, libraryIndex) =>
+      libraryIndex === index ? { ...library, ...patch } : library
+    );
+    onChange({ ...draft, libraries: next });
+  };
+
+  const handleLibrarySelection = (index: number, value: string | null) => {
+    if (!value) {
+      setLibraryCreation((prev) => (prev?.index === index ? null : prev));
+      setLibraryVersionCreation((prev) => (prev?.index === index ? null : prev));
+      handleLibrariesChange(index, { name: '', version: '' });
+      return;
+    }
+    if (value === CREATE_LIBRARY_OPTION) {
+      setLibraryCreation({ index, value: '', previous: draft.libraries[index]?.name ?? '' });
+      return;
+    }
+    setLibraryCreation((prev) => (prev?.index === index ? null : prev));
+    setLibraryVersionCreation((prev) => (prev?.index === index ? null : prev));
+    onRegisterLibrary(value);
+    handleLibrariesChange(index, { name: value, version: '' });
+  };
+
+  const confirmLibraryCreation = () => {
+    if (!libraryCreation) {
+      return;
+    }
+    const next = libraryCreation.value.trim();
+    if (!next) {
+      setLibraryCreation(null);
+      return;
+    }
+    onRegisterLibrary(next);
+    handleLibrariesChange(libraryCreation.index, { name: next, version: '' });
+    setLibraryCreation(null);
+  };
+
+  const cancelLibraryCreation = () => {
+    if (!libraryCreation) {
+      return;
+    }
+    handleLibrariesChange(libraryCreation.index, { name: libraryCreation.previous });
+    setLibraryCreation(null);
+  };
+
+  const handleLibraryVersionSelection = (index: number, value: string | null) => {
+    if (!value) {
+      setLibraryVersionCreation((prev) => (prev?.index === index ? null : prev));
+      handleLibrariesChange(index, { version: '' });
+      return;
+    }
+    if (value === CREATE_LIBRARY_VERSION_OPTION) {
+      setLibraryVersionCreation({
+        index,
+        value: '',
+        previous: draft.libraries[index]?.version ?? ''
+      });
+      return;
+    }
+    setLibraryVersionCreation((prev) => (prev?.index === index ? null : prev));
+    const libraryName = draft.libraries[index]?.name.trim();
+    if (libraryName) {
+      onRegisterLibraryVersion(libraryName, value);
+    }
+    handleLibrariesChange(index, { version: value });
+  };
+
+  const confirmLibraryVersionCreation = () => {
+    if (!libraryVersionCreation) {
+      return;
+    }
+    const next = libraryVersionCreation.value.trim();
+    if (!next) {
+      setLibraryVersionCreation(null);
+      return;
+    }
+    const libraryName = draft.libraries[libraryVersionCreation.index]?.name.trim();
+    if (libraryName) {
+      onRegisterLibraryVersion(libraryName, next);
+    }
+    handleLibrariesChange(libraryVersionCreation.index, { version: next });
+    setLibraryVersionCreation(null);
+  };
+
+  const cancelLibraryVersionCreation = () => {
+    if (!libraryVersionCreation) {
+      return;
+    }
+    handleLibrariesChange(libraryVersionCreation.index, { version: libraryVersionCreation.previous });
+    setLibraryVersionCreation(null);
+  };
+
+  const handleAddLibrary = () => {
+    onChange({
+      ...draft,
+      libraries: [...draft.libraries, { name: '', version: '' }]
+    });
+  };
+
+  const handleRemoveLibrary = (index: number) => {
+    setLibraryCreation((prev) => (prev?.index === index ? null : prev));
+    setLibraryVersionCreation((prev) => (prev?.index === index ? null : prev));
+    onChange({
+      ...draft,
+      libraries:
+        draft.libraries.length <= 1
+          ? draft.libraries
+          : draft.libraries.filter((_, libraryIndex) => libraryIndex !== index)
     });
   };
 
@@ -1016,26 +1477,6 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     });
   };
 
-  const handleLocalizationChange = (item: SelectItem<string> | null) => {
-    const value = item?.value ?? 'ru';
-    handleBasicFieldChange('localization', value);
-    handleRegisterIfNeeded(value, localizations, onRegisterLocalization);
-  };
-
-  const handleRidCompanyChange = (item: SelectItem<string> | null) => {
-    const value = item?.value ?? '';
-    handleRegisterIfNeeded(value, Object.keys(ridCompanyRegistry), onRegisterRidCompany);
-    onChange({ ...draft, ridOwner: { ...draft.ridOwner, company: value } });
-  };
-
-  const handleRidDivisionChange = (item: SelectItem<string> | null) => {
-    const value = item?.value ?? '';
-    if (draft.ridOwner.company.trim() && value.trim()) {
-      onRegisterRidDivision(draft.ridOwner.company.trim(), value.trim());
-    }
-    onChange({ ...draft, ridOwner: { ...draft.ridOwner, division: value } });
-  };
-
   const renderGeneralSection = () => (
     <>
       <label className={styles.field}>
@@ -1048,46 +1489,6 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           onChange={(value) => handleBasicFieldChange('name', value ?? '')}
         />
       </label>
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Описание
-        </Text>
-        <textarea
-          className={styles.textarea}
-          value={draft.description}
-          onChange={(event) => handleBasicFieldChange('description', event.target.value)}
-        />
-      </label>
-      <div className={styles.fieldGroup}>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Продукт
-          </Text>
-          <TextField
-            size="s"
-            value={draft.productName}
-            onChange={(value) => {
-              const next = value ?? '';
-              handleBasicFieldChange('productName', next);
-              handleRegisterIfNeeded(next, productNames, onRegisterProduct);
-            }}
-          />
-        </label>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Компания-разработчик
-          </Text>
-          <TextField
-            size="s"
-            value={draft.creatorCompany}
-            onChange={(value) => {
-              const next = value ?? '';
-              handleBasicFieldChange('creatorCompany', next);
-              handleRegisterIfNeeded(next, creatorCompanies, onRegisterCreatorCompany);
-            }}
-          />
-        </label>
-      </div>
       <div className={styles.fieldGroup}>
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
@@ -1104,21 +1505,144 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
         </label>
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
+            Компания-разработчик
+          </Text>
+          <Combobox<string>
+            size="s"
+            items={creatorCompanyItems}
+            value={
+              creatorCompanyCreation
+                ? CREATE_CREATOR_COMPANY_OPTION
+                : draft.creatorCompany.trim() || null
+            }
+            getItemKey={(item) => item}
+            getItemLabel={(item) =>
+              item === CREATE_CREATOR_COMPANY_OPTION ? 'Добавить компанию…' : item || '—'
+            }
+            placeholder="Выберите компанию"
+            onChange={handleCreatorCompanySelection}
+          />
+          {creatorCompanyCreation && (
+            <div className={styles.inlineForm}>
+              <input
+                className={styles.input}
+                value={creatorCompanyCreation.value}
+                onChange={(event) =>
+                  setCreatorCompanyCreation({ ...creatorCompanyCreation, value: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    confirmCreatorCompanyCreation();
+                  }
+                }}
+                placeholder="Введите название компании"
+              />
+              <div className={styles.inlineButtons}>
+                <Button size="xs" label="Сохранить" view="primary" onClick={confirmCreatorCompanyCreation} />
+                <Button size="xs" label="Отмена" view="ghost" onClick={cancelCreatorCompanyCreation} />
+              </div>
+            </div>
+          )}
+        </label>
+      </div>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Продукт
+          </Text>
+          <Combobox<string>
+            size="s"
+            items={productItems}
+            value={productCreation ? CREATE_PRODUCT_OPTION : draft.productName.trim() || null}
+            getItemKey={(item) => item}
+            getItemLabel={(item) => (item === CREATE_PRODUCT_OPTION ? 'Добавить продукт…' : item || '—')}
+            placeholder="Выберите продукт"
+            onChange={handleProductSelection}
+          />
+          {productCreation && (
+            <div className={styles.inlineForm}>
+              <input
+                className={styles.input}
+                value={productCreation.value}
+                onChange={(event) =>
+                  setProductCreation({ ...productCreation, value: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    confirmProductCreation();
+                  }
+                }}
+                placeholder="Введите название продукта"
+              />
+              <div className={styles.inlineButtons}>
+                <Button size="xs" label="Сохранить" view="primary" onClick={confirmProductCreation} />
+                <Button size="xs" label="Отмена" view="ghost" onClick={cancelProductCreation} />
+              </div>
+            </div>
+          )}
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
             Локализация
           </Text>
-          <Select<SelectItem<string>>
+          <Combobox<string>
             size="s"
             items={localizationItems}
             value={
-              localizationItems.find((item) => item.value === draft.localization.trim()) ??
-              localizationItems[0] ?? null
+              localizationCreation
+                ? CREATE_LOCALIZATION_OPTION
+                : draft.localization.trim() || 'ru'
             }
-            getItemLabel={(item) => item.label}
-            getItemKey={(item) => item.value}
-            onChange={handleLocalizationChange}
+            getItemKey={(item) => item}
+            getItemLabel={(item) => (item === CREATE_LOCALIZATION_OPTION ? 'Добавить локализацию…' : item)}
+            placeholder="Выберите локализацию"
+            onChange={handleLocalizationSelection}
           />
+          {localizationCreation && (
+            <div className={styles.inlineForm}>
+              <input
+                className={styles.input}
+                value={localizationCreation.value}
+                onChange={(event) =>
+                  setLocalizationCreation({ ...localizationCreation, value: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    confirmLocalizationCreation();
+                  }
+                }}
+                placeholder="Например, ru"
+              />
+              <div className={styles.inlineButtons}>
+                <Button size="xs" label="Сохранить" view="primary" onClick={confirmLocalizationCreation} />
+                <Button size="xs" label="Отмена" view="ghost" onClick={cancelLocalizationCreation} />
+              </div>
+            </div>
+          )}
         </label>
       </div>
+      <div className={styles.metricDisplay}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Оценка переиспользования
+        </Text>
+        <Text size="m" weight="semibold">{draft.reuseScore}%</Text>
+        <Text size="xs" view="secondary" className={styles.metricHint}>
+          Значение вычисляется автоматически и используется как справочная метрика.
+        </Text>
+      </div>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Описание
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.description}
+          onChange={(event) => handleBasicFieldChange('description', event.target.value)}
+        />
+      </label>
       <label className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
           Доменные области
@@ -1130,12 +1654,259 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           multiple
           getItemKey={(item) => item}
           getItemLabel={(item) => domainLabelMap[item] ?? item}
+          placeholder="Выберите конечные домены"
           onChange={(value) => handleBasicFieldChange('domainIds', value ?? [])}
         />
+        {mode === 'create' && draft.domainIds.length === 0 && (
+          <Text size="xs" className={styles.error}>
+            Укажите хотя бы один конечный домен.
+          </Text>
+        )}
       </label>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Владелец РИД — компания
+          </Text>
+          <Combobox<string>
+            size="s"
+            items={ridCompanyItems}
+            value={
+              ridCompanyCreation
+                ? CREATE_RID_COMPANY_OPTION
+                : draft.ridOwner.company.trim() || null
+            }
+            getItemKey={(item) => item}
+            getItemLabel={(item) => (item === CREATE_RID_COMPANY_OPTION ? 'Добавить компанию…' : item)}
+            placeholder="Выберите компанию"
+            onChange={handleRidCompanySelection}
+          />
+          {ridCompanyCreation && (
+            <div className={styles.inlineForm}>
+              <input
+                className={styles.input}
+                value={ridCompanyCreation.value}
+                onChange={(event) =>
+                  setRidCompanyCreation({ ...ridCompanyCreation, value: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    confirmRidCompanyCreation();
+                  }
+                }}
+                placeholder="Введите компанию"
+              />
+              <div className={styles.inlineButtons}>
+                <Button size="xs" label="Сохранить" view="primary" onClick={confirmRidCompanyCreation} />
+                <Button size="xs" label="Отмена" view="ghost" onClick={cancelRidCompanyCreation} />
+              </div>
+            </div>
+          )}
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Владелец РИД — подразделение
+          </Text>
+          <Combobox<string>
+            size="s"
+            items={ridDivisionItems}
+            value={
+              ridDivisionCreation
+                ? CREATE_RID_DIVISION_OPTION
+                : draft.ridOwner.division.trim() || null
+            }
+            getItemKey={(item) => item}
+            getItemLabel={(item) => (item === CREATE_RID_DIVISION_OPTION ? 'Добавить подразделение…' : item)}
+            placeholder="Выберите подразделение"
+            disabled={!draft.ridOwner.company.trim()}
+            onChange={handleRidDivisionSelection}
+          />
+          {ridDivisionCreation && (
+            <div className={styles.inlineForm}>
+              <input
+                className={styles.input}
+                value={ridDivisionCreation.value}
+                onChange={(event) =>
+                  setRidDivisionCreation({ ...ridDivisionCreation, value: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    confirmRidDivisionCreation();
+                  }
+                }}
+                placeholder="Введите подразделение"
+              />
+              <div className={styles.inlineButtons}>
+                <Button size="xs" label="Сохранить" view="primary" onClick={confirmRidDivisionCreation} />
+                <Button size="xs" label="Отмена" view="ghost" onClick={cancelRidDivisionCreation} />
+              </div>
+            </div>
+          )}
+        </label>
+      </div>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Технологический стек
+        </Text>
+        <div className={styles.chipList}>
+          {draft.technologyStack.length > 0 ? (
+            draft.technologyStack.map((technology) => (
+              <span key={technology} className={styles.chip}>
+                <Text size="xs">{technology}</Text>
+                <button
+                  type="button"
+                  className={styles.chipButton}
+                  onClick={() => handleRemoveTechnology(technology)}
+                >
+                  ×
+                </button>
+              </span>
+            ))
+          ) : (
+            <Text size="xs" view="secondary">
+              Технологии не выбраны
+            </Text>
+          )}
+        </div>
+        <Combobox<string>
+          size="s"
+          items={technologyItems}
+          value={draft.technologyStack}
+          multiple
+          getItemKey={(item) => item}
+          getItemLabel={(item) => (item === CREATE_TECHNOLOGY_OPTION ? 'Добавить технологию…' : item)}
+          placeholder="Добавьте технологию из справочника"
+          onChange={handleTechnologySelection}
+        />
+        {technologyCreation && (
+          <div className={styles.inlineForm}>
+            <input
+              className={styles.input}
+              value={technologyCreation.value}
+              onChange={(event) =>
+                setTechnologyCreation({ ...technologyCreation, value: event.target.value })
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  confirmTechnologyCreation();
+                }
+              }}
+              placeholder="Например, React"
+            />
+            <div className={styles.inlineButtons}>
+              <Button size="xs" label="Сохранить" view="primary" onClick={confirmTechnologyCreation} />
+              <Button size="xs" label="Отмена" view="ghost" onClick={cancelTechnologyCreation} />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Команда проекта
+        </Text>
+        <div className={styles.listStack}>
+          {draft.projectTeam.map((member, index) => (
+            <div key={member.id} className={styles.inlineGroup}>
+              <TextField
+                size="s"
+                value={member.fullName}
+                placeholder="ФИО"
+                onChange={(value) => handleTeamChange(index, { fullName: value ?? '' })}
+              />
+              <Select<SelectItem<TeamRole>>
+                size="s"
+                items={teamRoleItems}
+                value={teamRoleItems.find((item) => item.value === member.role) ?? null}
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.value}
+                onChange={(item) => item && handleTeamChange(index, { role: item.value })}
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveTeamMember(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить участника" onClick={handleAddTeamMember} />
+      </div>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Компании и лицензии
+        </Text>
+        <div className={styles.listStack}>
+          {draft.userStats.companies.map((company, index) => (
+            <div key={`${company.name || 'company'}-${index}`} className={styles.inlineGroup}>
+              <Combobox<string>
+                size="s"
+                items={companyUsageItems}
+                value={
+                  companyUsageCreation?.index === index
+                    ? CREATE_COMPANY_USAGE_OPTION
+                    : company.name.trim() || null
+                }
+                getItemKey={(item) => item}
+                getItemLabel={(item) => (item === CREATE_COMPANY_USAGE_OPTION ? 'Добавить компанию…' : item || '—')}
+                placeholder="Выберите компанию"
+                onChange={(value) => handleCompanyUsageSelection(index, value)}
+              />
+              {companyUsageCreation?.index === index && (
+                <div className={styles.inlineForm}>
+                  <input
+                    className={styles.input}
+                    value={companyUsageCreation.value}
+                    onChange={(event) =>
+                      setCompanyUsageCreation({ ...companyUsageCreation, value: event.target.value })
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        confirmCompanyUsageCreation();
+                      }
+                    }}
+                    placeholder="Введите компанию"
+                  />
+                  <div className={styles.inlineButtons}>
+                    <Button size="xs" label="Сохранить" view="primary" onClick={confirmCompanyUsageCreation} />
+                    <Button size="xs" label="Отмена" view="ghost" onClick={cancelCompanyUsageCreation} />
+                  </div>
+                </div>
+              )}
+              <TextField
+                size="s"
+                type="number"
+                value={String(company.licenses)}
+                placeholder="Лицензии"
+                onChange={(value) =>
+                  handleUserCompanyChange(index, {
+                    licenses: Number(value ?? company.licenses)
+                  })
+                }
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveUserCompany(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить компанию" onClick={handleAddUserCompany} />
+      </div>
+    </>
+  );
+
+  const renderCalculationSection = () => (
+    <>
       <label className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
-          Зависимости
+          Зависимые модули
         </Text>
         <Combobox<string>
           size="s"
@@ -1144,79 +1915,114 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           multiple
           getItemKey={(item) => item}
           getItemLabel={(item) => moduleLabelMap[item] ?? item}
+          placeholder="Выберите зависимости"
           onChange={(value) => handleBasicFieldChange('dependencyIds', value ?? [])}
         />
       </label>
-    </>
-  );
-
-  const renderCalculationSection = () => (
-    <>
-      <div className={styles.fieldGroup}>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Индекс переиспользования, %
-          </Text>
-          <TextField
-            size="s"
-            type="number"
-            value={String(draft.reuseScore)}
-            onChange={(value) =>
-              handleBasicFieldChange('reuseScore', Number(value ?? draft.reuseScore))
-            }
-          />
-        </label>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Покрытие тестами, %
-          </Text>
-          <TextField
-            size="s"
-            type="number"
-            value={String(draft.metrics.coverage)}
-            onChange={(value) =>
-              handleBasicFieldChange('metrics', {
-                ...draft.metrics,
-                coverage: Number(value ?? draft.metrics.coverage)
-              })
-            }
-          />
-        </label>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Входные данные
+        </Text>
+        <div className={styles.listStack}>
+          {draft.dataIn.map((input, index) => (
+            <div key={input.id || `input-${index}`} className={styles.dataRow}>
+              <TextField
+                size="s"
+                value={input.id}
+                placeholder="ID"
+                onChange={(value) => handleDataInChange(index, { id: value ?? '' })}
+              />
+              <TextField
+                size="s"
+                value={input.label}
+                placeholder="Описание"
+                onChange={(value) => handleDataInChange(index, { label: value ?? '' })}
+              />
+              <Combobox<string>
+                size="s"
+                items={artifactItems}
+                value={input.sourceId ?? null}
+                getItemKey={(item) => item}
+                getItemLabel={(item) => artifactLabelMap[item] ?? item}
+                placeholder="Артефакт"
+                onChange={(value) => handleDataInChange(index, { sourceId: value ?? undefined })}
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveDataIn(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить вход" onClick={handleAddDataIn} />
       </div>
-      <div className={styles.fieldGroup}>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Автоматизация регрессии, %
-          </Text>
-          <TextField
-            size="s"
-            type="number"
-            value={String(draft.metrics.automationRate)}
-            onChange={(value) =>
-              handleBasicFieldChange('metrics', {
-                ...draft.metrics,
-                automationRate: Number(value ?? draft.metrics.automationRate)
-              })
-            }
-          />
-        </label>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Количество тестов
-          </Text>
-          <TextField
-            size="s"
-            type="number"
-            value={String(draft.metrics.tests)}
-            onChange={(value) =>
-              handleBasicFieldChange('metrics', {
-                ...draft.metrics,
-                tests: Number(value ?? draft.metrics.tests)
-              })
-            }
-          />
-        </label>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Выходные данные
+        </Text>
+        <div className={styles.listStack}>
+          {draft.dataOut.map((output, index) => (
+            <div key={output.id || `output-${index}`} className={styles.dataRow}>
+              <TextField
+                size="s"
+                value={output.id}
+                placeholder="ID"
+                onChange={(value) => handleDataOutChange(index, { id: value ?? '' })}
+              />
+              <TextField
+                size="s"
+                value={output.label}
+                placeholder="Описание"
+                onChange={(value) => handleDataOutChange(index, { label: value ?? '' })}
+              />
+              <Combobox<string>
+                size="s"
+                items={moduleItems}
+                value={output.consumerIds ?? []}
+                multiple
+                getItemKey={(item) => item}
+                getItemLabel={(item) => moduleLabelMap[item] ?? item}
+                placeholder="Потребители"
+                onChange={(value) => handleDataOutChange(index, { consumerIds: value ?? [] })}
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveDataOut(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить выход" onClick={handleAddDataOut} />
       </div>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Производимые артефакты
+        </Text>
+        <Combobox<string>
+          size="s"
+          items={artifactItems}
+          value={draft.produces}
+          multiple
+          getItemKey={(item) => item}
+          getItemLabel={(item) => artifactLabelMap[item] ?? item}
+          placeholder="Выберите артефакты"
+          onChange={(value) => handleBasicFieldChange('produces', value ?? [])}
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Формула расчёта эффекта
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.formula}
+          onChange={(event) => handleBasicFieldChange('formula', event.target.value)}
+        />
+      </label>
     </>
   );
 
@@ -1284,9 +2090,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           <TextField
             size="s"
             value={draft.architectureDiagramUrl}
-            onChange={(value) =>
-              handleBasicFieldChange('architectureDiagramUrl', value ?? '')
-            }
+            onChange={(value) => handleBasicFieldChange('architectureDiagramUrl', value ?? '')}
           />
         </label>
       </div>
@@ -1311,9 +2115,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           <Select<SelectItem<ModuleNode['deploymentTool']>>
             size="s"
             items={deploymentItems}
-            value={
-              deploymentItems.find((item) => item.value === draft.deploymentTool) ?? null
-            }
+            value={deploymentItems.find((item) => item.value === draft.deploymentTool) ?? null}
             getItemLabel={(item) => item.label}
             getItemKey={(item) => item.value}
             onChange={(item) => item && handleBasicFieldChange('deploymentTool', item.value)}
@@ -1322,7 +2124,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
       </div>
       <div className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
-          Интеграция с лицензированием
+          Интеграция с сервером лицензирования
         </Text>
         <Switch
           size="s"
@@ -1330,245 +2132,155 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           onChange={({ checked }) => handleBasicFieldChange('licenseServerIntegrated', !!checked)}
         />
       </div>
-      <div className={styles.fieldGroup}>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Владелец RID — компания
-          </Text>
-          <Select<SelectItem<string>>
-            size="s"
-            items={ridCompanies}
-            value={
-              draft.ridOwner.company
-                ? ridCompanies.find((item) => item.value === draft.ridOwner.company) ?? null
-                : null
-            }
-            getItemLabel={(item) => item.label}
-            getItemKey={(item) => item.value}
-            onChange={handleRidCompanyChange}
-            placeholder="Выберите компанию"
-          />
-        </label>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Владелец RID — подразделение
-          </Text>
-          <Select<SelectItem<string>>
-            size="s"
-            items={ridDivisions}
-            value={
-              draft.ridOwner.division
-                ? ridDivisions.find((item) => item.value === draft.ridOwner.division) ?? null
-                : null
-            }
-            getItemLabel={(item) => item.label}
-            getItemKey={(item) => item.value}
-            onChange={handleRidDivisionChange}
-            placeholder="Выберите подразделение"
-          />
-        </label>
-      </div>
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Технологический стек (через запятую или перенос строки)
-        </Text>
-        <textarea
-          className={styles.textarea}
-          value={draft.technologyStack.join('\n')}
-          onChange={(event) => handleTechnologyChange(event.target.value)}
-          placeholder="Например: React, Node.js"
-        />
-      </label>
-      <div className={styles.subSection}>
-        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
-          Команда проекта
-        </Text>
-        <div className={styles.listStack}>
-          {draft.projectTeam.map((member, index) => (
-            <div key={member.id} className={styles.inlineGroup}>
-              <TextField
-                size="s"
-                value={member.fullName}
-                placeholder="ФИО"
-                onChange={(value) => handleTeamChange(index, { fullName: value ?? '' })}
-              />
-              <TextField
-                size="s"
-                value={member.role}
-                placeholder="Роль"
-                onChange={(value) => handleTeamChange(index, { role: (value ?? '') as TeamRole })}
-              />
-              <Button
-                size="xs"
-                view="ghost"
-                label="Удалить"
-                onClick={() => handleRemoveTeamMember(index)}
-              />
-            </div>
-          ))}
-        </div>
-        <Button size="xs" view="secondary" label="Добавить участника" onClick={handleAddTeamMember} />
-      </div>
-      <div className={styles.subSection}>
-        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
-          Использование по компаниям
-        </Text>
-        <div className={styles.listStack}>
-          {draft.userStats.companies.map((company, index) => (
-            <div key={`${company.name || 'company'}-${index}`} className={styles.inlineGroup}>
-              <TextField
-                size="s"
-                value={company.name}
-                placeholder="Компания"
-                onChange={(value) => handleUserCompanyChange(index, { name: value ?? '' })}
-              />
-              <TextField
-                size="s"
-                type="number"
-                value={String(company.licenses)}
-                placeholder="Лицензии"
-                onChange={(value) =>
-                  handleUserCompanyChange(index, {
-                    licenses: Number(value ?? company.licenses)
-                  })
-                }
-              />
-              <Button
-                size="xs"
-                view="ghost"
-                label="Удалить"
-                onClick={() => handleRemoveUserCompany(index)}
-              />
-            </div>
-          ))}
-        </div>
-        <Button size="xs" view="secondary" label="Добавить компанию" onClick={handleAddUserCompany} />
-      </div>
       <div className={styles.subSection}>
         <Text size="xs" weight="semibold" className={styles.sectionTitle}>
           Библиотеки
         </Text>
         <div className={styles.listStack}>
-          {draft.libraries.map((library, index) => (
-            <div key={`${library.name || 'library'}-${index}`} className={styles.inlineGroup}>
-              <TextField
-                size="s"
-                value={library.name}
-                placeholder="Библиотека"
-                onChange={(value) => handleLibrariesChange(index, { name: value ?? '' })}
-              />
-              <TextField
-                size="s"
-                value={library.version}
-                placeholder="Версия"
-                onChange={(value) => handleLibrariesChange(index, { version: value ?? '' })}
-              />
-              <Button
-                size="xs"
-                view="ghost"
-                label="Удалить"
-                onClick={() => handleRemoveLibrary(index)}
-              />
-            </div>
-          ))}
+          {draft.libraries.map((library, index) => {
+            const libraryName = library.name.trim();
+            const versionItems = (() => {
+              const base = buildItems(libraryName ? libraryRegistry[libraryName] ?? [] : [], library.version);
+              if (libraryName) {
+                base.push(CREATE_LIBRARY_VERSION_OPTION);
+              }
+              return base;
+            })();
+            return (
+              <div key={`${library.name || 'library'}-${index}`} className={styles.inlineGroup}>
+                <Combobox<string>
+                  size="s"
+                  items={libraryItems}
+                  value={
+                    libraryCreation?.index === index
+                      ? CREATE_LIBRARY_OPTION
+                      : library.name.trim() || null
+                  }
+                  getItemKey={(item) => item}
+                  getItemLabel={(item) => (item === CREATE_LIBRARY_OPTION ? 'Добавить библиотеку…' : item || '—')}
+                  placeholder="Выберите библиотеку"
+                  onChange={(value) => handleLibrarySelection(index, value)}
+                />
+                {libraryCreation?.index === index && (
+                  <div className={styles.inlineForm}>
+                    <input
+                      className={styles.input}
+                      value={libraryCreation.value}
+                      onChange={(event) =>
+                        setLibraryCreation({ ...libraryCreation, value: event.target.value })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          confirmLibraryCreation();
+                        }
+                      }}
+                      placeholder="Введите библиотеку"
+                    />
+                    <div className={styles.inlineButtons}>
+                      <Button size="xs" label="Сохранить" view="primary" onClick={confirmLibraryCreation} />
+                      <Button size="xs" label="Отмена" view="ghost" onClick={cancelLibraryCreation} />
+                    </div>
+                  </div>
+                )}
+                <Combobox<string>
+                  size="s"
+                  items={versionItems}
+                  value={
+                    libraryVersionCreation?.index === index
+                      ? CREATE_LIBRARY_VERSION_OPTION
+                      : library.version.trim() || null
+                  }
+                  disabled={!libraryName}
+                  getItemKey={(item) => item}
+                  getItemLabel={(item) => (item === CREATE_LIBRARY_VERSION_OPTION ? 'Добавить версию…' : item || '—')}
+                  placeholder="Выберите версию"
+                  onChange={(value) => handleLibraryVersionSelection(index, value)}
+                />
+                {libraryVersionCreation?.index === index && (
+                  <div className={styles.inlineForm}>
+                    <input
+                      className={styles.input}
+                      value={libraryVersionCreation.value}
+                      onChange={(event) =>
+                        setLibraryVersionCreation({ ...libraryVersionCreation, value: event.target.value })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          confirmLibraryVersionCreation();
+                        }
+                      }}
+                      placeholder="Введите версию"
+                    />
+                    <div className={styles.inlineButtons}>
+                      <Button size="xs" label="Сохранить" view="primary" onClick={confirmLibraryVersionCreation} />
+                      <Button size="xs" label="Отмена" view="ghost" onClick={cancelLibraryVersionCreation} />
+                    </div>
+                  </div>
+                )}
+                <Button
+                  size="xs"
+                  view="ghost"
+                  label="Удалить"
+                  onClick={() => handleRemoveLibrary(index)}
+                />
+              </div>
+            );
+          })}
         </div>
         <Button size="xs" view="secondary" label="Добавить библиотеку" onClick={handleAddLibrary} />
       </div>
-      <div className={styles.subSection}>
-        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
-          Входные данные
-        </Text>
-        <div className={styles.listStack}>
-          {draft.dataIn.map((input, index) => (
-            <div key={input.id || `input-${index}`} className={styles.dataRow}>
-              <TextField
-                size="s"
-                value={input.id}
-                placeholder="ID"
-                onChange={(value) => handleDataInChange(index, { id: value ?? '' })}
-              />
-              <TextField
-                size="s"
-                value={input.label}
-                placeholder="Описание"
-                onChange={(value) => handleDataInChange(index, { label: value ?? '' })}
-              />
-              <Combobox<string>
-                size="s"
-                items={artifactItems}
-                value={input.sourceId ?? null}
-                getItemKey={(item) => item}
-                getItemLabel={(item) => artifactLabelMap[item] ?? item}
-                placeholder="Артефакт"
-                onChange={(value) => handleDataInChange(index, { sourceId: value ?? undefined })}
-              />
-              <Button
-                size="xs"
-                view="ghost"
-                label="Удалить"
-                onClick={() => handleRemoveDataIn(index)}
-              />
-            </div>
-          ))}
-        </div>
-        <Button size="xs" view="secondary" label="Добавить вход" onClick={handleAddDataIn} />
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Покрытие тестами, %
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.metrics.coverage)}
+            onChange={(value) =>
+              handleBasicFieldChange('metrics', {
+                ...draft.metrics,
+                coverage: Number(value ?? draft.metrics.coverage)
+              })
+            }
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Автоматизация регрессии, %
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.metrics.automationRate)}
+            onChange={(value) =>
+              handleBasicFieldChange('metrics', {
+                ...draft.metrics,
+                automationRate: Number(value ?? draft.metrics.automationRate)
+              })
+            }
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Количество тестов
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.metrics.tests)}
+            onChange={(value) =>
+              handleBasicFieldChange('metrics', {
+                ...draft.metrics,
+                tests: Number(value ?? draft.metrics.tests)
+              })
+            }
+          />
+        </label>
       </div>
-      <div className={styles.subSection}>
-        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
-          Выходные данные
-        </Text>
-        <div className={styles.listStack}>
-          {draft.dataOut.map((output, index) => (
-            <div key={output.id || `output-${index}`} className={styles.dataRow}>
-              <TextField
-                size="s"
-                value={output.id}
-                placeholder="ID"
-                onChange={(value) => handleDataOutChange(index, { id: value ?? '' })}
-              />
-              <TextField
-                size="s"
-                value={output.label}
-                placeholder="Описание"
-                onChange={(value) => handleDataOutChange(index, { label: value ?? '' })}
-              />
-              <Combobox<string>
-                size="s"
-                items={moduleItems}
-                value={output.consumerIds ?? []}
-                multiple
-                getItemKey={(item) => item}
-                getItemLabel={(item) => moduleLabelMap[item] ?? item}
-                placeholder="Потребители"
-                onChange={(value) =>
-                  handleDataOutChange(index, { consumerIds: value ?? [] })
-                }
-              />
-              <Button
-                size="xs"
-                view="ghost"
-                label="Удалить"
-                onClick={() => handleRemoveDataOut(index)}
-              />
-            </div>
-          ))}
-        </div>
-        <Button size="xs" view="secondary" label="Добавить выход" onClick={handleAddDataOut} />
-      </div>
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Производимые артефакты
-        </Text>
-        <Combobox<string>
-          size="s"
-          items={artifactItems}
-          value={draft.produces}
-          multiple
-          getItemKey={(item) => item}
-          getItemLabel={(item) => artifactLabelMap[item] ?? item}
-          onChange={(value) => handleBasicFieldChange('produces', value ?? [])}
-        />
-      </label>
     </>
   );
 
@@ -1625,7 +2337,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
       </label>
       <label className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
-          Базовая нагрузка, пользователей
+          Базовое количество пользователей
         </Text>
         <TextField
           size="s"
@@ -1637,16 +2349,6 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
               baselineUsers: Number(value ?? draft.nonFunctional.baselineUsers)
             })
           }
-        />
-      </label>
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Формула расчёта эффекта
-        </Text>
-        <textarea
-          className={styles.textarea}
-          value={draft.formula}
-          onChange={(event) => handleBasicFieldChange('formula', event.target.value)}
         />
       </label>
     </>
@@ -1665,21 +2367,15 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
         </div>
         {onDelete && <Button size="s" view="clear" label="Удалить модуль" onClick={onDelete} />}
       </div>
-      {moduleSections.map(({ id }, index) => (
+      {moduleSections.map((section, index) => (
         <Collapse
-          key={id}
+          key={section.id}
           isOpen={current === index}
           onClick={() => goToStep(index)}
           label={
             <div className={styles.collapseLabel}>
               <Text size="s" weight="semibold">
-                {id === 'general'
-                  ? 'Основные сведения'
-                  : id === 'calculation'
-                    ? 'Показатели'
-                    : id === 'technical'
-                      ? 'Технические детали'
-                      : 'Нефункциональные требования'}
+                {section.title}
               </Text>
               <Text size="xs" view="secondary">
                 Раздел {index + 1} из {moduleSections.length}
@@ -1688,17 +2384,17 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
           }
         >
           <div className={styles.sectionContent}>
-            {id === 'general' && renderGeneralSection()}
-            {id === 'calculation' && renderCalculationSection()}
-            {id === 'technical' && renderTechnicalSection()}
-            {id === 'nonFunctional' && renderNonFunctionalSection()}
+            {section.id === 'general' && renderGeneralSection()}
+            {section.id === 'calculation' && renderCalculationSection()}
+            {section.id === 'technical' && renderTechnicalSection()}
+            {section.id === 'nonFunctional' && renderNonFunctionalSection()}
           </div>
           <div className={styles.stepActions}>
             {index > 0 && (
-              <Button size="s" view="ghost" label="Назад" onClick={() => goToStep(index - 1)} />
+              <Button size="s" view="ghost" label="Вернуться" onClick={() => goToStep(index - 1)} />
             )}
             {index < moduleSections.length - 1 ? (
-              <Button size="s" label="Далее" onClick={() => goToStep(index + 1)} />
+              <Button size="s" label="Заполнить следующий раздел" onClick={() => goToStep(index + 1)} />
             ) : (
               <Button size="s" view="primary" label="Сохранить модуль" onClick={onSubmit} />
             )}
@@ -1708,6 +2404,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
     </div>
   );
 };
+
 
 type DomainFormProps = {
   mode: 'create' | 'edit';
@@ -2394,24 +3091,6 @@ function buildDomainLabelMap(domains: DomainNode[]): Record<string, string> {
 
   visit(domains, 0);
   return map;
-}
-
-function collectAttachableDomainIds(domains: DomainNode[]): string[] {
-  const ids: string[] = [];
-
-  const visit = (nodes: DomainNode[], depth: number) => {
-    nodes.forEach((node) => {
-      if (depth > 0 && !node.isCatalogRoot) {
-        ids.push(node.id);
-      }
-      if (node.children) {
-        visit(node.children, depth + 1);
-      }
-    });
-  };
-
-  visit(domains, 0);
-  return ids;
 }
 
 function collectLeafDomainIds(domains: DomainNode[]): string[] {
