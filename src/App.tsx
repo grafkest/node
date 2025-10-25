@@ -1024,7 +1024,6 @@ function App() {
     });
     return map;
   }, [moduleData]);
-  const moduleIdSet = useMemo(() => new Set(moduleData.map((module) => module.id)), [moduleData]);
 
   const graphSelectOptions = useMemo(
     () =>
@@ -2751,64 +2750,6 @@ function App() {
     [expertProfiles, initiativeData, markGraphDirty]
   );
 
-  const handleUpdateInitiative = useCallback(
-    (initiativeId: string, draft: InitiativeDraftPayload) => {
-      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
-      if (!existing) {
-        return;
-      }
-
-      const defaults = {
-        name: existing.name,
-        description: existing.description,
-        owner: existing.owner,
-        expectedImpact: existing.expectedImpact,
-        status: existing.status,
-        targetModuleName: existing.targetModuleName,
-        plannedModuleIds: [...existing.plannedModuleIds],
-        requiredSkills: [...existing.requiredSkills],
-        workItems: [...existing.workItems],
-        approvalStages: [...existing.approvalStages],
-        roles: [...existing.roles],
-        risks: [...existing.risks],
-        potentialModules: [...existing.potentialModules],
-        works: [...existing.works],
-        requirements: [...existing.requirements],
-        lastUpdated: existing.lastUpdated,
-        customer: existing.customer
-      } as const;
-
-      const updated = buildInitiativeFromDraft(
-        initiativeId,
-        draft,
-        displayableDomainIdSet,
-        moduleIdSet,
-        defaults
-      );
-
-      markGraphDirty();
-      setInitiativeData((prev) =>
-        prev.map((initiative) => (initiative.id === initiativeId ? updated : initiative))
-      );
-      showAdminNotice('success', `Инициатива «${updated.name}» обновлена.`);
-    },
-    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
-  );
-
-  const handleDeleteInitiative = useCallback(
-    (initiativeId: string) => {
-      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
-      if (!existing) {
-        return;
-      }
-
-      markGraphDirty();
-      setInitiativeData((prev) => prev.filter((initiative) => initiative.id !== initiativeId));
-      showAdminNotice('success', `Инициатива «${existing.name}» удалена.`);
-    },
-    [initiativeData, markGraphDirty, showAdminNotice]
-  );
-
   const handleImportGraph = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
@@ -3596,136 +3537,6 @@ function buildModuleFromDraft(
   };
 
   return { module, consumedArtifactIds };
-}
-
-type InitiativeBuildDefaults = {
-  name: string;
-  description: string;
-  owner: string;
-  expectedImpact: string;
-  status: Initiative['status'];
-  targetModuleName?: string;
-  plannedModuleIds?: string[];
-  requiredSkills?: string[];
-  workItems?: Initiative['workItems'];
-  approvalStages?: Initiative['approvalStages'];
-  lastUpdated?: string;
-  risks?: Initiative['risks'];
-  roles?: Initiative['roles'];
-  potentialModules?: string[];
-  works?: Initiative['works'];
-  requirements?: Initiative['requirements'];
-  customer?: Initiative['customer'];
-};
-
-function buildInitiativeFromDraft(
-  initiativeId: string,
-  draft: InitiativeDraftPayload,
-  allowedDomainIds: Set<string>,
-  allowedModuleIds: Set<string>,
-  defaults: InitiativeBuildDefaults
-): Initiative {
-  const normalizedName = draft.name.trim() || defaults.name;
-  const normalizedDescription = draft.description.trim() || defaults.description;
-  const normalizedOwner = draft.owner.trim() || defaults.owner;
-  const normalizedImpact = draft.expectedImpact.trim() || defaults.expectedImpact;
-  const normalizedStatus = draft.status ?? defaults.status;
-
-  const domains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
-  const draftModuleIds = deduplicateNonEmpty(draft.moduleIds).filter((id) =>
-    allowedModuleIds.has(id)
-  );
-  const potentialModules =
-    draftModuleIds.length > 0
-      ? draftModuleIds
-      : deduplicateNonEmpty(defaults.potentialModules ?? []).filter((id) =>
-          allowedModuleIds.has(id)
-        );
-  const plannedModuleIds =
-    draftModuleIds.length > 0
-      ? draftModuleIds
-      : deduplicateNonEmpty(defaults.plannedModuleIds ?? []).filter((id) =>
-          allowedModuleIds.has(id)
-        );
-
-  const worksDraft = draft.works.map((work, index) => {
-    const effortValue = Number(work.effortHours);
-    const normalizedEffort = Number.isFinite(effortValue) ? Math.max(0, effortValue) : 0;
-    return {
-      id: work.id.trim() || `work-${index + 1}-${initiativeId}`,
-      title: work.title.trim() || `Работа ${index + 1}`,
-      description: work.description.trim() || 'Описание не заполнено',
-      effortHours: normalizedEffort
-    };
-  });
-  const works =
-    worksDraft.length > 0
-      ? worksDraft
-      : (defaults.works ?? []).map((work) => ({ ...work }));
-
-  const requirementsDraft = draft.requirements.map((requirement, index) => {
-    const countValue = Number(requirement.count);
-    const normalizedCount = Number.isFinite(countValue) ? Math.max(1, Math.round(countValue)) : 1;
-    const skills = deduplicateNonEmpty(requirement.skills.map((skill) => skill.trim()));
-    const comment = requirement.comment?.trim() ?? '';
-    return {
-      id: requirement.id.trim() || `requirement-${index + 1}-${initiativeId}`,
-      role: requirement.role,
-      skills,
-      count: normalizedCount,
-      comment: comment || undefined
-    };
-  });
-  const requirements =
-    requirementsDraft.length > 0
-      ? requirementsDraft
-      : (defaults.requirements ?? []).map((requirement) => ({
-          ...requirement,
-          skills: [...requirement.skills]
-        }));
-
-  const requiredSkillsDraft = deduplicateNonEmpty(
-    requirements.flatMap((requirement) => requirement.skills)
-  );
-  const requiredSkills =
-    requiredSkillsDraft.length > 0 ? requiredSkillsDraft : [...(defaults.requiredSkills ?? [])];
-
-  const normalizedTarget = defaults.targetModuleName?.trim() || normalizedName;
-  const workItems = (defaults.workItems ?? []).map((item) => ({ ...item }));
-  const approvalStages = (defaults.approvalStages ?? []).map((stage) => ({ ...stage }));
-  const risks = (defaults.risks ?? []).map((risk) => ({ ...risk }));
-  const roles = (defaults.roles ?? []).map((role) => ({
-    ...role,
-    pinnedExpertIds: [...role.pinnedExpertIds],
-    candidates: role.candidates.map((candidate) => ({
-      ...candidate,
-      scoreDetails: candidate.scoreDetails.map((detail) => ({ ...detail }))
-    })),
-    workItems: role.workItems?.map((item) => ({ ...item }))
-  }));
-  const customer = defaults.customer ? { ...defaults.customer } : undefined;
-
-  return {
-    id: initiativeId,
-    name: normalizedName,
-    description: normalizedDescription,
-    owner: normalizedOwner,
-    status: normalizedStatus,
-    expectedImpact: normalizedImpact,
-    domains,
-    plannedModuleIds,
-    requiredSkills,
-    workItems,
-    approvalStages,
-    targetModuleName: normalizedTarget,
-    lastUpdated: new Date().toISOString(),
-    risks,
-    roles,
-    potentialModules,
-    works,
-    requirements,
-    customer
-  };
 }
 
 function recalculateReuseScores(modules: ModuleNode[]): ModuleNode[] {
