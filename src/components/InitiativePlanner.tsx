@@ -279,6 +279,25 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     });
   };
 
+  const modal = (
+    <InitiativeCreationModal
+      isOpen={isModalOpen}
+      experts={experts}
+      onClose={() => {
+        setIsModalOpen(false);
+        setModalError(null);
+        setModalInitialDraft(null);
+        setModalTargetId(null);
+        setModalMode('create');
+      }}
+      onSubmit={handleSubmitModal}
+      isSubmitting={isModalSubmitting}
+      errorMessage={modalError}
+      mode={modalMode}
+      initialDraft={modalInitialDraft}
+    />
+  );
+
   if (!selectedInitiative) {
     return (
       <section className={styles.container} aria-label="Инициативы">
@@ -317,17 +336,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
             </div>
           </Card>
         </div>
-        <InitiativeCreationModal
-          isOpen={isCreateModalOpen}
-          experts={experts}
-          onClose={() => {
-            setIsCreateModalOpen(false);
-            setCreationError(null);
-          }}
-          onSubmit={handleCreateInitiative}
-          isSubmitting={isCreateSubmitting}
-          errorMessage={creationError}
-        />
+        {modal}
       </section>
     );
   }
@@ -652,22 +661,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
           </aside>
         </div>
       </div>
-      <InitiativeCreationModal
-        isOpen={isModalOpen}
-        experts={experts}
-        onClose={() => {
-          setIsModalOpen(false);
-          setModalError(null);
-          setModalInitialDraft(null);
-          setModalTargetId(null);
-          setModalMode('create');
-        }}
-        onSubmit={handleSubmitModal}
-        isSubmitting={isModalSubmitting}
-        errorMessage={modalError}
-        mode={modalMode}
-        initialDraft={modalInitialDraft}
-      />
+      {modal}
     </section>
   );
 };
