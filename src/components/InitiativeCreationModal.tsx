@@ -227,6 +227,14 @@ const createWorkDraft = (offset = 0): WorkDraft => ({
   assignments: [createWorkAssignmentDraft(roleOptions[0].value, offset)]
 });
 
+const createApprovalStageDraft = (): ApprovalStageDraft => ({
+  id: createId(),
+  title: '',
+  approver: '',
+  status: 'pending',
+  comment: ''
+});
+
 const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraft[] => {
   const workMap = new Map<string, WorkDraft>();
 
@@ -398,14 +406,16 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         setIsCreatingModule(false);
         setNewModuleLabel('');
         setCompanyItems([...companyBaseItems]);
-        setSelectedCompany(null);
+        setSelectedCompanies([]);
         setIsCreatingCompany(false);
         setNewCompanyLabel('');
-        setCustomerUnit('');
+        setUnitItems([...unitBaseItems]);
+        setSelectedUnits([]);
         setCustomerRepresentative('');
         setCustomerContact('');
         setCustomerComment('');
         setWorks([createWorkDraft()]);
+        setApprovalStages([createApprovalStageDraft()]);
         setRoleSkillOptions(createRoleSkillState());
         setActiveStep('details');
         return;
@@ -468,31 +478,54 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setNewModuleLabel('');
 
       const nextCompanyItems = [...companyBaseItems];
-      const trimmedCompany = draft.customer.company.trim();
-      let companySelection: OptionItem | null = null;
-      if (trimmedCompany) {
-        const existing = nextCompanyItems.find((item) => item.value === trimmedCompany);
-        if (existing) {
-          companySelection = existing;
-        } else {
-          companySelection = {
-            id: `prefill-company-${trimmedCompany}`,
-            label: trimmedCompany,
-            value: trimmedCompany,
+      const companySelections = (draft.customer?.companies ?? [])
+        .map((company) => company.trim())
+        .filter((company) => company.length > 0)
+        .map((company) => {
+          const existing = nextCompanyItems.find((item) => item.value === company);
+          if (existing) {
+            return existing;
+          }
+          const option: OptionItem = {
+            id: `prefill-company-${company}`,
+            label: company,
+            value: company,
             isCustom: true
           };
-          nextCompanyItems.push(companySelection);
-        }
-      }
+          nextCompanyItems.push(option);
+          return option;
+        });
       setCompanyItems(nextCompanyItems);
-      setSelectedCompany(companySelection);
+      setSelectedCompanies(companySelections);
       setIsCreatingCompany(false);
       setNewCompanyLabel('');
 
-      setCustomerUnit(draft.customer.unit ?? '');
-      setCustomerRepresentative(draft.customer.representative ?? '');
-      setCustomerContact(draft.customer.contact ?? '');
-      setCustomerComment(draft.customer.comment ?? '');
+      const nextUnitItems = [...unitBaseItems];
+      const unitSelections = (draft.customer?.units ?? [])
+        .map((unit) => unit.trim())
+        .filter((unit) => unit.length > 0)
+        .map((unit) => {
+          const existing = nextUnitItems.find((item) => item.value === unit);
+          if (existing) {
+            return existing;
+          }
+          const option: OptionItem = {
+            id: `prefill-unit-${unit}`,
+            label: unit,
+            value: unit,
+            isCustom: true
+          };
+          nextUnitItems.push(option);
+          return option;
+        });
+      setUnitItems(nextUnitItems);
+      setSelectedUnits(unitSelections);
+      setIsCreatingUnit(false);
+      setNewUnitLabel('');
+
+      setCustomerRepresentative(draft.customer?.representative ?? '');
+      setCustomerContact(draft.customer?.contact ?? '');
+      setCustomerComment(draft.customer?.comment ?? '');
 
       const worksFromDraft = buildWorksFromCreationDraft(draft);
       setWorks(worksFromDraft);
@@ -520,13 +553,25 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         });
       });
       setRoleSkillOptions(nextRoleSkills);
+      const stageDrafts =
+        draft.approvalStages.length > 0
+          ? draft.approvalStages.map((stage) => ({
+              id: stage.id || createId(),
+              title: stage.title,
+              approver: stage.approver,
+              status: stage.status,
+              comment: stage.comment ?? ''
+            }))
+          : [createApprovalStageDraft()];
+      setApprovalStages(stageDrafts);
       setActiveStep('details');
     },
     [
       companyBaseItems,
       createRoleSkillState,
       domainBaseItems,
-      moduleBaseItems
+      moduleBaseItems,
+      unitBaseItems
     ]
   );
 

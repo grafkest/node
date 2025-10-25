@@ -146,6 +146,36 @@
   align-items: center;
 }
 
+.listStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inlineGroup {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dataRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+
+.subSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionTitle {
+  margin: 0;
+}
+
 .companyInlineForm {
   display: flex;
   gap: 12px;

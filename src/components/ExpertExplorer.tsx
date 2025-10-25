@@ -20,7 +20,7 @@ import ForceGraph2D, {
   LinkObject,
   NodeObject
 } from 'react-force-graph-2d';
-import type { ExpertProfile, ModuleNode, TeamRole } from '../data';
+import type { ExpertProfile, ExpertSkill, ModuleNode, TeamRole } from '../data';
 import styles from './ExpertExplorer.module.css';
 import SkillEditorModal from './SkillEditorModal';
 
@@ -349,13 +349,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     moduleNameMap,
     normalizedSearch,
     expertRolesMap,
-    moduleNameMap,
-    domainNameMap,
-    normalizedSearch,
-    roleFilter,
     selectedCompetencySet,
     selectedConsultingSet,
-    selectedDomainSet
+    selectedDomainSet,
+    selectedRoleSet
   ]);
 
   const selectedExpert = useMemo(
@@ -1562,6 +1559,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
               moduleDomainMap={moduleDomainMap}
               domainNameMap={domainNameMap}
               roles={selectedExpertRoles}
+              onEditSkills={handleOpenSkillEditor}
             />
           ) : (
             <div className={styles.placeholder}>
@@ -1595,6 +1593,7 @@ type ExpertDetailsProps = {
   moduleDomainMap: Record<string, string[]>;
   domainNameMap: Record<string, string>;
   roles: ExpertRoleDetail[];
+  onEditSkills: (expert: ExpertProfile) => void;
 };
 
 const ExpertDetails: React.FC<ExpertDetailsProps> = ({
@@ -1602,7 +1601,8 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
   moduleNameMap,
   moduleDomainMap,
   domainNameMap,
-  roles
+  roles,
+  onEditSkills
 }) => {
   const availability = availabilityMeta[expert.availability];
   const modules = expert.modules.map((moduleId) => ({
