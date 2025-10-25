@@ -46,6 +46,7 @@ type OptionItem = {
 const NEW_DOMAIN_OPTION_ID = '__new-domain__';
 const NEW_MODULE_OPTION_ID = '__new-module__';
 const NEW_COMPANY_OPTION_ID = '__new-company__';
+const NEW_UNIT_OPTION_ID = '__new-unit__';
 
 const DOMAIN_CREATE_OPTION: OptionItem = {
   id: NEW_DOMAIN_OPTION_ID,
@@ -63,6 +64,12 @@ const COMPANY_CREATE_OPTION: OptionItem = {
   id: NEW_COMPANY_OPTION_ID,
   label: 'Создать нового',
   value: NEW_COMPANY_OPTION_ID
+};
+
+const UNIT_CREATE_OPTION: OptionItem = {
+  id: NEW_UNIT_OPTION_ID,
+  label: 'Добавить новое',
+  value: NEW_UNIT_OPTION_ID
 };
 
 const collectGraphDomainIds = (domains: DomainNode[]): string[] => {
@@ -263,6 +270,18 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       .map((name) => ({ id: name, label: name, value: name }));
   }, []);
 
+  const unitBaseItems = useMemo<OptionItem[]>(() => {
+    const unitNames = new Set<string>();
+    modules.forEach((module) => {
+      if (module.ridOwner?.division) {
+        unitNames.add(module.ridOwner.division);
+      }
+    });
+    return Array.from(unitNames)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map((name) => ({ id: name, label: name, value: name }));
+  }, []);
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [owner, setOwner] = useState('');
@@ -278,10 +297,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [isCreatingModule, setIsCreatingModule] = useState(false);
   const [newModuleLabel, setNewModuleLabel] = useState('');
   const [companyItems, setCompanyItems] = useState<OptionItem[]>(() => [...companyBaseItems]);
-  const [selectedCompany, setSelectedCompany] = useState<OptionItem | null>(null);
+  const [selectedCompanies, setSelectedCompanies] = useState<OptionItem[]>([]);
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
   const [newCompanyLabel, setNewCompanyLabel] = useState('');
-  const [customerUnit, setCustomerUnit] = useState('');
+  const [unitItems, setUnitItems] = useState<OptionItem[]>(() => [...unitBaseItems]);
+  const [selectedUnits, setSelectedUnits] = useState<OptionItem[]>([]);
+  const [isCreatingUnit, setIsCreatingUnit] = useState(false);
+  const [newUnitLabel, setNewUnitLabel] = useState('');
   const [customerRepresentative, setCustomerRepresentative] = useState('');
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
@@ -334,10 +356,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setIsCreatingModule(false);
       setNewModuleLabel('');
       setCompanyItems([...companyBaseItems]);
-      setSelectedCompany(null);
+      setSelectedCompanies([]);
       setIsCreatingCompany(false);
       setNewCompanyLabel('');
-      setCustomerUnit('');
+      setUnitItems([...unitBaseItems]);
+      setSelectedUnits([]);
+      setIsCreatingUnit(false);
+      setNewUnitLabel('');
       setCustomerRepresentative('');
       setCustomerContact('');
       setCustomerComment('');
@@ -348,6 +373,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     }
   }, [
     companyBaseItems,
+    unitBaseItems,
     createRoleSkillState,
     domainBaseItems,
     isOpen,
@@ -376,12 +402,26 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     setSelectedModules(uniqueItems);
   };
 
-  const handleCompanySelectionChange = (item: OptionItem | null) => {
-    if (item?.id === NEW_COMPANY_OPTION_ID) {
+  const handleCompanySelectionChange = (items: OptionItem[] | null) => {
+    const nextItems = (items ?? []).filter((item) => item.id !== NEW_COMPANY_OPTION_ID);
+    const uniqueItems = nextItems.filter(
+      (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+    );
+    if (items?.some((item) => item.id === NEW_COMPANY_OPTION_ID)) {
       setIsCreatingCompany(true);
-      return;
     }
-    setSelectedCompany(item);
+    setSelectedCompanies(uniqueItems);
+  };
+
+  const handleUnitSelectionChange = (items: OptionItem[] | null) => {
+    const nextItems = (items ?? []).filter((item) => item.id !== NEW_UNIT_OPTION_ID);
+    const uniqueItems = nextItems.filter(
+      (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+    );
+    if (items?.some((item) => item.id === NEW_UNIT_OPTION_ID)) {
+      setIsCreatingUnit(true);
+    }
+    setSelectedUnits(uniqueItems);
   };
 
   const handleAddCustomDomain = () => {
@@ -452,9 +492,41 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         isCustom: true
       };
     setCompanyItems((prev) => (existing ? prev : [...prev, nextItem]));
-    setSelectedCompany(nextItem);
+    setSelectedCompanies((prev) => {
+      const combined = existing ? prev : [...prev, nextItem];
+      return combined.filter(
+        (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+      );
+    });
     setNewCompanyLabel('');
     setIsCreatingCompany(false);
+  };
+
+  const handleAddCustomUnit = () => {
+    const trimmed = newUnitLabel.trim();
+    if (!trimmed) {
+      return;
+    }
+    const existing = unitItems.find(
+      (item) =>
+        item.label.toLowerCase() === trimmed.toLowerCase() || item.value.toLowerCase() === trimmed.toLowerCase()
+    );
+    const nextItem =
+      existing ?? {
+        id: `custom-unit-${createId()}`,
+        label: trimmed,
+        value: trimmed,
+        isCustom: true
+      };
+    setUnitItems((prev) => (existing ? prev : [...prev, nextItem]));
+    setSelectedUnits((prev) => {
+      const combined = existing ? prev : [...prev, nextItem];
+      return combined.filter(
+        (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+      );
+    });
+    setNewUnitLabel('');
+    setIsCreatingUnit(false);
   };
 
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
@@ -547,13 +619,19 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     [works]
   );
 
-  const isSubmitDisabled = !name.trim() || !isWorkPlanningReady;
+  const isSubmitDisabled = !name.trim() || selectedDomains.length === 0 || !isWorkPlanningReady;
 
   useEffect(() => {
     if (activeStep === 'team' && !isWorkPlanningReady) {
       setActiveStep('work');
     }
   }, [activeStep, isWorkPlanningReady]);
+
+  useEffect(() => {
+    if (selectedDomains.length === 0 && activeStep !== 'details') {
+      setActiveStep('details');
+    }
+  }, [activeStep, selectedDomains]);
 
   const totalSteps = creationStepOrder.length;
   const currentStepIndex = creationStepOrder.indexOf(activeStep) + 1;
@@ -680,8 +758,12 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         domains: selectedDomains.map((item) => item.value.trim()).filter(Boolean),
         potentialModules: selectedModules.map((item) => item.value.trim()).filter(Boolean),
         customer: {
-          company: selectedCompany?.value.trim() ?? '',
-          unit: customerUnit.trim(),
+          companies: selectedCompanies
+            .map((item) => item.value.trim())
+            .filter((value) => value.length > 0),
+          units: selectedUnits
+            .map((item) => item.value.trim())
+            .filter((value) => value.length > 0),
           representative: customerRepresentative.trim(),
           contact: customerContact.trim(),
           comment: customerComment.trim() || undefined
@@ -727,14 +809,14 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       customerComment,
       customerContact,
       customerRepresentative,
-      customerUnit,
       description,
       expectedImpact,
       name,
       owner,
       planningRoles,
       roleAssignmentRefs,
-      selectedCompany,
+      selectedCompanies,
+      selectedUnits,
       selectedDomains,
       selectedModules,
       status,
@@ -790,22 +872,40 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           ...work,
           assignments: work.assignments.map((assignment) => {
             if (assignment.id !== assignmentId) {
-              return assignment;
-            }
+            return assignment;
+          }
 
-            const nextAssignment: WorkAssignmentDraft = { ...assignment, ...patch };
+            let nextEffort =
+              patch.effortDays !== undefined
+                ? Math.max(1, Math.round(patch.effortDays))
+                : Math.max(1, Math.round(assignment.effortDays));
+            const nextStart =
+              patch.startDay !== undefined
+                ? Math.max(0, Math.round(patch.startDay))
+                : Math.max(0, Math.round(assignment.startDay));
+            let nextDuration =
+              patch.durationDays !== undefined
+                ? Math.max(1, Math.round(patch.durationDays))
+                : Math.max(1, Math.round(assignment.durationDays));
 
-            if (patch.effortDays !== undefined) {
-              nextAssignment.effortDays = Math.max(1, Math.round(patch.effortDays));
-            }
-
-            if (patch.startDay !== undefined) {
-              nextAssignment.startDay = Math.max(0, Math.round(patch.startDay));
+            if (patch.effortDays !== undefined && nextDuration < nextEffort) {
+              nextDuration = nextEffort;
             }
 
             if (patch.durationDays !== undefined) {
-              nextAssignment.durationDays = Math.max(1, Math.round(patch.durationDays));
+              const wasDecreased = Math.max(1, Math.round(assignment.durationDays)) > nextDuration;
+              if (wasDecreased && nextEffort < nextDuration) {
+                nextEffort = nextDuration;
+              }
             }
+
+            const nextAssignment: WorkAssignmentDraft = {
+              ...assignment,
+              ...patch,
+              effortDays: nextEffort,
+              startDay: nextStart,
+              durationDays: nextDuration
+            };
 
             return nextAssignment;
           })
@@ -962,6 +1062,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   };
 
   const handleSubmit = () => {
+    if (selectedDomains.length === 0) {
+      return;
+    }
     onSubmit(draftPayload);
   };
 
@@ -1138,19 +1241,24 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   <Combobox<OptionItem>
                     size="s"
                     label="Компания"
-                    placeholder="Выберите компанию заказчика"
+                    placeholder="Выберите компании заказчика"
                     items={[...companyItems, COMPANY_CREATE_OPTION]}
-                    value={selectedCompany}
+                    value={selectedCompanies}
+                    multiple
                     getItemLabel={(item) => item.label}
                     getItemKey={(item) => item.id}
                     onChange={handleCompanySelectionChange}
                   />
-                  <TextField
+                  <Combobox<OptionItem>
                     size="s"
-                    label="Подразделение"
-                    placeholder="Укажите бизнес-единицу"
-                    value={customerUnit}
-                    onChange={(value) => setCustomerUnit(value ?? '')}
+                    label="Подразделения"
+                    placeholder="Укажите бизнес-единицы"
+                    items={[...unitItems, UNIT_CREATE_OPTION]}
+                    value={selectedUnits}
+                    multiple
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.id}
+                    onChange={handleUnitSelectionChange}
                   />
                 </div>
                 {isCreatingCompany && (
@@ -1177,6 +1285,34 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                       onClick={() => {
                         setIsCreatingCompany(false);
                         setNewCompanyLabel('');
+                      }}
+                    />
+                  </div>
+                )}
+                {isCreatingUnit && (
+                  <div className={styles.inlineCreateRow}>
+                    <TextField
+                      size="s"
+                      label="Новое подразделение"
+                      placeholder="Введите название подразделения"
+                      value={newUnitLabel}
+                      onChange={(value) => setNewUnitLabel(value ?? '')}
+                      className={styles.inlineCreateField}
+                    />
+                    <Button
+                      size="s"
+                      view="primary"
+                      label="Добавить"
+                      onClick={handleAddCustomUnit}
+                      disabled={!newUnitLabel.trim()}
+                    />
+                    <Button
+                      size="s"
+                      view="ghost"
+                      label="Отмена"
+                      onClick={() => {
+                        setIsCreatingUnit(false);
+                        setNewUnitLabel('');
                       }}
                     />
                   </div>
@@ -1665,7 +1801,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 view="primary"
                 label="Оценка работ"
                 onClick={() => setActiveStep('work')}
-                disabled={isSubmitting}
+                disabled={isSubmitting || selectedDomains.length === 0}
               />
             )}
             {activeStep === 'work' && (
@@ -1682,7 +1818,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   view="primary"
                   label="Сформировать команду"
                   onClick={() => setActiveStep('team')}
-                  disabled={!isWorkPlanningReady || isSubmitting}
+                  disabled={!isWorkPlanningReady || isSubmitting || selectedDomains.length === 0}
                 />
               </>
             )}

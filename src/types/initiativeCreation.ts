@@ -49,8 +49,8 @@ export type InitiativeCreationRoleDraft = {
 };
 
 export type InitiativeCustomerDraft = {
-  company: string;
-  unit: string;
+  companies: string[];
+  units: string[];
   representative: string;
   contact: string;
   comment?: string;
