@@ -57,7 +57,9 @@ export type ModuleDraftPayload = {
 
 export type ModuleDraftPrefillRequest = {
   id: number;
+  mode: 'create' | 'edit';
   draft: Partial<ModuleDraftPayload>;
+  moduleId?: string;
 };
 
 export type DomainDraftPayload = {
@@ -430,46 +432,56 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
     const target = modules.find((module) => module.id === nextOption.value);
     if (target) {
-      setModuleDraft(moduleToDraft(target));
+      let draft = moduleToDraft(target);
+      if (
+        moduleDraftPrefill &&
+        moduleDraftPrefill.mode === 'edit' &&
+        moduleDraftPrefill.moduleId === target.id
+      ) {
+        draft = applyModuleDraftPrefill(draft, moduleDraftPrefill.draft);
+        if (onModuleDraftPrefillApplied) {
+          onModuleDraftPrefillApplied();
+        }
+      }
+      setModuleDraft(draft);
       setModuleStep(0);
     }
-  }, [moduleOptions, modules, selectedModuleId]);
+  }, [
+    moduleOptions,
+    modules,
+    selectedModuleId,
+    moduleDraftPrefill,
+    moduleDraftPrefillKey,
+    onModuleDraftPrefillApplied
+  ]);
 
   useEffect(() => {
     if (!moduleDraftPrefill) {
       return;
     }
     setActiveTab('module');
+    if (
+      moduleDraftPrefill.mode === 'edit' &&
+      moduleDraftPrefill.moduleId &&
+      moduleOptions.some((item) => item.value === moduleDraftPrefill.moduleId)
+    ) {
+      setSelectedModuleId(moduleDraftPrefill.moduleId);
+      setModuleStep(0);
+      return;
+    }
+
     setSelectedModuleId('__new__');
     setModuleStep(0);
-    const { draft } = moduleDraftPrefill;
-    setModuleDraft((prev) => {
-      let next = { ...prev };
-      if (draft.name !== undefined) {
-        next = { ...next, name: draft.name };
-      }
-      if (draft.productName !== undefined) {
-        next = { ...next, productName: draft.productName };
-      }
-      if (Array.isArray(draft.domainIds)) {
-        next = { ...next, domainIds: [...draft.domainIds] };
-      }
-      if (Array.isArray(draft.projectTeam) && draft.projectTeam.length > 0) {
-        next = {
-          ...next,
-          projectTeam: draft.projectTeam.map((member, index) => ({
-            id: member.id || `member-${index + 1}`,
-            fullName: member.fullName,
-            role: member.role
-          }))
-        };
-      }
-      return next;
-    });
+    setModuleDraft((prev) => applyModuleDraftPrefill(prev, moduleDraftPrefill.draft));
     if (onModuleDraftPrefillApplied) {
       onModuleDraftPrefillApplied();
     }
-  }, [moduleDraftPrefillKey, moduleDraftPrefill, onModuleDraftPrefillApplied]);
+  }, [
+    moduleDraftPrefillKey,
+    moduleDraftPrefill,
+    moduleOptions,
+    onModuleDraftPrefillApplied
+  ]);
 
   useEffect(() => {
     const nextOption = domainOptions.find((item) => item.value === selectedDomainId);
@@ -3899,6 +3911,47 @@ function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
     formula: module.formula,
     nonFunctional: { ...module.nonFunctional }
   };
+}
+
+function applyModuleDraftPrefill(
+  base: ModuleDraftPayload,
+  patch: Partial<ModuleDraftPayload>
+): ModuleDraftPayload {
+  let next = base;
+  let hasChanges = false;
+
+  const ensureCopy = () => {
+    if (!hasChanges) {
+      next = { ...next };
+      hasChanges = true;
+    }
+  };
+
+  if (patch.name !== undefined) {
+    ensureCopy();
+    next.name = patch.name;
+  }
+
+  if (patch.productName !== undefined) {
+    ensureCopy();
+    next.productName = patch.productName;
+  }
+
+  if (Array.isArray(patch.domainIds)) {
+    ensureCopy();
+    next.domainIds = [...patch.domainIds];
+  }
+
+  if (Array.isArray(patch.projectTeam)) {
+    ensureCopy();
+    next.projectTeam = patch.projectTeam.map((member, index) => ({
+      id: member.id || `member-${index + 1}`,
+      fullName: member.fullName,
+      role: member.role
+    }));
+  }
+
+  return next;
 }
 
 function domainToDraft(
