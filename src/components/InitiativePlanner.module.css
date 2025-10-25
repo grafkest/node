@@ -57,8 +57,8 @@
 
 .contentGrid {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
 }
 
@@ -139,7 +139,8 @@
 
 @media (max-width: 1200px) {
   .contentGrid {
-    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    gap: 20px;
   }
 }
 
