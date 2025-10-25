@@ -656,15 +656,34 @@ function App() {
         });
       });
 
+      const moduleCandidates = [
+        ...initiative.plannedModuleIds,
+        ...initiative.potentialModules
+      ];
+      const linkedModule = moduleCandidates
+        .map((moduleId) => moduleData.find((module) => module.id === moduleId))
+        .find((module): module is ModuleNode => Boolean(module));
+
+      const productName = linkedModule?.productName?.trim()
+        ? linkedModule.productName
+        : initiative.targetModuleName;
+
       moduleDraftPrefillIdRef.current += 1;
+      const prefillDraft: Partial<ModuleDraftPayload> = {};
+      if (!linkedModule) {
+        prefillDraft.name = initiative.targetModuleName;
+        prefillDraft.productName = productName;
+        prefillDraft.domainIds = initiative.domains;
+      }
+      if (team.length > 0) {
+        prefillDraft.projectTeam = team;
+      }
+
       setModuleDraftPrefill({
         id: moduleDraftPrefillIdRef.current,
-        draft: {
-          name: initiative.targetModuleName,
-          productName: initiative.targetModuleName,
-          domainIds: initiative.domains,
-          projectTeam: team
-        }
+        mode: linkedModule ? 'edit' : 'create',
+        moduleId: linkedModule?.id,
+        draft: prefillDraft
       });
 
       patchInitiative(initiativeId, (current) => {
@@ -683,6 +702,7 @@ function App() {
     [
       initiativeData,
       expertProfiles,
+      moduleData,
       patchInitiative,
       setViewMode,
       showAdminNotice,
