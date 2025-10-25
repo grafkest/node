@@ -1,4 +1,3 @@
-import { Bar, BarProps } from '@consta/charts/Bar';
 import { Card } from '@consta/uikit/Card';
 import { Text } from '@consta/uikit/Text';
 import React, { useMemo } from 'react';
@@ -11,66 +10,66 @@ type AnalyticsPanelProps = {
 };
 
 const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ modules, domainNameMap }) => {
-  const data = useMemo(() => {
-    const totals = modules.reduce<Record<string, { count: number; label: string }>>((acc, module) => {
+  const metrics = useMemo(() => {
+    if (modules.length === 0) {
+      return [] as const;
+    }
+
+    const coverage = average(modules.map((module) => module.metrics.coverage ?? 0));
+    const reuse = average(modules.map((module) => Math.round(module.reuseScore * 100)));
+    const domainCount = modules.reduce((acc, module) => {
       module.domains.forEach((domainId) => {
-        const label = domainNameMap[domainId] ?? domainId;
-        const current = acc[domainId] ?? { count: 0, label };
-        acc[domainId] = {
-          label,
-          count: current.count + 1
-        };
+        acc.add(domainNameMap[domainId] ?? domainId);
       });
       return acc;
-    }, {});
+    }, new Set<string>());
 
-    return Object.entries(totals)
-      .map(([domainId, value]) => ({
-        domainId,
-        domainLabel: value.label,
-        count: value.count
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+    return [
+      {
+        id: 'modules',
+        label: 'Модулей в графе',
+        value: modules.length.toString()
+      },
+      {
+        id: 'domains',
+        label: 'Активных доменов',
+        value: domainCount.size.toString()
+      },
+      {
+        id: 'coverage',
+        label: 'Среднее покрытие тестами',
+        value: `${Math.round(coverage)}%`
+      },
+      {
+        id: 'reuse',
+        label: 'Средний индекс переиспользуемости',
+        value: `${Math.round(reuse)}%`
+      }
+    ] as const;
   }, [domainNameMap, modules]);
 
-  const chartProps: BarProps = {
-    data,
-    xField: 'count',
-    yField: 'domainLabel',
-    legend: false,
-    height: 220,
-    autoFit: true,
-    seriesField: 'domainLabel'
-  };
-
-  const coverage = average(modules.map((module) => module.metrics.coverage ?? 0));
-  const reuse = average(modules.map((module) => Math.round(module.reuseScore * 100)));
+  if (metrics.length === 0) {
+    return null;
+  }
 
   return (
     <div className={styles.container}>
-      <Card verticalSpace="l" horizontalSpace="l" shadow={false} className={styles.card}>
-        <Text size="s" weight="semibold">
-          Среднее покрытие тестами
-        </Text>
-        <Text size="3xl" weight="bold">
-          {Math.round(coverage)}%
-        </Text>
-      </Card>
-      <Card verticalSpace="l" horizontalSpace="l" shadow={false} className={styles.card}>
-        <Text size="s" weight="semibold">
-          Средний индекс переиспользуемости
-        </Text>
-        <Text size="3xl" weight="bold">
-          {Math.round(reuse)}%
-        </Text>
-      </Card>
-      <Card verticalSpace="l" horizontalSpace="l" shadow={false} className={styles.chartCard}>
-        <Text size="s" weight="semibold" className={styles.chartTitle}>
-          Модули по доменам (топ-6)
-        </Text>
-        <Bar {...chartProps} />
-      </Card>
+      {metrics.map((metric) => (
+        <Card
+          key={metric.id}
+          verticalSpace="l"
+          horizontalSpace="l"
+          shadow={false}
+          className={styles.card}
+        >
+          <Text size="s" weight="semibold">
+            {metric.label}
+          </Text>
+          <Text size="2xl" weight="bold">
+            {metric.value}
+          </Text>
+        </Card>
+      ))}
     </div>
   );
 };

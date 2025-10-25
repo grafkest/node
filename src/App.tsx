@@ -104,6 +104,9 @@ type AdminNotice = {
   message: string;
 };
 
+const isAnalyticsPanelEnabled =
+  (import.meta.env.VITE_ENABLE_ANALYTICS_PANEL ?? 'true').toLowerCase() !== 'false';
+
 function App() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
   const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
@@ -930,6 +933,8 @@ function App() {
     () => moduleData.filter((module) => matchesModuleFilters(module)),
     [moduleData, matchesModuleFilters]
   );
+
+  const shouldShowAnalytics = isAnalyticsPanelEnabled && filteredModules.length > 0;
 
   const artifactMap = useMemo(
     () => new Map(artifactData.map((artifact) => [artifact.id, artifact])),
@@ -3051,9 +3056,11 @@ function App() {
                 onLayoutChange={handleLayoutChange}
               />
             </div>
-            <div className={styles.analytics}>
-              <AnalyticsPanel modules={filteredModules} domainNameMap={domainNameMap} />
-            </div>
+            {shouldShowAnalytics && (
+              <div className={styles.analytics}>
+                <AnalyticsPanel modules={filteredModules} domainNameMap={domainNameMap} />
+              </div>
+            )}
           </section>
           <aside className={styles.details}>
             <NodeDetails

@@ -182,17 +182,17 @@
 }
 
 .graphSection {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   height: 100%;
   min-height: 0;
 }
 
 .graphContainer {
-  height: 100%;
-  min-height: 0;
   display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .analytics {
@@ -200,6 +200,9 @@
   border-radius: 12px;
   background: var(--color-bg-default);
   box-shadow: var(--shadow-layer);
+  display: flex;
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .details {
