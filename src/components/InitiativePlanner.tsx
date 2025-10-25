@@ -255,9 +255,52 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   if (!selectedInitiative) {
     return (
       <section className={styles.container} aria-label="Инициативы">
-        <Text size="s" view="secondary">
-          Инициативы не найдены. Добавьте их в данных графа, чтобы начать планирование команды.
-        </Text>
+        <div className={styles.emptyState}>
+          <Card className={styles.emptyCard} verticalSpace="2xl" horizontalSpace="2xl">
+            <div>
+              <Text size="2xl" weight="bold">
+                Пока нет инициатив для планирования
+              </Text>
+              <Text size="s" view="secondary">
+                Создайте первую инициативу, чтобы сформировать команду и увидеть дорожку планирования работ.
+              </Text>
+            </div>
+            <div className={styles.emptyActions}>
+              <Button size="m" view="primary" label="Создать инициативу" onClick={handleOpenCreate} />
+            </div>
+            <div className={styles.emptyHints}>
+              <div className={styles.emptyHintItem}>
+                <Badge size="xs" view="stroked" label="1" />
+                <Text size="xs" view="secondary">
+                  Добавьте краткое описание и владельца — так участникам будет проще понять контекст.
+                </Text>
+              </div>
+              <div className={styles.emptyHintItem}>
+                <Badge size="xs" view="stroked" label="2" />
+                <Text size="xs" view="secondary">
+                  Укажите домены и требуемые роли, чтобы подобрать подходящих экспертов.
+                </Text>
+              </div>
+              <div className={styles.emptyHintItem}>
+                <Badge size="xs" view="stroked" label="3" />
+                <Text size="xs" view="secondary">
+                  Заполните работы по ролям — после этого появится диаграмма с дорожкой реализации.
+                </Text>
+              </div>
+            </div>
+          </Card>
+        </div>
+        <InitiativeCreationModal
+          isOpen={isCreateModalOpen}
+          experts={experts}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            setCreationError(null);
+          }}
+          onSubmit={handleCreateInitiative}
+          isSubmitting={isCreateSubmitting}
+          errorMessage={creationError}
+        />
       </section>
     );
   }
