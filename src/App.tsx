@@ -2579,6 +2579,180 @@ function App() {
     [expertProfiles, initiativeData, markGraphDirty, showAdminNotice]
   );
 
+  const handlePlannerUpdateInitiative = useCallback(
+    (initiativeId: string, request: InitiativeCreationRequest): Initiative => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        throw new Error('Инициатива не найдена. Обновление невозможно.');
+      }
+
+      const normalizedName = request.name.trim() || existing.name;
+      const normalizedDescription = request.description.trim() || existing.description;
+      const normalizedOwner = request.owner.trim() || existing.owner;
+      const normalizedImpact = request.expectedImpact.trim() || existing.expectedImpact;
+      const normalizedTarget = request.targetModuleName.trim() || existing.targetModuleName;
+      const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
+      const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
+        request.potentialModules
+      );
+
+      const roleEntries = request.roles.map((role, index) => {
+        const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
+        const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
+          id: item.id?.trim() || `${roleId}-work-${workIndex + 1}`,
+          title: item.title.trim() || `Работа ${workIndex + 1}`,
+          description: item.description.trim() || 'Описание не заполнено',
+          startDay: Math.max(0, Math.round(item.startDay)),
+          durationDays: Math.max(1, Math.round(item.durationDays)),
+          effortDays: Math.max(1, Math.round(item.effortDays)),
+          tasks: (item.tasks ?? [])
+            .map((task) => task.skill.trim())
+            .filter(Boolean)
+        }));
+
+        return {
+          draft: {
+            id: roleId,
+            role: role.role,
+            required: Math.max(1, Math.round(role.required)),
+            skills: role.skills.map((skill) => skill.trim()).filter(Boolean),
+            workItems: sanitizedWorkItems
+          } satisfies RolePlanningDraft,
+          comment: role.comment?.trim() || undefined
+        };
+      });
+
+      const planningRoles = roleEntries.map((entry) => entry.draft);
+      const matchReports = buildRoleMatchReports(planningRoles, expertProfiles);
+
+      const roles: InitiativeRolePlan[] = planningRoles.map((planningRole, index) => {
+        const report = matchReports[index];
+        const candidates = buildCandidatesFromReport(report);
+        const pinnedExpertIds = selectPinnedExperts(candidates, planningRole.required);
+        const workItems: InitiativeRoleWork[] = assignExpertsToWorkItems(
+          planningRole.workItems,
+          pinnedExpertIds
+        );
+
+        return {
+          id: planningRole.id,
+          role: planningRole.role,
+          required: planningRole.required,
+          pinnedExpertIds,
+          candidates,
+          workItems
+        };
+      });
+
+      const works: InitiativeWork[] = roles.flatMap((rolePlan) =>
+        (rolePlan.workItems ?? []).map((item) => ({
+          id: `${rolePlan.id}-${item.id}`,
+          title: item.title,
+          description: item.description,
+          effortHours: Math.max(0, Math.round(item.effortDays)) * 8
+        }))
+      );
+
+      const requirements: InitiativeRequirement[] = roleEntries.map((entry) => ({
+        id: `${entry.draft.id}-req`,
+        role: entry.draft.role,
+        skills: entry.draft.skills,
+        count: entry.draft.required,
+        comment: entry.comment
+      }));
+
+      const updated: Initiative = {
+        ...existing,
+        name: normalizedName,
+        description: normalizedDescription,
+        domains,
+        plannedModuleIds,
+        status: request.status,
+        owner: normalizedOwner,
+        expectedImpact: normalizedImpact,
+        targetModuleName: normalizedTarget,
+        lastUpdated: new Date().toISOString(),
+        roles,
+        potentialModules,
+        works,
+        requirements,
+        customer: {
+          company: request.customer.company.trim(),
+          unit: request.customer.unit.trim(),
+          representative: request.customer.representative.trim(),
+          contact: request.customer.contact.trim(),
+          comment: request.customer.comment?.trim() || undefined
+        }
+      };
+
+      markGraphDirty();
+      setInitiativeData((prev) =>
+        prev.map((initiative) => (initiative.id === initiativeId ? updated : initiative))
+      );
+
+      return updated;
+    },
+    [expertProfiles, initiativeData, markGraphDirty]
+  );
+
+  const handleUpdateInitiative = useCallback(
+    (initiativeId: string, draft: InitiativeDraftPayload) => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        return;
+      }
+
+      const defaults = {
+        name: existing.name,
+        description: existing.description,
+        owner: existing.owner,
+        expectedImpact: existing.expectedImpact,
+        status: existing.status,
+        targetModuleName: existing.targetModuleName,
+        plannedModuleIds: [...existing.plannedModuleIds],
+        requiredSkills: [...existing.requiredSkills],
+        workItems: [...existing.workItems],
+        approvalStages: [...existing.approvalStages],
+        roles: [...existing.roles],
+        risks: [...existing.risks],
+        potentialModules: [...existing.potentialModules],
+        works: [...existing.works],
+        requirements: [...existing.requirements],
+        lastUpdated: existing.lastUpdated,
+        customer: existing.customer
+      } as const;
+
+      const updated = buildInitiativeFromDraft(
+        initiativeId,
+        draft,
+        displayableDomainIdSet,
+        moduleIdSet,
+        defaults
+      );
+
+      markGraphDirty();
+      setInitiativeData((prev) =>
+        prev.map((initiative) => (initiative.id === initiativeId ? updated : initiative))
+      );
+      showAdminNotice('success', `Инициатива «${updated.name}» обновлена.`);
+    },
+    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+
+  const handleDeleteInitiative = useCallback(
+    (initiativeId: string) => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        return;
+      }
+
+      markGraphDirty();
+      setInitiativeData((prev) => prev.filter((initiative) => initiative.id !== initiativeId));
+      showAdminNotice('success', `Инициатива «${existing.name}» удалена.`);
+    },
+    [initiativeData, markGraphDirty, showAdminNotice]
+  );
+
   const handleImportGraph = useCallback(
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
@@ -3184,6 +3358,7 @@ function App() {
           onStatusChange={handleInitiativeStatusChange}
           onExport={handleInitiativeExport}
           onCreateInitiative={handlePlannerCreateInitiative}
+          onUpdateInitiative={handlePlannerUpdateInitiative}
         />
       </main>
       <main

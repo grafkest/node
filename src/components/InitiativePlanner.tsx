@@ -20,6 +20,7 @@ import InitiativeGanttChart, {
   type InitiativeGanttTask
 } from './InitiativeGanttChart';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
+import { buildCreationRequestFromInitiative } from '../utils/initiativePlanner';
 import styles from './InitiativePlanner.module.css';
 import { getSkillNameById } from '../data/skills';
 
@@ -41,6 +42,10 @@ type InitiativePlannerProps = {
   onStatusChange: (initiativeId: string, status: InitiativeStatus) => void;
   onExport: (initiativeId: string) => void;
   onCreateInitiative: (draft: InitiativeCreationRequest) => Initiative | Promise<Initiative>;
+  onUpdateInitiative: (
+    initiativeId: string,
+    draft: InitiativeCreationRequest
+  ) => Initiative | Promise<Initiative>;
 };
 
 type CandidateKey = `${string}:${string}`;
@@ -96,15 +101,19 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   onRemoveRisk,
   onStatusChange,
   onExport,
-  onCreateInitiative
+  onCreateInitiative,
+  onUpdateInitiative
 }) => {
   const [selectedId, setSelectedId] = useState<string | null>(() => initiatives[0]?.id ?? null);
   const [riskDescription, setRiskDescription] = useState('');
   const [riskSeverity, setRiskSeverity] = useState<InitiativeRisk['severity']>('medium');
   const [openCandidates, setOpenCandidates] = useState<Set<CandidateKey>>(new Set());
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
-  const [creationError, setCreationError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [modalTargetId, setModalTargetId] = useState<string | null>(null);
+  const [modalInitialDraft, setModalInitialDraft] = useState<InitiativeCreationRequest | null>(null);
+  const [isModalSubmitting, setIsModalSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedId && initiatives.length > 0) {
@@ -217,27 +226,45 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   }, [expertMap, selectedInitiative]);
 
   const handleOpenCreate = () => {
-    setCreationError(null);
-    setIsCreateModalOpen(true);
+    setModalMode('create');
+    setModalTargetId(null);
+    setModalInitialDraft(null);
+    setModalError(null);
+    setIsModalOpen(true);
   };
 
-  const handleCreateInitiative = useCallback(
+  const handleSubmitModal = useCallback(
     async (draft: InitiativeCreationRequest) => {
       try {
-        setIsCreateSubmitting(true);
-        setCreationError(null);
-        const result = await Promise.resolve(onCreateInitiative(draft));
-        setIsCreateModalOpen(false);
+        setIsModalSubmitting(true);
+        setModalError(null);
+        const result = await Promise.resolve(
+          modalMode === 'edit'
+            ? (() => {
+                if (!modalTargetId) {
+                  throw new Error('Не выбрана инициатива для редактирования.');
+                }
+                return onUpdateInitiative(modalTargetId, draft);
+              })()
+            : onCreateInitiative(draft)
+        );
+        setIsModalOpen(false);
+        setModalInitialDraft(null);
+        setModalTargetId(null);
+        setModalMode('create');
         setSelectedId(result.id);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Не удалось создать инициативу. Попробуйте ещё раз.';
-        setCreationError(message);
+        const fallbackMessage =
+          modalMode === 'edit'
+            ? 'Не удалось обновить инициативу. Попробуйте ещё раз.'
+            : 'Не удалось создать инициативу. Попробуйте ещё раз.';
+        const message = error instanceof Error ? error.message : fallbackMessage;
+        setModalError(message);
       } finally {
-        setIsCreateSubmitting(false);
+        setIsModalSubmitting(false);
       }
     },
-    [onCreateInitiative]
+    [modalMode, modalTargetId, onCreateInitiative, onUpdateInitiative]
   );
 
   const handleToggleCandidateDetails = (candidateId: CandidateKey) => {
@@ -261,6 +288,17 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
       </section>
     );
   }
+
+  const handleOpenEdit = () => {
+    if (!selectedInitiative) {
+      return;
+    }
+    setModalMode('edit');
+    setModalTargetId(selectedInitiative.id);
+    setModalInitialDraft(buildCreationRequestFromInitiative(selectedInitiative));
+    setModalError(null);
+    setIsModalOpen(true);
+  };
 
   const domainLabels = selectedInitiative.domains.map(
     (domainId) => domainNameMap[domainId] ?? domainId
@@ -405,6 +443,13 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         </div>
         <div className={styles.headerControls}>
           <Button size="s" view="secondary" label="Создать инициативу" onClick={handleOpenCreate} />
+          <Button
+            size="s"
+            view="secondary"
+            label="Редактировать инициативу"
+            onClick={handleOpenEdit}
+            disabled={!selectedInitiative}
+          />
           <Select<SelectItem<string>>
             size="s"
             items={initiativeOptions}
@@ -565,15 +610,20 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         </div>
       </div>
       <InitiativeCreationModal
-        isOpen={isCreateModalOpen}
+        isOpen={isModalOpen}
         experts={experts}
         onClose={() => {
-          setIsCreateModalOpen(false);
-          setCreationError(null);
+          setIsModalOpen(false);
+          setModalError(null);
+          setModalInitialDraft(null);
+          setModalTargetId(null);
+          setModalMode('create');
         }}
-        onSubmit={handleCreateInitiative}
-        isSubmitting={isCreateSubmitting}
-        errorMessage={creationError}
+        onSubmit={handleSubmitModal}
+        isSubmitting={isModalSubmitting}
+        errorMessage={modalError}
+        mode={modalMode}
+        initialDraft={modalInitialDraft}
       />
     </section>
   );

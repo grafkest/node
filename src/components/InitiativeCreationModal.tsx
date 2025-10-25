@@ -145,6 +145,8 @@ type InitiativeCreationModalProps = {
   onSubmit: (draft: InitiativeCreationRequest) => void | Promise<void>;
   isSubmitting?: boolean;
   errorMessage?: string | null;
+  mode?: 'create' | 'edit';
+  initialDraft?: InitiativeCreationRequest | null;
 };
 
 const statusOptions: SelectOption<InitiativeStatus>[] = [
@@ -225,13 +227,50 @@ const createWorkDraft = (offset = 0): WorkDraft => ({
   assignments: [createWorkAssignmentDraft(roleOptions[0].value, offset)]
 });
 
-const createApprovalStageDraft = (): ApprovalStageDraft => ({
-  id: createId(),
-  title: '',
-  approver: '',
-  status: 'pending',
-  comment: ''
-});
+const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraft[] => {
+  const workMap = new Map<string, WorkDraft>();
+
+  draft.roles.forEach((role) => {
+    role.workItems.forEach((item, index) => {
+      const workId = item.id || `${role.id}-work-${index + 1}`;
+      let work = workMap.get(workId);
+
+      if (!work) {
+        work = {
+          id: workId,
+          title: item.title,
+          description: item.description,
+          assumptions: item.assumptions ?? '',
+          assignments: []
+        };
+        workMap.set(workId, work);
+      }
+
+      const tasks = item.tasks ?? [];
+      const assignment: WorkAssignmentDraft = {
+        id: createId(),
+        role: role.role,
+        task: tasks[0]?.skill ?? '',
+        description: item.description,
+        effortDays: Math.max(1, Math.round(item.effortDays)),
+        startDay: Math.max(0, Math.round(item.startDay)),
+        durationDays: Math.max(1, Math.round(item.durationDays)),
+        isCustom: tasks.some((task) => task.isCustom),
+        tasks: tasks.map((task) => task.skill)
+      };
+
+      work.assignments.push(assignment);
+    });
+  });
+
+  const works = Array.from(workMap.values()).map((work) => ({
+    ...work,
+    assignments:
+      work.assignments.length > 0 ? work.assignments : [createWorkAssignmentDraft()]
+  }));
+
+  return works.length > 0 ? works : [createWorkDraft()];
+};
 
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   isOpen,
@@ -239,7 +278,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   onClose,
   onSubmit,
   isSubmitting = false,
-  errorMessage = null
+  errorMessage = null,
+  mode = 'create',
+  initialDraft = null
 }) => {
   const domainBaseItems = useMemo<OptionItem[]>(
     () =>
@@ -339,46 +380,162 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     () => createRoleSkillState()
   );
 
-  useEffect(() => {
-    if (isOpen) {
-      setName('');
-      setDescription('');
-      setOwner('');
-      setExpectedImpact('');
-      setTargetModule('');
-      setStatus('initiated');
-      setDomainItems([...domainBaseItems]);
-      setSelectedDomains([]);
+  const hydrateFromDraft = useCallback(
+    (draft: InitiativeCreationRequest | null) => {
+      if (!draft) {
+        setName('');
+        setDescription('');
+        setOwner('');
+        setExpectedImpact('');
+        setTargetModule('');
+        setStatus('initiated');
+        setDomainItems([...domainBaseItems]);
+        setSelectedDomains([]);
+        setIsCreatingDomain(false);
+        setNewDomainLabel('');
+        setModuleItems([...moduleBaseItems]);
+        setSelectedModules([]);
+        setIsCreatingModule(false);
+        setNewModuleLabel('');
+        setCompanyItems([...companyBaseItems]);
+        setSelectedCompany(null);
+        setIsCreatingCompany(false);
+        setNewCompanyLabel('');
+        setCustomerUnit('');
+        setCustomerRepresentative('');
+        setCustomerContact('');
+        setCustomerComment('');
+        setWorks([createWorkDraft()]);
+        setRoleSkillOptions(createRoleSkillState());
+        setActiveStep('details');
+        return;
+      }
+
+      setName(draft.name);
+      setDescription(draft.description);
+      setOwner(draft.owner);
+      setExpectedImpact(draft.expectedImpact);
+      setTargetModule(draft.targetModuleName);
+      setStatus(draft.status);
+
+      const nextDomainItems = [...domainBaseItems];
+      const domainSelections = draft.domains
+        .map((domain) => domain.trim())
+        .filter(Boolean)
+        .map((domain) => {
+          const existing = nextDomainItems.find((item) => item.value === domain);
+          if (existing) {
+            return existing;
+          }
+          const option: OptionItem = {
+            id: `prefill-domain-${domain}`,
+            label: domain,
+            value: domain,
+            isCustom: true
+          };
+          nextDomainItems.push(option);
+          return option;
+        });
+      setDomainItems(nextDomainItems);
+      setSelectedDomains(domainSelections);
       setIsCreatingDomain(false);
       setNewDomainLabel('');
-      setModuleItems([...moduleBaseItems]);
-      setSelectedModules([]);
+
+      const nextModuleItems = [...moduleBaseItems];
+      const moduleSelections = Array.from(
+        new Set(
+          draft.potentialModules
+            .map((module) => module.trim())
+            .filter((module) => module.length > 0)
+        )
+      ).map((module) => {
+        const existing = nextModuleItems.find((item) => item.value === module);
+        if (existing) {
+          return existing;
+        }
+        const option: OptionItem = {
+          id: `prefill-module-${module}`,
+          label: module,
+          value: module,
+          isCustom: true
+        };
+        nextModuleItems.push(option);
+        return option;
+      });
+      setModuleItems(nextModuleItems);
+      setSelectedModules(moduleSelections);
       setIsCreatingModule(false);
       setNewModuleLabel('');
-      setCompanyItems([...companyBaseItems]);
-      setSelectedCompanies([]);
+
+      const nextCompanyItems = [...companyBaseItems];
+      const trimmedCompany = draft.customer.company.trim();
+      let companySelection: OptionItem | null = null;
+      if (trimmedCompany) {
+        const existing = nextCompanyItems.find((item) => item.value === trimmedCompany);
+        if (existing) {
+          companySelection = existing;
+        } else {
+          companySelection = {
+            id: `prefill-company-${trimmedCompany}`,
+            label: trimmedCompany,
+            value: trimmedCompany,
+            isCustom: true
+          };
+          nextCompanyItems.push(companySelection);
+        }
+      }
+      setCompanyItems(nextCompanyItems);
+      setSelectedCompany(companySelection);
       setIsCreatingCompany(false);
       setNewCompanyLabel('');
-      setUnitItems([...unitBaseItems]);
-      setSelectedUnits([]);
-      setIsCreatingUnit(false);
-      setNewUnitLabel('');
-      setCustomerRepresentative('');
-      setCustomerContact('');
-      setCustomerComment('');
-      setWorks([createWorkDraft()]);
-      setApprovalStages([createApprovalStageDraft()]);
-      setRoleSkillOptions(createRoleSkillState());
+
+      setCustomerUnit(draft.customer.unit ?? '');
+      setCustomerRepresentative(draft.customer.representative ?? '');
+      setCustomerContact(draft.customer.contact ?? '');
+      setCustomerComment(draft.customer.comment ?? '');
+
+      const worksFromDraft = buildWorksFromCreationDraft(draft);
+      setWorks(worksFromDraft);
+
+      const nextRoleSkills = createRoleSkillState();
+      worksFromDraft.forEach((work) => {
+        work.assignments.forEach((assignment) => {
+          const normalizedTask = assignment.task.trim();
+          if (!normalizedTask) {
+            return;
+          }
+          const existingOptions = nextRoleSkills[assignment.role] ?? [];
+          if (!existingOptions.some((option) => option.value === normalizedTask)) {
+            const option: OptionItem = {
+              id: `prefill-skill-${assignment.role}-${normalizedTask}`,
+              label: resolveTaskLabel(normalizedTask, normalizedTask),
+              value: normalizedTask,
+              isCustom: true
+            };
+            const merged = [...existingOptions, option].sort((a, b) =>
+              a.label.localeCompare(b.label, 'ru')
+            );
+            nextRoleSkills[assignment.role] = merged;
+          }
+        });
+      });
+      setRoleSkillOptions(nextRoleSkills);
       setActiveStep('details');
+    },
+    [
+      companyBaseItems,
+      createRoleSkillState,
+      domainBaseItems,
+      moduleBaseItems
+    ]
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
     }
-  }, [
-    companyBaseItems,
-    unitBaseItems,
-    createRoleSkillState,
-    domainBaseItems,
-    isOpen,
-    moduleBaseItems
-  ]);
+    hydrateFromDraft(initialDraft);
+  }, [hydrateFromDraft, initialDraft, isOpen]);
 
   const handleDomainSelectionChange = (items: OptionItem[] | null) => {
     const nextItems = (items ?? []).filter((item) => item.id !== NEW_DOMAIN_OPTION_ID);
@@ -637,6 +794,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const currentStepIndex = creationStepOrder.indexOf(activeStep) + 1;
   const currentStepTitle = creationStepTitles[activeStep];
   const currentStepDescription = creationStepDescriptions[activeStep];
+  const modalTitle = mode === 'edit' ? 'Редактирование инициативы' : 'Новая инициатива';
+  const submitButtonLabel = mode === 'edit' ? 'Сохранить изменения' : 'Создать инициативу';
+  const teamStepForwardLabel = mode === 'edit' ? 'Обновить команду' : 'Сформировать команду';
 
   const { planningRoles, roleAssignmentRefs } = useMemo(() => {
     const accumulator = new Map<
@@ -1082,7 +1242,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           <header className={styles.header}>
             <div className={styles.stepInfo}>
               <Text size="l" weight="bold">
-                Новая инициатива
+                {modalTitle}
               </Text>
               <Text size="xs" view="secondary">
                 Шаг {currentStepIndex} из {totalSteps} · {currentStepTitle}
@@ -1816,7 +1976,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 <Button
                   size="s"
                   view="primary"
-                  label="Сформировать команду"
+                  label={teamStepForwardLabel}
                   onClick={() => setActiveStep('team')}
                   disabled={!isWorkPlanningReady || isSubmitting || selectedDomains.length === 0}
                 />
@@ -1834,7 +1994,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 <Button
                   size="s"
                   view="primary"
-                  label="Создать инициативу"
+                  label={submitButtonLabel}
                   onClick={handleSubmit}
                   disabled={isSubmitDisabled || isSubmitting}
                 />
