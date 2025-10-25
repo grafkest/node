@@ -24,7 +24,6 @@ import DomainTree from './components/DomainTree';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
-  type InitiativeDraftPayload,
   type ModuleDraftPayload,
   type ModuleDraftPrefillRequest
 } from './components/AdminPanel';
@@ -57,12 +56,16 @@ import {
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
+  type ExpertSkill,
   type GraphLink,
   type Initiative,
+  type InitiativeApprovalStage,
   type InitiativeRequirement,
   type InitiativeRolePlan,
   type InitiativeRoleWork,
   type InitiativeWork,
+  type InitiativeWorkItem,
+  type InitiativeWorkItemStatus,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -72,6 +75,7 @@ import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
 import InitiativePlanner from './components/InitiativePlanner';
 import type { InitiativeCreationRequest } from './types/initiativeCreation';
+import { getSkillNameById } from './data/skills';
 import {
   assignExpertsToWorkItems,
   buildCandidatesFromReport,
@@ -115,7 +119,7 @@ function App() {
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
   const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
-  const [expertProfiles] = useState(initialExperts);
+  const [expertProfiles, setExpertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
   );
@@ -170,6 +174,11 @@ function App() {
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
+  const handleUpdateExpertSkills = useCallback((expertId: string, skills: ExpertSkill[]) => {
+    setExpertProfiles((prev) =>
+      prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
+    );
+  }, []);
   useLayoutEffect(() => {
     const element = sidebarRef.current;
     if (!element) {
@@ -646,15 +655,34 @@ function App() {
         });
       });
 
+      const moduleCandidates = [
+        ...initiative.plannedModuleIds,
+        ...initiative.potentialModules
+      ];
+      const linkedModule = moduleCandidates
+        .map((moduleId) => moduleData.find((module) => module.id === moduleId))
+        .find((module): module is ModuleNode => Boolean(module));
+
+      const productName = linkedModule?.productName?.trim()
+        ? linkedModule.productName
+        : initiative.targetModuleName;
+
       moduleDraftPrefillIdRef.current += 1;
+      const prefillDraft: Partial<ModuleDraftPayload> = {};
+      if (!linkedModule) {
+        prefillDraft.name = initiative.targetModuleName;
+        prefillDraft.productName = productName;
+        prefillDraft.domainIds = initiative.domains;
+      }
+      if (team.length > 0) {
+        prefillDraft.projectTeam = team;
+      }
+
       setModuleDraftPrefill({
         id: moduleDraftPrefillIdRef.current,
-        draft: {
-          name: initiative.targetModuleName,
-          productName: initiative.targetModuleName,
-          domainIds: initiative.domains,
-          projectTeam: team
-        }
+        mode: linkedModule ? 'edit' : 'create',
+        moduleId: linkedModule?.id,
+        draft: prefillDraft
       });
 
       patchInitiative(initiativeId, (current) => {
@@ -673,6 +701,7 @@ function App() {
     [
       initiativeData,
       expertProfiles,
+      moduleData,
       patchInitiative,
       setViewMode,
       showAdminNotice,
@@ -2296,50 +2325,11 @@ function App() {
     [artifactData, markGraphDirty, showAdminNotice]
   );
 
-  const handleCreateInitiative = useCallback(
-    (draft: InitiativeDraftPayload) => {
-      const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
-      const initiativeId = createEntityId('initiative', draft.name, existingIds);
-      const fallbackName = draft.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
-      const defaults = {
-        name: fallbackName,
-        description: draft.description.trim() || 'Описание не заполнено',
-        owner: draft.owner.trim() || 'Ответственный не указан',
-        expectedImpact: draft.expectedImpact.trim() || 'Эффект не оценён',
-        status: draft.status,
-        targetModuleName: fallbackName,
-        plannedModuleIds: [],
-        requiredSkills: [],
-        workItems: [],
-        approvalStages: [],
-        roles: [],
-        risks: [],
-        potentialModules: [],
-        works: [],
-        requirements: [],
-        lastUpdated: new Date().toISOString(),
-        customer: undefined
-      } as const;
-
-      const initiative = buildInitiativeFromDraft(
-        initiativeId,
-        draft,
-        displayableDomainIdSet,
-        moduleIdSet,
-        defaults
-      );
-
-      markGraphDirty();
-      setInitiativeData((prev) => [...prev, initiative]);
-      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
-    },
-    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
-  );
-
   const handlePlannerCreateInitiative = useCallback(
     (request: InitiativeCreationRequest): Initiative => {
       const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
       const initiativeId = createEntityId('initiative', request.name, existingIds);
+      const expertNameById = new Map(expertProfiles.map((expert) => [expert.id, expert.fullName]));
       const normalizedName = request.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
       const normalizedDescription = request.description.trim() || 'Описание не заполнено';
       const normalizedOwner = request.owner.trim() || 'Ответственный не указан';
@@ -2349,6 +2339,263 @@ function App() {
       const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
         request.potentialModules
       );
+      const roleEntries = request.roles.map((role, index) => {
+        const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
+        const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
+          id: item.id?.trim() || `${roleId}-work-${workIndex + 1}`,
+          title: item.title.trim() || `Работа ${workIndex + 1}`,
+          description: item.description.trim() || 'Описание не заполнено',
+          startDay: Math.max(0, Math.round(item.startDay)),
+          durationDays: Math.max(1, Math.round(item.durationDays)),
+          effortDays: Math.max(1, Math.round(item.effortDays)),
+          tasks: (item.tasks ?? [])
+            .map((task) => task.skill.trim())
+            .filter(Boolean)
+        }));
+
+        return {
+          draft: {
+            id: roleId,
+            role: role.role,
+            required: Math.max(1, Math.round(role.required)),
+            skills: role.skills.map((skill) => skill.trim()).filter(Boolean),
+            workItems: sanitizedWorkItems
+          } satisfies RolePlanningDraft,
+          comment: role.comment?.trim() || undefined
+        };
+      });
+
+      const planningRoles = roleEntries.map((entry) => entry.draft);
+      const matchReports = buildRoleMatchReports(planningRoles, expertProfiles);
+
+      const roles: InitiativeRolePlan[] = planningRoles.map((planningRole, index) => {
+        const report = matchReports[index];
+        const candidates = buildCandidatesFromReport(report);
+        const pinnedExpertIds = selectPinnedExperts(candidates, planningRole.required);
+        const workItems: InitiativeRoleWork[] = assignExpertsToWorkItems(
+          planningRole.workItems,
+          pinnedExpertIds
+        );
+
+        return {
+          id: planningRole.id,
+          role: planningRole.role,
+          required: planningRole.required,
+          pinnedExpertIds,
+          candidates,
+          workItems
+        };
+      });
+
+      const requiredSkillLabels = new Set<string>();
+      const workScheduleLookup = new Map<
+        string,
+        { startDay: number; durationDays: number; roleName: InitiativeRolePlan['role'] }
+      >();
+      roleEntries.forEach((entry) => {
+        entry.draft.skills.forEach((skillId) => {
+          if (!skillId) {
+            return;
+          }
+          requiredSkillLabels.add(getSkillNameById(skillId) ?? skillId);
+        });
+        entry.draft.workItems.forEach((item) => {
+          workScheduleLookup.set(item.id, {
+            startDay: item.startDay,
+            durationDays: item.durationDays,
+            roleName: entry.draft.role
+          });
+          item.tasks.forEach((taskId) => {
+            if (!taskId) {
+              return;
+            }
+            requiredSkillLabels.add(getSkillNameById(taskId) ?? taskId);
+          });
+        });
+      });
+
+      const requiredSkills = Array.from(requiredSkillLabels).sort((a, b) =>
+        a.localeCompare(b, 'ru')
+      );
+
+      const assignedExpertNameByWorkItem = new Map<string, string>();
+      roles.forEach((rolePlan) => {
+        (rolePlan.workItems ?? []).forEach((item) => {
+          if (!item.assignedExpertId) {
+            return;
+          }
+          const expertName = expertNameById.get(item.assignedExpertId) ?? item.assignedExpertId;
+          assignedExpertNameByWorkItem.set(item.id, expertName);
+        });
+      });
+
+      const normalizedWorkItemsFromRequest: InitiativeWorkItem[] = (request.workItems ?? []).map(
+        (item, index) => {
+          const rawId = item.id?.trim() ?? '';
+          const lookupKey = rawId || item.id || '';
+          const schedule = lookupKey ? workScheduleLookup.get(lookupKey) : undefined;
+          const id = rawId || `${initiativeId}-timeline-${index + 1}`;
+          const title = item.title.trim() || `Работа ${index + 1}`;
+          const description = item.description.trim() || 'Описание не заполнено';
+          const ownerCandidate = item.owner.trim();
+          const owner =
+            ownerCandidate ||
+            (lookupKey ? assignedExpertNameByWorkItem.get(lookupKey) : undefined) ||
+            (schedule ? schedule.roleName : undefined) ||
+            normalizedOwner;
+          const timeframeCandidate = item.timeframe.trim();
+          const timeframe =
+            timeframeCandidate ||
+            (schedule
+              ? `Д${schedule.startDay + 1} – Д${schedule.startDay + schedule.durationDays}`
+              : 'Срок не определён');
+          const status = item.status ?? 'discovery';
+
+          return {
+            id,
+            title,
+            description,
+            owner,
+            status,
+            timeframe
+          } satisfies InitiativeWorkItem;
+        }
+      );
+
+      const fallbackStatusOrder: InitiativeWorkItemStatus[] = [
+        'discovery',
+        'design',
+        'pilot',
+        'delivery'
+      ];
+      let fallbackStatusIndex = 0;
+      const fallbackWorkItemMap = new Map<string, InitiativeWorkItem>();
+      roleEntries.forEach((entry) => {
+        entry.draft.workItems.forEach((item) => {
+          if (fallbackWorkItemMap.has(item.id)) {
+            return;
+          }
+          const schedule = workScheduleLookup.get(item.id);
+          const timeframe = schedule
+            ? `Д${schedule.startDay + 1} – Д${schedule.startDay + schedule.durationDays}`
+            : 'Срок не определён';
+          const status =
+            fallbackStatusOrder[
+              Math.min(fallbackStatusOrder.length - 1, fallbackStatusIndex)
+            ];
+          fallbackStatusIndex += 1;
+          fallbackWorkItemMap.set(item.id, {
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            owner: schedule?.roleName ?? entry.draft.role,
+            status,
+            timeframe
+          });
+        });
+      });
+
+      const workItemsSource =
+        normalizedWorkItemsFromRequest.length > 0
+          ? normalizedWorkItemsFromRequest
+          : Array.from(fallbackWorkItemMap.values());
+
+      const workItems: InitiativeWorkItem[] = workItemsSource.filter(
+        (item, index, array) =>
+          array.findIndex((candidate) => candidate.id === item.id) === index
+      );
+
+      const approvalStages: InitiativeApprovalStage[] = [];
+      (request.approvalStages ?? []).forEach((stage, index) => {
+        const trimmedTitle = stage.title.trim();
+        const trimmedApprover = stage.approver.trim();
+        const trimmedComment = stage.comment?.trim() ?? '';
+        if (!trimmedTitle && !trimmedApprover && !trimmedComment) {
+          return;
+        }
+        approvalStages.push({
+          id: stage.id?.trim() || `${initiativeId}-approval-${index + 1}`,
+          title: trimmedTitle || `Этап согласования ${index + 1}`,
+          approver: trimmedApprover || 'Не назначен',
+          status: stage.status ?? 'pending',
+          comment: trimmedComment || undefined
+        });
+      });
+
+      const works: InitiativeWork[] = roles.flatMap((rolePlan) =>
+        (rolePlan.workItems ?? []).map((item) => ({
+          id: `${rolePlan.id}-${item.id}`,
+          title: item.title,
+          description: item.description,
+          effortHours: Math.max(0, Math.round(item.effortDays)) * 8
+        }))
+      );
+
+      const requirements: InitiativeRequirement[] = roleEntries.map((entry) => ({
+        id: `${entry.draft.id}-req`,
+        role: entry.draft.role,
+        skills: entry.draft.skills,
+        count: entry.draft.required,
+        comment: entry.comment
+      }));
+
+      const initiative: Initiative = {
+        id: initiativeId,
+        name: normalizedName,
+        description: normalizedDescription,
+        domains,
+        plannedModuleIds,
+        requiredSkills,
+        workItems,
+        approvalStages,
+        status: request.status,
+        owner: normalizedOwner,
+        expectedImpact: normalizedImpact,
+        targetModuleName: normalizedTarget,
+        lastUpdated: new Date().toISOString(),
+        risks: [],
+        roles,
+        potentialModules,
+        works,
+        requirements,
+        customer: {
+          companies: request.customer.companies
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+          units: request.customer.units
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+          representative: request.customer.representative.trim(),
+          contact: request.customer.contact.trim(),
+          comment: request.customer.comment?.trim() || undefined
+        }
+      };
+
+      markGraphDirty();
+      setInitiativeData((prev) => [...prev, initiative]);
+      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
+      return initiative;
+    },
+    [expertProfiles, initiativeData, markGraphDirty, showAdminNotice]
+  );
+
+  const handlePlannerUpdateInitiative = useCallback(
+    (initiativeId: string, request: InitiativeCreationRequest): Initiative => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        throw new Error('Инициатива не найдена. Обновление невозможно.');
+      }
+
+      const normalizedName = request.name.trim() || existing.name;
+      const normalizedDescription = request.description.trim() || existing.description;
+      const normalizedOwner = request.owner.trim() || existing.owner;
+      const normalizedImpact = request.expectedImpact.trim() || existing.expectedImpact;
+      const normalizedTarget = request.targetModuleName.trim() || existing.targetModuleName;
+      const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
+      const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
+        request.potentialModules
+      );
+
       const roleEntries = request.roles.map((role, index) => {
         const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
         const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
@@ -2414,21 +2661,17 @@ function App() {
         comment: entry.comment
       }));
 
-      const initiative: Initiative = {
-        id: initiativeId,
+      const updated: Initiative = {
+        ...existing,
         name: normalizedName,
         description: normalizedDescription,
         domains,
         plannedModuleIds,
-        requiredSkills: [],
-        workItems: [],
-        approvalStages: [],
         status: request.status,
         owner: normalizedOwner,
         expectedImpact: normalizedImpact,
         targetModuleName: normalizedTarget,
         lastUpdated: new Date().toISOString(),
-        risks: [],
         roles,
         potentialModules,
         works,
@@ -2443,11 +2686,13 @@ function App() {
       };
 
       markGraphDirty();
-      setInitiativeData((prev) => [...prev, initiative]);
-      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
-      return initiative;
+      setInitiativeData((prev) =>
+        prev.map((initiative) => (initiative.id === initiativeId ? updated : initiative))
+      );
+
+      return updated;
     },
-    [expertProfiles, initiativeData, markGraphDirty, showAdminNotice]
+    [expertProfiles, initiativeData, markGraphDirty]
   );
 
   const handleUpdateInitiative = useCallback(
@@ -3095,6 +3340,7 @@ function App() {
           moduleNameMap={moduleNameMap}
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
+          onUpdateExpertSkills={handleUpdateExpertSkills}
         />
       </main>
       <main
@@ -3113,6 +3359,7 @@ function App() {
           onStatusChange={handleInitiativeStatusChange}
           onExport={handleInitiativeExport}
           onCreateInitiative={handlePlannerCreateInitiative}
+          onUpdateInitiative={handlePlannerUpdateInitiative}
         />
       </main>
       <main
@@ -3138,7 +3385,6 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
-          initiatives={initiativeData}
           moduleDraftPrefill={moduleDraftPrefill}
           onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
@@ -3150,9 +3396,6 @@ function App() {
           onCreateArtifact={handleCreateArtifact}
           onUpdateArtifact={handleUpdateArtifact}
           onDeleteArtifact={handleDeleteArtifact}
-          onCreateInitiative={handleCreateInitiative}
-          onUpdateInitiative={handleUpdateInitiative}
-          onDeleteInitiative={handleDeleteInitiative}
         />
       </main>
     </Layout>
@@ -3315,532 +3558,6 @@ type InitiativeBuildDefaults = {
   requirements?: Initiative['requirements'];
   customer?: Initiative['customer'];
 };
-
-function buildInitiativeFromDraft(
-  initiativeId: string,
-  draft: InitiativeDraftPayload,
-  allowedDomainIds: Set<string>,
-  allowedModuleIds: Set<string>,
-  defaults: InitiativeBuildDefaults
-): Initiative {
-  const normalizedName = draft.name.trim() || defaults.name;
-  const normalizedDescription = draft.description.trim() || defaults.description;
-  const normalizedOwner = draft.owner.trim() || defaults.owner;
-  const normalizedImpact = draft.expectedImpact.trim() || defaults.expectedImpact;
-  const normalizedStatus = draft.status ?? defaults.status;
-
-  const domains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
-  const draftModuleIds = deduplicateNonEmpty(draft.moduleIds).filter((id) =>
-    allowedModuleIds.has(id)
-  );
-  const potentialModules =
-    draftModuleIds.length > 0
-      ? draftModuleIds
-      : deduplicateNonEmpty(defaults.potentialModules ?? []).filter((id) =>
-          allowedModuleIds.has(id)
-        );
-  const plannedModuleIds =
-    draftModuleIds.length > 0
-      ? draftModuleIds
-      : deduplicateNonEmpty(defaults.plannedModuleIds ?? []).filter((id) =>
-          allowedModuleIds.has(id)
-        );
-
-  const worksDraft = draft.works.map((work, index) => {
-    const effortValue = Number(work.effortHours);
-    const normalizedEffort = Number.isFinite(effortValue) ? Math.max(0, effortValue) : 0;
-    return {
-      id: work.id.trim() || `work-${index + 1}-${initiativeId}`,
-      title: work.title.trim() || `Работа ${index + 1}`,
-      description: work.description.trim() || 'Описание не заполнено',
-      effortHours: normalizedEffort
-    };
-  });
-  const works =
-    worksDraft.length > 0
-      ? worksDraft
-      : (defaults.works ?? []).map((work) => ({ ...work }));
-
-  const requirementsDraft = draft.requirements.map((requirement, index) => {
-    const countValue = Number(requirement.count);
-    const normalizedCount = Number.isFinite(countValue) ? Math.max(1, Math.round(countValue)) : 1;
-    const skills = deduplicateNonEmpty(requirement.skills.map((skill) => skill.trim()));
-    const comment = requirement.comment?.trim() ?? '';
-    return {
-      id: requirement.id.trim() || `requirement-${index + 1}-${initiativeId}`,
-      role: requirement.role,
-      skills,
-      count: normalizedCount,
-      comment: comment || undefined
-    };
-  });
-  const requirements =
-    requirementsDraft.length > 0
-      ? requirementsDraft
-      : (defaults.requirements ?? []).map((requirement) => ({
-          ...requirement,
-          skills: [...requirement.skills]
-        }));
-
-  const requiredSkillsDraft = deduplicateNonEmpty(
-    requirements.flatMap((requirement) => requirement.skills)
-  );
-  const requiredSkills =
-    requiredSkillsDraft.length > 0 ? requiredSkillsDraft : [...(defaults.requiredSkills ?? [])];
-
-  const normalizedTarget = defaults.targetModuleName?.trim() || normalizedName;
-  const workItems = (defaults.workItems ?? []).map((item) => ({ ...item }));
-  const approvalStages = (defaults.approvalStages ?? []).map((stage) => ({ ...stage }));
-  const risks = (defaults.risks ?? []).map((risk) => ({ ...risk }));
-  const roles = (defaults.roles ?? []).map((role) => ({
-    ...role,
-    pinnedExpertIds: [...role.pinnedExpertIds],
-    candidates: role.candidates.map((candidate) => ({
-      ...candidate,
-      scoreDetails: candidate.scoreDetails.map((detail) => ({ ...detail }))
-    })),
-    workItems: role.workItems?.map((item) => ({ ...item }))
-  }));
-  const customer = defaults.customer ? { ...defaults.customer } : undefined;
-
-  return {
-    id: initiativeId,
-    name: normalizedName,
-    description: normalizedDescription,
-    owner: normalizedOwner,
-    status: normalizedStatus,
-    expectedImpact: normalizedImpact,
-    domains,
-    plannedModuleIds,
-    requiredSkills,
-    workItems,
-    approvalStages,
-    targetModuleName: normalizedTarget,
-    lastUpdated: new Date().toISOString(),
-    risks,
-    roles,
-    potentialModules,
-    works,
-    requirements,
-    customer
-  };
-}
-
-function recalculateReuseScores(modules: ModuleNode[]): ModuleNode[] {
-  if (modules.length === 0) {
-    return modules;
-  }
-
-  const integrationMap = buildModuleIntegrationMap(modules);
-  const denominator = Math.max(1, modules.length - 1);
-
-  return modules.map((module) => {
-    const connections = integrationMap.get(module.id);
-    const score = connections ? Math.min(1, connections.size / denominator) : 0;
-    return { ...module, reuseScore: score };
-  });
-}
-
-function buildModuleIntegrationMap(modules: ModuleNode[]): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-
-  modules.forEach((module) => {
-    map.set(module.id, new Set());
-  });
-
-  modules.forEach((module) => {
-    module.dependencies.forEach((dependencyId) => {
-      if (!map.has(dependencyId) || dependencyId === module.id) {
-        return;
-      }
-      map.get(module.id)?.add(dependencyId);
-      map.get(dependencyId)?.add(module.id);
-    });
-
-    module.dataOut.forEach((output) => {
-      (output.consumerIds ?? []).forEach((consumerId) => {
-        if (!map.has(consumerId) || consumerId === module.id) {
-          return;
-        }
-        map.get(module.id)?.add(consumerId);
-        map.get(consumerId)?.add(module.id);
-      });
-    });
-  });
-
-  return map;
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  const normalized = Number.isFinite(value) ? value : min;
-  if (normalized < min) {
-    return min;
-  }
-  if (normalized > max) {
-    return max;
-  }
-  return normalized;
-}
-
-function buildCompanyList(modules: ModuleNode[]): string[] {
-  const names = new Set<string>();
-
-  modules.forEach((module) => {
-    module.userStats.companies.forEach((company) => {
-      const normalized = company.name.trim();
-      if (normalized) {
-        names.add(normalized);
-      }
-    });
-  });
-
-  return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
-}
-
-function buildProductList(modules: ModuleNode[]): string[] {
-  const products = new Set<string>();
-  modules.forEach((module) => {
-    if (module.productName) {
-      products.add(module.productName);
-    }
-  });
-  return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
-}
-
-function needsEngineLayoutCapture(
-  layout: Record<string, GraphLayoutNodePosition>,
-  activeIds: Set<string>
-): boolean {
-  for (const id of activeIds) {
-    const position = layout[id];
-    if (!position) {
-      return true;
-    }
-
-    if (typeof position.x !== 'number' || Number.isNaN(position.x)) {
-      return true;
-    }
-
-    if (typeof position.y !== 'number' || Number.isNaN(position.y)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function mergeLayoutPositions(
-  prev: Record<string, GraphLayoutNodePosition>,
-  next: Record<string, GraphLayoutNodePosition>
-): Record<string, GraphLayoutNodePosition> {
-  const merged: Record<string, GraphLayoutNodePosition> = { ...prev };
-
-  Object.entries(next).forEach(([id, position]) => {
-    const existing = merged[id];
-    if (!existing || !layoutPositionsEqual(existing, position)) {
-      merged[id] = position;
-    }
-  });
-
-  return merged;
-}
-
-function pruneLayoutPositions(
-  positions: Record<string, GraphLayoutNodePosition>,
-  activeIds: Set<string>
-): Record<string, GraphLayoutNodePosition> {
-  const result: Record<string, GraphLayoutNodePosition> = {};
-
-  Object.entries(positions).forEach(([id, position]) => {
-    if (activeIds.has(id)) {
-      result[id] = position;
-    }
-  });
-
-  return result;
-}
-
-function layoutsEqual(
-  prev: Record<string, GraphLayoutNodePosition>,
-  next: Record<string, GraphLayoutNodePosition>
-): boolean {
-  const prevKeys = Object.keys(prev);
-  const nextKeys = Object.keys(next);
-
-  if (prevKeys.length !== nextKeys.length) {
-    return false;
-  }
-
-  return prevKeys.every((key) => {
-    const prevPosition = prev[key];
-    const nextPosition = next[key];
-
-    if (!nextPosition) {
-      return false;
-    }
-
-    return layoutPositionsEqual(prevPosition, nextPosition);
-  });
-}
-
-function layoutPositionsEqual(
-  prev: GraphLayoutNodePosition,
-  next: GraphLayoutNodePosition
-): boolean {
-  if (prev.x !== next.x || prev.y !== next.y) {
-    return false;
-  }
-
-  const prevFx = prev.fx ?? null;
-  const nextFx = next.fx ?? null;
-  if (prevFx !== nextFx) {
-    return false;
-  }
-
-  const prevFy = prev.fy ?? null;
-  const nextFy = next.fy ?? null;
-  return prevFy === nextFy;
-}
-
-function resolveInitialModulePosition(
-  positions: Record<string, GraphLayoutNodePosition>,
-  anchorIds: string[]
-): GraphLayoutNodePosition | null {
-  const anchors = anchorIds
-    .map((id) => positions[id])
-    .filter((position): position is GraphLayoutNodePosition => Boolean(position));
-  const fallbackEntries = Object.values(positions);
-
-  const anchorValues = extractAxisValues(anchors);
-  const fallbackValues = extractAxisValues(fallbackEntries);
-
-  const xValues = anchorValues.x.length > 0 ? anchorValues.x : fallbackValues.x;
-  const yValues = anchorValues.y.length > 0 ? anchorValues.y : fallbackValues.y;
-
-  if (xValues.length === 0 || yValues.length === 0) {
-    return { x: 0, y: 0 };
-  }
-
-  const anchorAverageX = anchorValues.x.length > 0
-    ? anchorValues.x.reduce((sum, value) => sum + value, 0) / anchorValues.x.length
-    : Math.max(...xValues);
-  const averageY = yValues.reduce((sum, value) => sum + value, 0) / yValues.length;
-
-  const horizontalOffset = anchorValues.x.length > 0 ? 80 : 140;
-  const jitterSeed = Object.keys(positions).length;
-  const verticalJitter = ((jitterSeed % 5) - 2) * 45;
-
-  return {
-    x: roundCoordinate(anchorAverageX + horizontalOffset),
-    y: roundCoordinate(averageY + verticalJitter)
-  };
-}
-
-function extractAxisValues(positions: GraphLayoutNodePosition[]): {
-  x: number[];
-  y: number[];
-} {
-  const x = positions
-    .map((position) => getAxisCoordinate(position, 'x'))
-    .filter((value): value is number => value !== null);
-  const y = positions
-    .map((position) => getAxisCoordinate(position, 'y'))
-    .filter((value): value is number => value !== null);
-
-  return { x, y };
-}
-
-function getAxisCoordinate(
-  position: GraphLayoutNodePosition,
-  axis: 'x' | 'y'
-): number | null {
-  const fixed = axis === 'x' ? position.fx : position.fy;
-  if (typeof fixed === 'number' && Number.isFinite(fixed)) {
-    return fixed;
-  }
-
-  const fallback = axis === 'x' ? position.x : position.y;
-  if (typeof fallback === 'number' && Number.isFinite(fallback)) {
-    return fallback;
-  }
-
-  return null;
-}
-
-function roundCoordinate(value: number): number {
-  return Number(value.toFixed(2));
-}
-
-function collectSearchableValues(value: unknown, target: string[]): void {
-  if (value === null || value === undefined) {
-    return;
-  }
-
-  if (typeof value === 'string') {
-    target.push(value);
-    return;
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    target.push(String(value));
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectSearchableValues(item, target));
-    return;
-  }
-
-  if (typeof value === 'object') {
-    Object.values(value as Record<string, unknown>).forEach((item) => {
-      collectSearchableValues(item, target);
-    });
-  }
-}
-
-function deduplicateNonEmpty(values: (string | null | undefined)[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  values.forEach((value) => {
-    if (!value) {
-      return;
-    }
-    if (!seen.has(value)) {
-      seen.add(value);
-      result.push(value);
-    }
-  });
-  return result;
-}
-
-function createEntityId(prefix: string, name: string, existing: Set<string>): string {
-  const normalized = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  const base = normalized ? `${prefix}-${normalized}` : `${prefix}-${Date.now()}`;
-  let candidate = base;
-  let counter = 1;
-  while (existing.has(candidate)) {
-    candidate = `${base}-${counter++}`;
-  }
-  return candidate;
-}
-
-function addDomainToTree(domains: DomainNode[], parentId: string | undefined, newDomain: DomainNode): DomainNode[] {
-  if (!parentId) {
-    return [...domains, newDomain];
-  }
-
-  const [next, inserted] = insertDomain(domains, parentId, newDomain);
-  if (inserted) {
-    return next;
-  }
-
-  return [...domains, newDomain];
-}
-
-function insertDomain(domains: DomainNode[], parentId: string, newDomain: DomainNode): [DomainNode[], boolean] {
-  let inserted = false;
-  const next = domains.map((domain) => {
-    if (domain.id === parentId) {
-      inserted = true;
-      const children = domain.children ? [...domain.children, newDomain] : [newDomain];
-      return { ...domain, children };
-    }
-
-    if (domain.children) {
-      const [childUpdated, childInserted] = insertDomain(domain.children, parentId, newDomain);
-      if (childInserted) {
-        inserted = true;
-        return { ...domain, children: childUpdated };
-      }
-    }
-
-    return domain;
-  });
-
-  return [next, inserted];
-}
-
-function removeDomainFromTree(
-  domains: DomainNode[],
-  targetId: string,
-  parentId: string | null = null
-): [DomainNode[], DomainNode | null, string | null] {
-  let removed: DomainNode | null = null;
-  let removedParent: string | null = null;
-
-  const next = domains
-    .map((domain) => {
-      if (domain.id === targetId) {
-        removed = domain;
-        removedParent = parentId;
-        return null;
-      }
-
-      if (domain.children) {
-        const [children, childRemoved, childParent] = removeDomainFromTree(domain.children, targetId, domain.id);
-        if (childRemoved) {
-          removed = childRemoved;
-          removedParent = childParent;
-          return { ...domain, children };
-        }
-      }
-
-      return domain;
-    })
-    .filter((domain): domain is DomainNode => Boolean(domain));
-
-  return [next, removed, removedParent];
-}
-
-function collectDomainIds(domain: DomainNode): string[] {
-  const children = domain.children ?? [];
-  return [domain.id, ...children.flatMap((child) => collectDomainIds(child))];
-}
-
-function buildModuleLinks(
-  modules: ModuleNode[],
-  artifacts: ArtifactNode[],
-  allowedDomainIds: Set<string>
-): GraphLink[] {
-  const artifactMap = new Map<string, ArtifactNode>();
-  artifacts.forEach((artifact) => artifactMap.set(artifact.id, artifact));
-
-  return modules.flatMap((module) => {
-    const domainLinks: GraphLink[] = module.domains
-      .filter((domainId) => allowedDomainIds.has(domainId))
-      .map((domainId) => ({
-        source: module.id,
-        target: domainId,
-        type: 'domain'
-      }));
-
-    const dependencyLinks: GraphLink[] = module.dependencies.map((dependencyId) => ({
-      source: module.id,
-      target: dependencyId,
-      type: 'dependency'
-    }));
-
-    const produceLinks: GraphLink[] = module.produces.map((artifactId) => ({
-      source: module.id,
-      target: artifactId,
-      type: 'produces'
-    }));
-
-    const consumeLinks: GraphLink[] = module.dataIn
-      .filter((input) => input.sourceId && artifactMap.has(input.sourceId))
-      .map((input) => ({
-        source: input.sourceId as string,
-        target: module.id,
-        type: 'consumes'
-      }));
-
-    return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
-  });
-}
 
 function buildInitiativeLinks(
   initiatives: Initiative[],

@@ -8,7 +8,14 @@ import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { domainNameById, domainTree, modules } from '../data';
-import type { DomainNode, ExpertProfile, InitiativeStatus, TeamRole } from '../data';
+import type {
+  DomainNode,
+  ExpertProfile,
+  InitiativeApprovalStatus,
+  InitiativeStatus,
+  InitiativeWorkItemStatus,
+  TeamRole
+} from '../data';
 import { getSkillNameById, getSkillsByRole } from '../data/skills';
 import InitiativeGanttChart, {
   type InitiativeGanttBlocker,
@@ -39,6 +46,7 @@ type OptionItem = {
 const NEW_DOMAIN_OPTION_ID = '__new-domain__';
 const NEW_MODULE_OPTION_ID = '__new-module__';
 const NEW_COMPANY_OPTION_ID = '__new-company__';
+const NEW_UNIT_OPTION_ID = '__new-unit__';
 
 const DOMAIN_CREATE_OPTION: OptionItem = {
   id: NEW_DOMAIN_OPTION_ID,
@@ -56,6 +64,12 @@ const COMPANY_CREATE_OPTION: OptionItem = {
   id: NEW_COMPANY_OPTION_ID,
   label: 'Создать нового',
   value: NEW_COMPANY_OPTION_ID
+};
+
+const UNIT_CREATE_OPTION: OptionItem = {
+  id: NEW_UNIT_OPTION_ID,
+  label: 'Добавить новое',
+  value: NEW_UNIT_OPTION_ID
 };
 
 const collectGraphDomainIds = (domains: DomainNode[]): string[] => {
@@ -108,7 +122,18 @@ type WorkDraft = {
   title: string;
   description: string;
   assumptions: string;
+  owner: string;
+  timeframe: string;
+  status: InitiativeWorkItemStatus;
   assignments: WorkAssignmentDraft[];
+};
+
+type ApprovalStageDraft = {
+  id: string;
+  title: string;
+  approver: string;
+  status: InitiativeApprovalStatus;
+  comment: string;
 };
 
 type CreationStep = 'details' | 'work' | 'team';
@@ -120,6 +145,8 @@ type InitiativeCreationModalProps = {
   onSubmit: (draft: InitiativeCreationRequest) => void | Promise<void>;
   isSubmitting?: boolean;
   errorMessage?: string | null;
+  mode?: 'create' | 'edit';
+  initialDraft?: InitiativeCreationRequest | null;
 };
 
 const statusOptions: SelectOption<InitiativeStatus>[] = [
@@ -138,6 +165,19 @@ const roleOptions: SelectOption<TeamRole>[] = [
   { label: 'Тестировщик', value: 'Тестировщик' },
   { label: 'Руководитель проекта', value: 'Руководитель проекта' },
   { label: 'UX', value: 'UX' }
+];
+
+const workItemStatusOptions: SelectOption<InitiativeWorkItemStatus>[] = [
+  { label: 'Исследование', value: 'discovery' },
+  { label: 'Проектирование', value: 'design' },
+  { label: 'Пилот', value: 'pilot' },
+  { label: 'Внедрение', value: 'delivery' }
+];
+
+const approvalStatusOptions: SelectOption<InitiativeApprovalStatus>[] = [
+  { label: 'Ожидание', value: 'pending' },
+  { label: 'В работе', value: 'in-progress' },
+  { label: 'Одобрено', value: 'approved' }
 ];
 
 const creationStepOrder: CreationStep[] = ['details', 'work', 'team'];
@@ -181,8 +221,56 @@ const createWorkDraft = (offset = 0): WorkDraft => ({
   title: '',
   description: '',
   assumptions: '',
+  owner: '',
+  timeframe: '',
+  status: 'discovery',
   assignments: [createWorkAssignmentDraft(roleOptions[0].value, offset)]
 });
+
+const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraft[] => {
+  const workMap = new Map<string, WorkDraft>();
+
+  draft.roles.forEach((role) => {
+    role.workItems.forEach((item, index) => {
+      const workId = item.id || `${role.id}-work-${index + 1}`;
+      let work = workMap.get(workId);
+
+      if (!work) {
+        work = {
+          id: workId,
+          title: item.title,
+          description: item.description,
+          assumptions: item.assumptions ?? '',
+          assignments: []
+        };
+        workMap.set(workId, work);
+      }
+
+      const tasks = item.tasks ?? [];
+      const assignment: WorkAssignmentDraft = {
+        id: createId(),
+        role: role.role,
+        task: tasks[0]?.skill ?? '',
+        description: item.description,
+        effortDays: Math.max(1, Math.round(item.effortDays)),
+        startDay: Math.max(0, Math.round(item.startDay)),
+        durationDays: Math.max(1, Math.round(item.durationDays)),
+        isCustom: tasks.some((task) => task.isCustom),
+        tasks: tasks.map((task) => task.skill)
+      };
+
+      work.assignments.push(assignment);
+    });
+  });
+
+  const works = Array.from(workMap.values()).map((work) => ({
+    ...work,
+    assignments:
+      work.assignments.length > 0 ? work.assignments : [createWorkAssignmentDraft()]
+  }));
+
+  return works.length > 0 ? works : [createWorkDraft()];
+};
 
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   isOpen,
@@ -190,7 +278,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   onClose,
   onSubmit,
   isSubmitting = false,
-  errorMessage = null
+  errorMessage = null,
+  mode = 'create',
+  initialDraft = null
 }) => {
   const domainBaseItems = useMemo<OptionItem[]>(
     () =>
@@ -221,6 +311,18 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       .map((name) => ({ id: name, label: name, value: name }));
   }, []);
 
+  const unitBaseItems = useMemo<OptionItem[]>(() => {
+    const unitNames = new Set<string>();
+    modules.forEach((module) => {
+      if (module.ridOwner?.division) {
+        unitNames.add(module.ridOwner.division);
+      }
+    });
+    return Array.from(unitNames)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map((name) => ({ id: name, label: name, value: name }));
+  }, []);
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [owner, setOwner] = useState('');
@@ -236,14 +338,20 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [isCreatingModule, setIsCreatingModule] = useState(false);
   const [newModuleLabel, setNewModuleLabel] = useState('');
   const [companyItems, setCompanyItems] = useState<OptionItem[]>(() => [...companyBaseItems]);
-  const [selectedCompany, setSelectedCompany] = useState<OptionItem | null>(null);
+  const [selectedCompanies, setSelectedCompanies] = useState<OptionItem[]>([]);
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
   const [newCompanyLabel, setNewCompanyLabel] = useState('');
-  const [customerUnit, setCustomerUnit] = useState('');
+  const [unitItems, setUnitItems] = useState<OptionItem[]>(() => [...unitBaseItems]);
+  const [selectedUnits, setSelectedUnits] = useState<OptionItem[]>([]);
+  const [isCreatingUnit, setIsCreatingUnit] = useState(false);
+  const [newUnitLabel, setNewUnitLabel] = useState('');
   const [customerRepresentative, setCustomerRepresentative] = useState('');
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
   const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft()]);
+  const [approvalStages, setApprovalStages] = useState<ApprovalStageDraft[]>([
+    createApprovalStageDraft()
+  ]);
   const [activeStep, setActiveStep] = useState<CreationStep>('details');
   const baseRoleSkillOptions = useMemo<Record<TeamRole, OptionItem[]>>(
     () =>
@@ -272,41 +380,162 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     () => createRoleSkillState()
   );
 
-  useEffect(() => {
-    if (isOpen) {
-      setName('');
-      setDescription('');
-      setOwner('');
-      setExpectedImpact('');
-      setTargetModule('');
-      setStatus('initiated');
-      setDomainItems([...domainBaseItems]);
-      setSelectedDomains([]);
+  const hydrateFromDraft = useCallback(
+    (draft: InitiativeCreationRequest | null) => {
+      if (!draft) {
+        setName('');
+        setDescription('');
+        setOwner('');
+        setExpectedImpact('');
+        setTargetModule('');
+        setStatus('initiated');
+        setDomainItems([...domainBaseItems]);
+        setSelectedDomains([]);
+        setIsCreatingDomain(false);
+        setNewDomainLabel('');
+        setModuleItems([...moduleBaseItems]);
+        setSelectedModules([]);
+        setIsCreatingModule(false);
+        setNewModuleLabel('');
+        setCompanyItems([...companyBaseItems]);
+        setSelectedCompany(null);
+        setIsCreatingCompany(false);
+        setNewCompanyLabel('');
+        setCustomerUnit('');
+        setCustomerRepresentative('');
+        setCustomerContact('');
+        setCustomerComment('');
+        setWorks([createWorkDraft()]);
+        setRoleSkillOptions(createRoleSkillState());
+        setActiveStep('details');
+        return;
+      }
+
+      setName(draft.name);
+      setDescription(draft.description);
+      setOwner(draft.owner);
+      setExpectedImpact(draft.expectedImpact);
+      setTargetModule(draft.targetModuleName);
+      setStatus(draft.status);
+
+      const nextDomainItems = [...domainBaseItems];
+      const domainSelections = draft.domains
+        .map((domain) => domain.trim())
+        .filter(Boolean)
+        .map((domain) => {
+          const existing = nextDomainItems.find((item) => item.value === domain);
+          if (existing) {
+            return existing;
+          }
+          const option: OptionItem = {
+            id: `prefill-domain-${domain}`,
+            label: domain,
+            value: domain,
+            isCustom: true
+          };
+          nextDomainItems.push(option);
+          return option;
+        });
+      setDomainItems(nextDomainItems);
+      setSelectedDomains(domainSelections);
       setIsCreatingDomain(false);
       setNewDomainLabel('');
-      setModuleItems([...moduleBaseItems]);
-      setSelectedModules([]);
+
+      const nextModuleItems = [...moduleBaseItems];
+      const moduleSelections = Array.from(
+        new Set(
+          draft.potentialModules
+            .map((module) => module.trim())
+            .filter((module) => module.length > 0)
+        )
+      ).map((module) => {
+        const existing = nextModuleItems.find((item) => item.value === module);
+        if (existing) {
+          return existing;
+        }
+        const option: OptionItem = {
+          id: `prefill-module-${module}`,
+          label: module,
+          value: module,
+          isCustom: true
+        };
+        nextModuleItems.push(option);
+        return option;
+      });
+      setModuleItems(nextModuleItems);
+      setSelectedModules(moduleSelections);
       setIsCreatingModule(false);
       setNewModuleLabel('');
-      setCompanyItems([...companyBaseItems]);
-      setSelectedCompany(null);
+
+      const nextCompanyItems = [...companyBaseItems];
+      const trimmedCompany = draft.customer.company.trim();
+      let companySelection: OptionItem | null = null;
+      if (trimmedCompany) {
+        const existing = nextCompanyItems.find((item) => item.value === trimmedCompany);
+        if (existing) {
+          companySelection = existing;
+        } else {
+          companySelection = {
+            id: `prefill-company-${trimmedCompany}`,
+            label: trimmedCompany,
+            value: trimmedCompany,
+            isCustom: true
+          };
+          nextCompanyItems.push(companySelection);
+        }
+      }
+      setCompanyItems(nextCompanyItems);
+      setSelectedCompany(companySelection);
       setIsCreatingCompany(false);
       setNewCompanyLabel('');
-      setCustomerUnit('');
-      setCustomerRepresentative('');
-      setCustomerContact('');
-      setCustomerComment('');
-      setWorks([createWorkDraft()]);
-      setRoleSkillOptions(createRoleSkillState());
+
+      setCustomerUnit(draft.customer.unit ?? '');
+      setCustomerRepresentative(draft.customer.representative ?? '');
+      setCustomerContact(draft.customer.contact ?? '');
+      setCustomerComment(draft.customer.comment ?? '');
+
+      const worksFromDraft = buildWorksFromCreationDraft(draft);
+      setWorks(worksFromDraft);
+
+      const nextRoleSkills = createRoleSkillState();
+      worksFromDraft.forEach((work) => {
+        work.assignments.forEach((assignment) => {
+          const normalizedTask = assignment.task.trim();
+          if (!normalizedTask) {
+            return;
+          }
+          const existingOptions = nextRoleSkills[assignment.role] ?? [];
+          if (!existingOptions.some((option) => option.value === normalizedTask)) {
+            const option: OptionItem = {
+              id: `prefill-skill-${assignment.role}-${normalizedTask}`,
+              label: resolveTaskLabel(normalizedTask, normalizedTask),
+              value: normalizedTask,
+              isCustom: true
+            };
+            const merged = [...existingOptions, option].sort((a, b) =>
+              a.label.localeCompare(b.label, 'ru')
+            );
+            nextRoleSkills[assignment.role] = merged;
+          }
+        });
+      });
+      setRoleSkillOptions(nextRoleSkills);
       setActiveStep('details');
+    },
+    [
+      companyBaseItems,
+      createRoleSkillState,
+      domainBaseItems,
+      moduleBaseItems
+    ]
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
     }
-  }, [
-    companyBaseItems,
-    createRoleSkillState,
-    domainBaseItems,
-    isOpen,
-    moduleBaseItems
-  ]);
+    hydrateFromDraft(initialDraft);
+  }, [hydrateFromDraft, initialDraft, isOpen]);
 
   const handleDomainSelectionChange = (items: OptionItem[] | null) => {
     const nextItems = (items ?? []).filter((item) => item.id !== NEW_DOMAIN_OPTION_ID);
@@ -330,12 +559,26 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     setSelectedModules(uniqueItems);
   };
 
-  const handleCompanySelectionChange = (item: OptionItem | null) => {
-    if (item?.id === NEW_COMPANY_OPTION_ID) {
+  const handleCompanySelectionChange = (items: OptionItem[] | null) => {
+    const nextItems = (items ?? []).filter((item) => item.id !== NEW_COMPANY_OPTION_ID);
+    const uniqueItems = nextItems.filter(
+      (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+    );
+    if (items?.some((item) => item.id === NEW_COMPANY_OPTION_ID)) {
       setIsCreatingCompany(true);
-      return;
     }
-    setSelectedCompany(item);
+    setSelectedCompanies(uniqueItems);
+  };
+
+  const handleUnitSelectionChange = (items: OptionItem[] | null) => {
+    const nextItems = (items ?? []).filter((item) => item.id !== NEW_UNIT_OPTION_ID);
+    const uniqueItems = nextItems.filter(
+      (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+    );
+    if (items?.some((item) => item.id === NEW_UNIT_OPTION_ID)) {
+      setIsCreatingUnit(true);
+    }
+    setSelectedUnits(uniqueItems);
   };
 
   const handleAddCustomDomain = () => {
@@ -406,9 +649,41 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         isCustom: true
       };
     setCompanyItems((prev) => (existing ? prev : [...prev, nextItem]));
-    setSelectedCompany(nextItem);
+    setSelectedCompanies((prev) => {
+      const combined = existing ? prev : [...prev, nextItem];
+      return combined.filter(
+        (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+      );
+    });
     setNewCompanyLabel('');
     setIsCreatingCompany(false);
+  };
+
+  const handleAddCustomUnit = () => {
+    const trimmed = newUnitLabel.trim();
+    if (!trimmed) {
+      return;
+    }
+    const existing = unitItems.find(
+      (item) =>
+        item.label.toLowerCase() === trimmed.toLowerCase() || item.value.toLowerCase() === trimmed.toLowerCase()
+    );
+    const nextItem =
+      existing ?? {
+        id: `custom-unit-${createId()}`,
+        label: trimmed,
+        value: trimmed,
+        isCustom: true
+      };
+    setUnitItems((prev) => (existing ? prev : [...prev, nextItem]));
+    setSelectedUnits((prev) => {
+      const combined = existing ? prev : [...prev, nextItem];
+      return combined.filter(
+        (item, index, array) => array.findIndex((candidate) => candidate.value === item.value) === index
+      );
+    });
+    setNewUnitLabel('');
+    setIsCreatingUnit(false);
   };
 
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
@@ -501,7 +776,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     [works]
   );
 
-  const isSubmitDisabled = !name.trim() || !isWorkPlanningReady;
+  const isSubmitDisabled = !name.trim() || selectedDomains.length === 0 || !isWorkPlanningReady;
 
   useEffect(() => {
     if (activeStep === 'team' && !isWorkPlanningReady) {
@@ -509,10 +784,19 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     }
   }, [activeStep, isWorkPlanningReady]);
 
+  useEffect(() => {
+    if (selectedDomains.length === 0 && activeStep !== 'details') {
+      setActiveStep('details');
+    }
+  }, [activeStep, selectedDomains]);
+
   const totalSteps = creationStepOrder.length;
   const currentStepIndex = creationStepOrder.indexOf(activeStep) + 1;
   const currentStepTitle = creationStepTitles[activeStep];
   const currentStepDescription = creationStepDescriptions[activeStep];
+  const modalTitle = mode === 'edit' ? 'Редактирование инициативы' : 'Новая инициатива';
+  const submitButtonLabel = mode === 'edit' ? 'Сохранить изменения' : 'Создать инициативу';
+  const teamStepForwardLabel = mode === 'edit' ? 'Обновить команду' : 'Сформировать команду';
 
   const { planningRoles, roleAssignmentRefs } = useMemo(() => {
     const accumulator = new Map<
@@ -599,6 +883,31 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const draftPayload = useMemo<InitiativeCreationRequest>(
     () => {
       const workLookup = new Map(works.map((work) => [work.id, work]));
+      const workItemsPayload = works.map((work) => ({
+        id: work.id,
+        title: work.title.trim(),
+        description: work.description.trim(),
+        owner: work.owner.trim(),
+        timeframe: work.timeframe.trim(),
+        status: work.status
+      }));
+      const approvalStagePayload = approvalStages
+        .map((stage) => {
+          const title = stage.title.trim();
+          const approver = stage.approver.trim();
+          const comment = stage.comment.trim();
+          if (!title && !approver && !comment) {
+            return null;
+          }
+          return {
+            id: stage.id,
+            title,
+            approver,
+            status: stage.status,
+            comment: comment || undefined
+          };
+        })
+        .filter((stage): stage is NonNullable<typeof stage> => stage !== null);
       return {
         name: name.trim(),
         description: description.trim(),
@@ -609,8 +918,12 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         domains: selectedDomains.map((item) => item.value.trim()).filter(Boolean),
         potentialModules: selectedModules.map((item) => item.value.trim()).filter(Boolean),
         customer: {
-          company: selectedCompany?.value.trim() ?? '',
-          unit: customerUnit.trim(),
+          companies: selectedCompanies
+            .map((item) => item.value.trim())
+            .filter((value) => value.length > 0),
+          units: selectedUnits
+            .map((item) => item.value.trim())
+            .filter((value) => value.length > 0),
           representative: customerRepresentative.trim(),
           contact: customerContact.trim(),
           comment: customerComment.trim() || undefined
@@ -646,21 +959,24 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
             skills: role.skills,
             workItems
           };
-        })
+        }),
+        workItems: workItemsPayload,
+        approvalStages: approvalStagePayload
       };
     },
     [
+      approvalStages,
       customerComment,
       customerContact,
       customerRepresentative,
-      customerUnit,
       description,
       expectedImpact,
       name,
       owner,
       planningRoles,
       roleAssignmentRefs,
-      selectedCompany,
+      selectedCompanies,
+      selectedUnits,
       selectedDomains,
       selectedModules,
       status,
@@ -716,22 +1032,40 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           ...work,
           assignments: work.assignments.map((assignment) => {
             if (assignment.id !== assignmentId) {
-              return assignment;
-            }
+            return assignment;
+          }
 
-            const nextAssignment: WorkAssignmentDraft = { ...assignment, ...patch };
+            let nextEffort =
+              patch.effortDays !== undefined
+                ? Math.max(1, Math.round(patch.effortDays))
+                : Math.max(1, Math.round(assignment.effortDays));
+            const nextStart =
+              patch.startDay !== undefined
+                ? Math.max(0, Math.round(patch.startDay))
+                : Math.max(0, Math.round(assignment.startDay));
+            let nextDuration =
+              patch.durationDays !== undefined
+                ? Math.max(1, Math.round(patch.durationDays))
+                : Math.max(1, Math.round(assignment.durationDays));
 
-            if (patch.effortDays !== undefined) {
-              nextAssignment.effortDays = Math.max(1, Math.round(patch.effortDays));
-            }
-
-            if (patch.startDay !== undefined) {
-              nextAssignment.startDay = Math.max(0, Math.round(patch.startDay));
+            if (patch.effortDays !== undefined && nextDuration < nextEffort) {
+              nextDuration = nextEffort;
             }
 
             if (patch.durationDays !== undefined) {
-              nextAssignment.durationDays = Math.max(1, Math.round(patch.durationDays));
+              const wasDecreased = Math.max(1, Math.round(assignment.durationDays)) > nextDuration;
+              if (wasDecreased && nextEffort < nextDuration) {
+                nextEffort = nextDuration;
+              }
             }
+
+            const nextAssignment: WorkAssignmentDraft = {
+              ...assignment,
+              ...patch,
+              effortDays: nextEffort,
+              startDay: nextStart,
+              durationDays: nextDuration
+            };
 
             return nextAssignment;
           })
@@ -813,6 +1147,25 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     setWorks((prev) => [...prev, createWorkDraft(prev.length * 5)]);
   };
 
+  const handleApprovalStageChange = (
+    stageId: string,
+    patch: Partial<ApprovalStageDraft>
+  ) => {
+    setApprovalStages((prev) =>
+      prev.map((stage) => (stage.id === stageId ? { ...stage, ...patch } : stage))
+    );
+  };
+
+  const handleAddApprovalStage = () => {
+    setApprovalStages((prev) => [...prev, createApprovalStageDraft()]);
+  };
+
+  const handleRemoveApprovalStage = (stageId: string) => {
+    setApprovalStages((prev) =>
+      prev.length <= 1 ? prev : prev.filter((stage) => stage.id !== stageId)
+    );
+  };
+
   const handleRemoveWork = (workId: string) => {
     setWorks((prev) => (prev.length <= 1 ? prev : prev.filter((work) => work.id !== workId)));
   };
@@ -869,6 +1222,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   };
 
   const handleSubmit = () => {
+    if (selectedDomains.length === 0) {
+      return;
+    }
     onSubmit(draftPayload);
   };
 
@@ -886,7 +1242,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           <header className={styles.header}>
             <div className={styles.stepInfo}>
               <Text size="l" weight="bold">
-                Новая инициатива
+                {modalTitle}
               </Text>
               <Text size="xs" view="secondary">
                 Шаг {currentStepIndex} из {totalSteps} · {currentStepTitle}
@@ -1045,19 +1401,24 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   <Combobox<OptionItem>
                     size="s"
                     label="Компания"
-                    placeholder="Выберите компанию заказчика"
+                    placeholder="Выберите компании заказчика"
                     items={[...companyItems, COMPANY_CREATE_OPTION]}
-                    value={selectedCompany}
+                    value={selectedCompanies}
+                    multiple
                     getItemLabel={(item) => item.label}
                     getItemKey={(item) => item.id}
                     onChange={handleCompanySelectionChange}
                   />
-                  <TextField
+                  <Combobox<OptionItem>
                     size="s"
-                    label="Подразделение"
-                    placeholder="Укажите бизнес-единицу"
-                    value={customerUnit}
-                    onChange={(value) => setCustomerUnit(value ?? '')}
+                    label="Подразделения"
+                    placeholder="Укажите бизнес-единицы"
+                    items={[...unitItems, UNIT_CREATE_OPTION]}
+                    value={selectedUnits}
+                    multiple
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.id}
+                    onChange={handleUnitSelectionChange}
                   />
                 </div>
                 {isCreatingCompany && (
@@ -1088,6 +1449,34 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                     />
                   </div>
                 )}
+                {isCreatingUnit && (
+                  <div className={styles.inlineCreateRow}>
+                    <TextField
+                      size="s"
+                      label="Новое подразделение"
+                      placeholder="Введите название подразделения"
+                      value={newUnitLabel}
+                      onChange={(value) => setNewUnitLabel(value ?? '')}
+                      className={styles.inlineCreateField}
+                    />
+                    <Button
+                      size="s"
+                      view="primary"
+                      label="Добавить"
+                      onClick={handleAddCustomUnit}
+                      disabled={!newUnitLabel.trim()}
+                    />
+                    <Button
+                      size="s"
+                      view="ghost"
+                      label="Отмена"
+                      onClick={() => {
+                        setIsCreatingUnit(false);
+                        setNewUnitLabel('');
+                      }}
+                    />
+                  </div>
+                )}
                 <div className={styles.gridTwoCols}>
                   <TextField
                     size="s"
@@ -1113,6 +1502,87 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   type="textarea"
                   minRows={2}
                 />
+              </section>
+              <section className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <Text size="s" weight="semibold">
+                    Этапы согласования
+                  </Text>
+                  <Button
+                    size="s"
+                    view="ghost"
+                    label="Добавить этап"
+                    onClick={handleAddApprovalStage}
+                  />
+                </div>
+                <div className={styles.workList}>
+                  {approvalStages.map((stage) => {
+                    const statusOption =
+                      approvalStatusOptions.find((option) => option.value === stage.status) ??
+                      approvalStatusOptions[0];
+                    return (
+                      <Card
+                        key={stage.id}
+                        className={styles.workCard}
+                        verticalSpace="l"
+                        horizontalSpace="l"
+                      >
+                        <div className={styles.workHeader}>
+                          <TextField
+                            size="s"
+                            label="Название этапа"
+                            placeholder="Например, Архитектурный комитет"
+                            value={stage.title}
+                            onChange={(value) =>
+                              handleApprovalStageChange(stage.id, { title: value ?? '' })
+                            }
+                          />
+                          <Button
+                            size="s"
+                            view="ghost"
+                            label="Удалить"
+                            onClick={() => handleRemoveApprovalStage(stage.id)}
+                            disabled={approvalStages.length <= 1}
+                          />
+                        </div>
+                        <div className={styles.gridTwoCols}>
+                          <TextField
+                            size="s"
+                            label="Согласующий"
+                            placeholder="ФИО или роль"
+                            value={stage.approver}
+                            onChange={(value) =>
+                              handleApprovalStageChange(stage.id, { approver: value ?? '' })
+                            }
+                          />
+                          <Select<SelectOption<InitiativeApprovalStatus>>
+                            size="s"
+                            label="Статус"
+                            items={approvalStatusOptions}
+                            value={statusOption}
+                            getItemLabel={(item) => item.label}
+                            getItemKey={(item) => item.value}
+                            onChange={(option) =>
+                              option &&
+                              handleApprovalStageChange(stage.id, { status: option.value })
+                            }
+                          />
+                        </div>
+                        <TextField
+                          size="s"
+                          label="Комментарий"
+                          placeholder="Дополнительные детали или требования"
+                          value={stage.comment}
+                          onChange={(value) =>
+                            handleApprovalStageChange(stage.id, { comment: value ?? '' })
+                          }
+                          type="textarea"
+                          minRows={2}
+                        />
+                      </Card>
+                    );
+                  })}
+                </div>
               </section>
             </>
           )}
@@ -1192,6 +1662,38 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                             onChange={(value) => handleWorkChange(work.id, { assumptions: value ?? '' })}
                             type="textarea"
                             minRows={2}
+                          />
+                          <div className={styles.gridTwoCols}>
+                            <TextField
+                              size="s"
+                              label="Ответственный за этап"
+                              placeholder="ФИО или роль"
+                              value={work.owner}
+                              onChange={(value) => handleWorkChange(work.id, { owner: value ?? '' })}
+                            />
+                            <TextField
+                              size="s"
+                              label="Период / таймфрейм"
+                              placeholder="Например, Q1 2025"
+                              value={work.timeframe}
+                              onChange={(value) =>
+                                handleWorkChange(work.id, { timeframe: value ?? '' })
+                              }
+                            />
+                          </div>
+                          <Select<SelectOption<InitiativeWorkItemStatus>>
+                            size="s"
+                            label="Статус этапа"
+                            items={workItemStatusOptions}
+                            value={
+                              workItemStatusOptions.find((option) => option.value === work.status) ??
+                              workItemStatusOptions[0]
+                            }
+                            getItemLabel={(item) => item.label}
+                            getItemKey={(item) => item.value}
+                            onChange={(option) =>
+                              option && handleWorkChange(work.id, { status: option.value })
+                            }
                           />
                           <Text size="xs" view="secondary" className={styles.workTiming}>
                             {hasAssignments
@@ -1459,7 +1961,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 view="primary"
                 label="Оценка работ"
                 onClick={() => setActiveStep('work')}
-                disabled={isSubmitting}
+                disabled={isSubmitting || selectedDomains.length === 0}
               />
             )}
             {activeStep === 'work' && (
@@ -1474,9 +1976,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 <Button
                   size="s"
                   view="primary"
-                  label="Сформировать команду"
+                  label={teamStepForwardLabel}
                   onClick={() => setActiveStep('team')}
-                  disabled={!isWorkPlanningReady || isSubmitting}
+                  disabled={!isWorkPlanningReady || isSubmitting || selectedDomains.length === 0}
                 />
               </>
             )}
@@ -1492,7 +1994,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 <Button
                   size="s"
                   view="primary"
-                  label="Создать инициативу"
+                  label={submitButtonLabel}
                   onClick={handleSubmit}
                   disabled={isSubmitDisabled || isSubmitting}
                 />

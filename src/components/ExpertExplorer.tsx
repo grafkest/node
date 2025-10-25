@@ -22,6 +22,7 @@ import ForceGraph2D, {
 } from 'react-force-graph-2d';
 import type { ExpertProfile, ModuleNode, TeamRole } from '../data';
 import styles from './ExpertExplorer.module.css';
+import SkillEditorModal from './SkillEditorModal';
 
 type ViewOption = {
   label: string;
@@ -36,6 +37,7 @@ type ExpertExplorerProps = {
   moduleNameMap: Record<string, string>;
   moduleDomainMap: Record<string, string[]>;
   domainNameMap: Record<string, string>;
+  onUpdateExpertSkills: (expertId: string, skills: ExpertSkill[]) => void | Promise<void>;
 };
 
 type SkillFocus = {
@@ -136,7 +138,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   modules,
   moduleNameMap,
   moduleDomainMap,
-  domainNameMap
+  domainNameMap,
+  onUpdateExpertSkills
 }) => {
   const { theme } = useTheme();
   const themeClassName = theme?.className;
@@ -152,6 +155,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [consultingFilter, setConsultingFilter] = useState<string[]>([]);
   const [roleFilter, setRoleFilter] = useState<TeamRole[]>([]);
   const [selectedExpertId, setSelectedExpertId] = useState<string | null>(null);
+  const [isSkillEditorOpen, setIsSkillEditorOpen] = useState(false);
+  const [skillEditorExpert, setSkillEditorExpert] = useState<ExpertProfile | null>(null);
   const [focusedSkill, setFocusedSkill] = useState<SkillFocus | null>(null);
   const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
 
@@ -485,6 +490,35 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       setSelectedExpertId(filteredExperts[0].id);
     }
   }, [filteredExperts, selectedExpertId]);
+
+  useEffect(() => {
+    if (isSkillEditorOpen && selectedExpert && (!skillEditorExpert || skillEditorExpert.id !== selectedExpert.id)) {
+      setSkillEditorExpert(selectedExpert);
+    }
+  }, [isSkillEditorOpen, selectedExpert, skillEditorExpert]);
+
+  const handleOpenSkillEditor = useCallback((expert: ExpertProfile) => {
+    setSkillEditorExpert(expert);
+    setIsSkillEditorOpen(true);
+  }, []);
+
+  const handleCloseSkillEditor = useCallback(() => {
+    setIsSkillEditorOpen(false);
+    setSkillEditorExpert(null);
+  }, []);
+
+  const handleSaveSkills = useCallback(
+    async (skills: ExpertSkill[]) => {
+      const targetExpert = skillEditorExpert ?? selectedExpert;
+      if (!targetExpert) {
+        return;
+      }
+      await Promise.resolve(onUpdateExpertSkills(targetExpert.id, skills));
+      setIsSkillEditorOpen(false);
+      setSkillEditorExpert(null);
+    },
+    [onUpdateExpertSkills, selectedExpert, skillEditorExpert]
+  );
 
   useEffect(() => {
     if (!focusedSkill) {
@@ -1538,6 +1572,14 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           )}
         </aside>
       </section>
+      {isSkillEditorOpen && (skillEditorExpert ?? selectedExpert) && (
+        <SkillEditorModal
+          isOpen={isSkillEditorOpen}
+          expert={(skillEditorExpert ?? selectedExpert)!}
+          onClose={handleCloseSkillEditor}
+          onSave={handleSaveSkills}
+        />
+      )}
     </div>
   );
 };
@@ -1578,6 +1620,14 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
         <Text size="s" view="secondary">
           {expert.title}
         </Text>
+      </div>
+      <div className={styles.detailActions}>
+        <Button
+          size="xs"
+          view="secondary"
+          label="Редактировать навыки"
+          onClick={() => onEditSkills(expert)}
+        />
       </div>
       <Text size="s" view="secondary">
         {expert.summary}
