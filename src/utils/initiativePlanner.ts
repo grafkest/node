@@ -50,8 +50,8 @@ export function buildCreationRequestFromInitiative(
     domains: [...initiative.domains],
     potentialModules: moduleSelections,
     customer: {
-      company: initiative.customer?.company ?? '',
-      unit: initiative.customer?.unit ?? '',
+      companies: [...(initiative.customer?.companies ?? [])],
+      units: [...(initiative.customer?.units ?? [])],
       representative: initiative.customer?.representative ?? '',
       contact: initiative.customer?.contact ?? '',
       comment: initiative.customer?.comment
@@ -82,6 +82,21 @@ export function buildCreationRequestFromInitiative(
           }))
         }))
       };
-    })
+    }),
+    workItems: initiative.workItems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      owner: item.owner,
+      timeframe: item.timeframe,
+      status: item.status
+    })),
+    approvalStages: initiative.approvalStages.map((stage) => ({
+      id: stage.id,
+      title: stage.title,
+      approver: stage.approver,
+      status: stage.status,
+      comment: stage.comment
+    }))
   };
 }

@@ -5,7 +5,8 @@ import { Select } from '@consta/uikit/Select';
 import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { TextField } from '@consta/uikit/TextField';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   type ArtifactNode,
   type DomainNode,
@@ -130,15 +131,6 @@ const adminTabs = [
 ] as const satisfies readonly { label: string; value: AdminTab }[];
 
 const ROOT_DOMAIN_OPTION = '__root__';
-const CREATE_COMPANY_OPTION = '__create__';
-const CREATE_PRODUCT_OPTION = '__create_product__';
-const CREATE_CREATOR_COMPANY_OPTION = '__create_creator_company__';
-const CREATE_LOCALIZATION_OPTION = '__create_localization__';
-const CREATE_RID_COMPANY_OPTION = '__create_rid_company__';
-const CREATE_RID_DIVISION_OPTION = '__create_rid_division__';
-const CREATE_TECHNOLOGY_OPTION = '__create_technology__';
-const CREATE_LIBRARY_OPTION = '__create_library__';
-const CREATE_LIBRARY_VERSION_OPTION = '__create_library_version__';
 const CREATE_DATA_TYPE_OPTION = '__create_data_type__';
 
 const statusLabels: Record<ModuleStatus, string> = {
@@ -156,20 +148,6 @@ const deploymentToolLabels: Record<ModuleNode['deploymentTool'], string> = {
   docker: 'Docker',
   kubernetes: 'Kubernetes'
 };
-
-const teamRoleOptions: SelectItem<TeamRole>[] = (
-  [
-    'Владелец продукта',
-    'Эксперт R&D',
-    'Аналитик',
-    'Backend',
-    'Frontend',
-    'Архитектор',
-    'Тестировщик',
-    'Руководитель проекта',
-    'UX'
-  ] as TeamRole[]
-).map((role) => ({ label: role, value: role }));
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
   modules,
@@ -733,6 +711,1198 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   );
 };
 
+type ModuleFormProps = {
+  moduleKey: string | null;
+  mode: 'create' | 'edit';
+  draft: ModuleDraftPayload;
+  step: number;
+  domainItems: string[];
+  domainLabelMap: Record<string, string>;
+  moduleItems: string[];
+  moduleLabelMap: Record<string, string>;
+  artifactItems: string[];
+  artifactLabelMap: Record<string, string>;
+  productNames: string[];
+  onRegisterProduct: (value: string) => void;
+  creatorCompanies: string[];
+  onRegisterCreatorCompany: (value: string) => void;
+  localizations: string[];
+  onRegisterLocalization: (value: string) => void;
+  ridCompanyRegistry: Record<string, string[]>;
+  onRegisterRidCompany: (value: string) => void;
+  onRegisterRidDivision: (company: string, division: string) => void;
+  technologyOptions: string[];
+  onRegisterTechnology: (value: string) => void;
+  libraryRegistry: Record<string, string[]>;
+  onRegisterLibrary: (value: string) => void;
+  onRegisterLibraryVersion: (library: string, version: string) => void;
+  companyNames: string[];
+  onRegisterCompany: (value: string) => void;
+  onChange: (draft: ModuleDraftPayload) => void;
+  onStepChange: (step: number) => void;
+  onSubmit: () => void;
+  onDelete?: () => void;
+};
+
+const ModuleForm: React.FC<ModuleFormProps> = ({
+  moduleKey,
+  mode,
+  draft,
+  step,
+  domainItems,
+  domainLabelMap,
+  moduleItems,
+  moduleLabelMap,
+  artifactItems,
+  artifactLabelMap,
+  productNames,
+  onRegisterProduct,
+  creatorCompanies,
+  onRegisterCreatorCompany,
+  localizations,
+  onRegisterLocalization,
+  ridCompanyRegistry,
+  onRegisterRidCompany,
+  onRegisterRidDivision,
+  technologyOptions,
+  onRegisterTechnology,
+  libraryRegistry,
+  onRegisterLibrary,
+  onRegisterLibraryVersion,
+  companyNames,
+  onRegisterCompany,
+  onChange,
+  onStepChange,
+  onSubmit,
+  onDelete
+}) => {
+  const current = Math.min(Math.max(step, 0), moduleSections.length - 1);
+  const goToStep = (next: number) => {
+    onStepChange(Math.min(Math.max(next, 0), moduleSections.length - 1));
+  };
+
+  const statusItems = useMemo<SelectItem<ModuleStatus>[]>(
+    () =>
+      (['in-dev', 'production', 'deprecated'] as ModuleStatus[]).map((status) => ({
+        label: statusLabels[status],
+        value: status
+      })),
+    []
+  );
+
+  const clientTypeItems = useMemo<SelectItem<ModuleNode['clientType']>[]>(
+    () =>
+      (Object.keys(clientTypeLabels) as ModuleNode['clientType'][]).map((type) => ({
+        label: clientTypeLabels[type],
+        value: type
+      })),
+    []
+  );
+
+  const deploymentItems = useMemo<SelectItem<ModuleNode['deploymentTool']>[]>(
+    () =>
+      (Object.keys(deploymentToolLabels) as ModuleNode['deploymentTool'][]).map((tool) => ({
+        label: deploymentToolLabels[tool],
+        value: tool
+      })),
+    []
+  );
+
+  const localizationItems = useMemo<SelectItem<string>[]>(() => {
+    const values = new Set(localizations);
+    if (draft.localization.trim()) {
+      values.add(draft.localization.trim());
+    }
+    return Array.from(values)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map<SelectItem<string>>((value) => ({ label: value || 'ru', value: value || 'ru' }));
+  }, [draft.localization, localizations]);
+
+  const ridCompanies = useMemo<SelectItem<string>[]>(() => {
+    const values = new Set<string>([...Object.keys(ridCompanyRegistry)]);
+    if (draft.ridOwner.company.trim()) {
+      values.add(draft.ridOwner.company.trim());
+    }
+    return Array.from(values)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map((value) => ({ label: value, value }));
+  }, [draft.ridOwner.company, ridCompanyRegistry]);
+
+  const ridDivisions = useMemo<SelectItem<string>[]>(() => {
+    const company = draft.ridOwner.company.trim();
+    const values = new Set<string>(company ? ridCompanyRegistry[company] ?? [] : []);
+    if (draft.ridOwner.division.trim()) {
+      values.add(draft.ridOwner.division.trim());
+    }
+    return Array.from(values)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map((value) => ({ label: value, value }));
+  }, [draft.ridOwner.company, draft.ridOwner.division, ridCompanyRegistry]);
+
+  const handleBasicFieldChange = <Key extends keyof ModuleDraftPayload>(
+    key: Key,
+    value: ModuleDraftPayload[Key]
+  ) => {
+    onChange({ ...draft, [key]: value });
+  };
+
+  const handleRegisterIfNeeded = (value: string, existing: string[], register: (val: string) => void) => {
+    const normalized = value.trim();
+    if (!normalized) {
+      return;
+    }
+    if (!existing.some((item) => item.toLowerCase() === normalized.toLowerCase())) {
+      register(normalized);
+    }
+  };
+
+  const handleTechnologyChange = (value: string) => {
+    const items = value
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    items.forEach((item) => handleRegisterIfNeeded(item, technologyOptions, onRegisterTechnology));
+    onChange({ ...draft, technologyStack: items });
+  };
+
+  const handleLibrariesChange = (index: number, patch: Partial<LibraryDependency>) => {
+    const next = draft.libraries.map((library, libraryIndex) =>
+      libraryIndex === index ? { ...library, ...patch } : library
+    );
+    const target = next[index];
+    if (patch.name !== undefined) {
+      handleRegisterIfNeeded(patch.name, Object.keys(libraryRegistry), onRegisterLibrary);
+    }
+    if (patch.version !== undefined && target.name.trim()) {
+      onRegisterLibraryVersion(target.name.trim(), patch.version.trim());
+    }
+    onChange({ ...draft, libraries: next });
+  };
+
+  const handleAddLibrary = () => {
+    onChange({
+      ...draft,
+      libraries: [...draft.libraries, { name: '', version: '' }]
+    });
+  };
+
+  const handleRemoveLibrary = (index: number) => {
+    onChange({
+      ...draft,
+      libraries: draft.libraries.filter((_, libraryIndex) => libraryIndex !== index)
+    });
+  };
+
+  const handleTeamChange = (
+    index: number,
+    patch: Partial<Pick<TeamMember, 'fullName' | 'role'>>
+  ) => {
+    onChange({
+      ...draft,
+      projectTeam: draft.projectTeam.map((member, memberIndex) =>
+        memberIndex === index ? { ...member, ...patch } : member
+      )
+    });
+  };
+
+  const handleAddTeamMember = () => {
+    onChange({
+      ...draft,
+      projectTeam: [
+        ...draft.projectTeam,
+        { id: `member-${draft.projectTeam.length + 1}`, fullName: '', role: 'Аналитик' }
+      ]
+    });
+  };
+
+  const handleRemoveTeamMember = (index: number) => {
+    onChange({
+      ...draft,
+      projectTeam:
+        draft.projectTeam.length <= 1
+          ? draft.projectTeam
+          : draft.projectTeam.filter((_, memberIndex) => memberIndex !== index)
+    });
+  };
+
+  const handleUserCompanyChange = (
+    index: number,
+    patch: Partial<{ name: string; licenses: number }>
+  ) => {
+    const next = draft.userStats.companies.map((company, companyIndex) =>
+      companyIndex === index ? { ...company, ...patch } : company
+    );
+    if (patch.name !== undefined) {
+      handleRegisterIfNeeded(patch.name, companyNames, onRegisterCompany);
+    }
+    onChange({
+      ...draft,
+      userStats: { companies: next }
+    });
+  };
+
+  const handleAddUserCompany = () => {
+    onChange({
+      ...draft,
+      userStats: {
+        companies: [...draft.userStats.companies, { name: '', licenses: 0 }]
+      }
+    });
+  };
+
+  const handleRemoveUserCompany = (index: number) => {
+    onChange({
+      ...draft,
+      userStats: {
+        companies:
+          draft.userStats.companies.length <= 1
+            ? draft.userStats.companies
+            : draft.userStats.companies.filter((_, companyIndex) => companyIndex !== index)
+      }
+    });
+  };
+
+  const handleDataInChange = (index: number, patch: Partial<ModuleInput>) => {
+    onChange({
+      ...draft,
+      dataIn: draft.dataIn.map((input, inputIndex) =>
+        inputIndex === index ? { ...input, ...patch } : input
+      )
+    });
+  };
+
+  const handleAddDataIn = () => {
+    onChange({
+      ...draft,
+      dataIn: [...draft.dataIn, { id: `input-${draft.dataIn.length + 1}`, label: '', sourceId: undefined }]
+    });
+  };
+
+  const handleRemoveDataIn = (index: number) => {
+    onChange({
+      ...draft,
+      dataIn:
+        draft.dataIn.length <= 1
+          ? draft.dataIn
+          : draft.dataIn.filter((_, inputIndex) => inputIndex !== index)
+    });
+  };
+
+  const handleDataOutChange = (index: number, patch: Partial<ModuleOutput>) => {
+    onChange({
+      ...draft,
+      dataOut: draft.dataOut.map((output, outputIndex) =>
+        outputIndex === index ? { ...output, ...patch } : output
+      )
+    });
+  };
+
+  const handleAddDataOut = () => {
+    onChange({
+      ...draft,
+      dataOut: [...draft.dataOut, { id: `output-${draft.dataOut.length + 1}`, label: '', consumerIds: [] }]
+    });
+  };
+
+  const handleRemoveDataOut = (index: number) => {
+    onChange({
+      ...draft,
+      dataOut:
+        draft.dataOut.length <= 1
+          ? draft.dataOut
+          : draft.dataOut.filter((_, outputIndex) => outputIndex !== index)
+    });
+  };
+
+  const handleLocalizationChange = (item: SelectItem<string> | null) => {
+    const value = item?.value ?? 'ru';
+    handleBasicFieldChange('localization', value);
+    handleRegisterIfNeeded(value, localizations, onRegisterLocalization);
+  };
+
+  const handleRidCompanyChange = (item: SelectItem<string> | null) => {
+    const value = item?.value ?? '';
+    handleRegisterIfNeeded(value, Object.keys(ridCompanyRegistry), onRegisterRidCompany);
+    onChange({ ...draft, ridOwner: { ...draft.ridOwner, company: value } });
+  };
+
+  const handleRidDivisionChange = (item: SelectItem<string> | null) => {
+    const value = item?.value ?? '';
+    if (draft.ridOwner.company.trim() && value.trim()) {
+      onRegisterRidDivision(draft.ridOwner.company.trim(), value.trim());
+    }
+    onChange({ ...draft, ridOwner: { ...draft.ridOwner, division: value } });
+  };
+
+  const renderGeneralSection = () => (
+    <>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Название модуля
+        </Text>
+        <TextField
+          size="s"
+          value={draft.name}
+          onChange={(value) => handleBasicFieldChange('name', value ?? '')}
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Описание
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.description}
+          onChange={(event) => handleBasicFieldChange('description', event.target.value)}
+        />
+      </label>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Продукт
+          </Text>
+          <TextField
+            size="s"
+            value={draft.productName}
+            onChange={(value) => {
+              const next = value ?? '';
+              handleBasicFieldChange('productName', next);
+              handleRegisterIfNeeded(next, productNames, onRegisterProduct);
+            }}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Компания-разработчик
+          </Text>
+          <TextField
+            size="s"
+            value={draft.creatorCompany}
+            onChange={(value) => {
+              const next = value ?? '';
+              handleBasicFieldChange('creatorCompany', next);
+              handleRegisterIfNeeded(next, creatorCompanies, onRegisterCreatorCompany);
+            }}
+          />
+        </label>
+      </div>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Статус
+          </Text>
+          <Select<SelectItem<ModuleStatus>>
+            size="s"
+            items={statusItems}
+            value={statusItems.find((item) => item.value === draft.status) ?? null}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={(item) => item && handleBasicFieldChange('status', item.value)}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Локализация
+          </Text>
+          <Select<SelectItem<string>>
+            size="s"
+            items={localizationItems}
+            value={
+              localizationItems.find((item) => item.value === draft.localization.trim()) ??
+              localizationItems[0] ?? null
+            }
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={handleLocalizationChange}
+          />
+        </label>
+      </div>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Доменные области
+        </Text>
+        <Combobox<string>
+          size="s"
+          items={domainItems}
+          value={draft.domainIds}
+          multiple
+          getItemKey={(item) => item}
+          getItemLabel={(item) => domainLabelMap[item] ?? item}
+          onChange={(value) => handleBasicFieldChange('domainIds', value ?? [])}
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Зависимости
+        </Text>
+        <Combobox<string>
+          size="s"
+          items={moduleItems.filter((item) => item !== moduleKey)}
+          value={draft.dependencyIds}
+          multiple
+          getItemKey={(item) => item}
+          getItemLabel={(item) => moduleLabelMap[item] ?? item}
+          onChange={(value) => handleBasicFieldChange('dependencyIds', value ?? [])}
+        />
+      </label>
+    </>
+  );
+
+  const renderCalculationSection = () => (
+    <>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Индекс переиспользования, %
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.reuseScore)}
+            onChange={(value) =>
+              handleBasicFieldChange('reuseScore', Number(value ?? draft.reuseScore))
+            }
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Покрытие тестами, %
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.metrics.coverage)}
+            onChange={(value) =>
+              handleBasicFieldChange('metrics', {
+                ...draft.metrics,
+                coverage: Number(value ?? draft.metrics.coverage)
+              })
+            }
+          />
+        </label>
+      </div>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Автоматизация регрессии, %
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.metrics.automationRate)}
+            onChange={(value) =>
+              handleBasicFieldChange('metrics', {
+                ...draft.metrics,
+                automationRate: Number(value ?? draft.metrics.automationRate)
+              })
+            }
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Количество тестов
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.metrics.tests)}
+            onChange={(value) =>
+              handleBasicFieldChange('metrics', {
+                ...draft.metrics,
+                tests: Number(value ?? draft.metrics.tests)
+              })
+            }
+          />
+        </label>
+      </div>
+    </>
+  );
+
+  const renderTechnicalSection = () => (
+    <>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Репозиторий
+          </Text>
+          <TextField
+            size="s"
+            value={draft.repository ?? ''}
+            onChange={(value) => handleBasicFieldChange('repository', value ?? '')}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            API
+          </Text>
+          <TextField
+            size="s"
+            value={draft.api ?? ''}
+            onChange={(value) => handleBasicFieldChange('api', value ?? '')}
+          />
+        </label>
+      </div>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Спецификация
+          </Text>
+          <TextField
+            size="s"
+            value={draft.specificationUrl}
+            onChange={(value) => handleBasicFieldChange('specificationUrl', value ?? '')}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Контракты API
+          </Text>
+          <TextField
+            size="s"
+            value={draft.apiContractsUrl}
+            onChange={(value) => handleBasicFieldChange('apiContractsUrl', value ?? '')}
+          />
+        </label>
+      </div>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Технический проект
+          </Text>
+          <TextField
+            size="s"
+            value={draft.techDesignUrl}
+            onChange={(value) => handleBasicFieldChange('techDesignUrl', value ?? '')}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Диаграмма архитектуры
+          </Text>
+          <TextField
+            size="s"
+            value={draft.architectureDiagramUrl}
+            onChange={(value) =>
+              handleBasicFieldChange('architectureDiagramUrl', value ?? '')
+            }
+          />
+        </label>
+      </div>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Клиентское приложение
+          </Text>
+          <Select<SelectItem<ModuleNode['clientType']>>
+            size="s"
+            items={clientTypeItems}
+            value={clientTypeItems.find((item) => item.value === draft.clientType) ?? null}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={(item) => item && handleBasicFieldChange('clientType', item.value)}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Инструмент деплоя
+          </Text>
+          <Select<SelectItem<ModuleNode['deploymentTool']>>
+            size="s"
+            items={deploymentItems}
+            value={
+              deploymentItems.find((item) => item.value === draft.deploymentTool) ?? null
+            }
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={(item) => item && handleBasicFieldChange('deploymentTool', item.value)}
+          />
+        </label>
+      </div>
+      <div className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Интеграция с лицензированием
+        </Text>
+        <Switch
+          size="s"
+          checked={draft.licenseServerIntegrated}
+          onChange={({ checked }) => handleBasicFieldChange('licenseServerIntegrated', !!checked)}
+        />
+      </div>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Владелец RID — компания
+          </Text>
+          <Select<SelectItem<string>>
+            size="s"
+            items={ridCompanies}
+            value={
+              draft.ridOwner.company
+                ? ridCompanies.find((item) => item.value === draft.ridOwner.company) ?? null
+                : null
+            }
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={handleRidCompanyChange}
+            placeholder="Выберите компанию"
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Владелец RID — подразделение
+          </Text>
+          <Select<SelectItem<string>>
+            size="s"
+            items={ridDivisions}
+            value={
+              draft.ridOwner.division
+                ? ridDivisions.find((item) => item.value === draft.ridOwner.division) ?? null
+                : null
+            }
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={handleRidDivisionChange}
+            placeholder="Выберите подразделение"
+          />
+        </label>
+      </div>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Технологический стек (через запятую или перенос строки)
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.technologyStack.join('\n')}
+          onChange={(event) => handleTechnologyChange(event.target.value)}
+          placeholder="Например: React, Node.js"
+        />
+      </label>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Команда проекта
+        </Text>
+        <div className={styles.listStack}>
+          {draft.projectTeam.map((member, index) => (
+            <div key={member.id} className={styles.inlineGroup}>
+              <TextField
+                size="s"
+                value={member.fullName}
+                placeholder="ФИО"
+                onChange={(value) => handleTeamChange(index, { fullName: value ?? '' })}
+              />
+              <TextField
+                size="s"
+                value={member.role}
+                placeholder="Роль"
+                onChange={(value) => handleTeamChange(index, { role: (value ?? '') as TeamRole })}
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveTeamMember(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить участника" onClick={handleAddTeamMember} />
+      </div>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Использование по компаниям
+        </Text>
+        <div className={styles.listStack}>
+          {draft.userStats.companies.map((company, index) => (
+            <div key={`${company.name || 'company'}-${index}`} className={styles.inlineGroup}>
+              <TextField
+                size="s"
+                value={company.name}
+                placeholder="Компания"
+                onChange={(value) => handleUserCompanyChange(index, { name: value ?? '' })}
+              />
+              <TextField
+                size="s"
+                type="number"
+                value={String(company.licenses)}
+                placeholder="Лицензии"
+                onChange={(value) =>
+                  handleUserCompanyChange(index, {
+                    licenses: Number(value ?? company.licenses)
+                  })
+                }
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveUserCompany(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить компанию" onClick={handleAddUserCompany} />
+      </div>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Библиотеки
+        </Text>
+        <div className={styles.listStack}>
+          {draft.libraries.map((library, index) => (
+            <div key={`${library.name || 'library'}-${index}`} className={styles.inlineGroup}>
+              <TextField
+                size="s"
+                value={library.name}
+                placeholder="Библиотека"
+                onChange={(value) => handleLibrariesChange(index, { name: value ?? '' })}
+              />
+              <TextField
+                size="s"
+                value={library.version}
+                placeholder="Версия"
+                onChange={(value) => handleLibrariesChange(index, { version: value ?? '' })}
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveLibrary(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить библиотеку" onClick={handleAddLibrary} />
+      </div>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Входные данные
+        </Text>
+        <div className={styles.listStack}>
+          {draft.dataIn.map((input, index) => (
+            <div key={input.id || `input-${index}`} className={styles.dataRow}>
+              <TextField
+                size="s"
+                value={input.id}
+                placeholder="ID"
+                onChange={(value) => handleDataInChange(index, { id: value ?? '' })}
+              />
+              <TextField
+                size="s"
+                value={input.label}
+                placeholder="Описание"
+                onChange={(value) => handleDataInChange(index, { label: value ?? '' })}
+              />
+              <Combobox<string>
+                size="s"
+                items={artifactItems}
+                value={input.sourceId ?? null}
+                getItemKey={(item) => item}
+                getItemLabel={(item) => artifactLabelMap[item] ?? item}
+                placeholder="Артефакт"
+                onChange={(value) => handleDataInChange(index, { sourceId: value ?? undefined })}
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveDataIn(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить вход" onClick={handleAddDataIn} />
+      </div>
+      <div className={styles.subSection}>
+        <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+          Выходные данные
+        </Text>
+        <div className={styles.listStack}>
+          {draft.dataOut.map((output, index) => (
+            <div key={output.id || `output-${index}`} className={styles.dataRow}>
+              <TextField
+                size="s"
+                value={output.id}
+                placeholder="ID"
+                onChange={(value) => handleDataOutChange(index, { id: value ?? '' })}
+              />
+              <TextField
+                size="s"
+                value={output.label}
+                placeholder="Описание"
+                onChange={(value) => handleDataOutChange(index, { label: value ?? '' })}
+              />
+              <Combobox<string>
+                size="s"
+                items={moduleItems}
+                value={output.consumerIds ?? []}
+                multiple
+                getItemKey={(item) => item}
+                getItemLabel={(item) => moduleLabelMap[item] ?? item}
+                placeholder="Потребители"
+                onChange={(value) =>
+                  handleDataOutChange(index, { consumerIds: value ?? [] })
+                }
+              />
+              <Button
+                size="xs"
+                view="ghost"
+                label="Удалить"
+                onClick={() => handleRemoveDataOut(index)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button size="xs" view="secondary" label="Добавить выход" onClick={handleAddDataOut} />
+      </div>
+    </>
+  );
+
+  const renderNonFunctionalSection = () => (
+    <>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Время отклика, мс
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.nonFunctional.responseTimeMs)}
+            onChange={(value) =>
+              handleBasicFieldChange('nonFunctional', {
+                ...draft.nonFunctional,
+                responseTimeMs: Number(value ?? draft.nonFunctional.responseTimeMs)
+              })
+            }
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Пропускная способность, rps
+          </Text>
+          <TextField
+            size="s"
+            type="number"
+            value={String(draft.nonFunctional.throughputRps)}
+            onChange={(value) =>
+              handleBasicFieldChange('nonFunctional', {
+                ...draft.nonFunctional,
+                throughputRps: Number(value ?? draft.nonFunctional.throughputRps)
+              })
+            }
+          />
+        </label>
+      </div>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Потребление ресурсов
+        </Text>
+        <TextField
+          size="s"
+          value={draft.nonFunctional.resourceConsumption}
+          onChange={(value) =>
+            handleBasicFieldChange('nonFunctional', {
+              ...draft.nonFunctional,
+              resourceConsumption: value ?? ''
+            })
+          }
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Базовая нагрузка, пользователей
+        </Text>
+        <TextField
+          size="s"
+          type="number"
+          value={String(draft.nonFunctional.baselineUsers)}
+          onChange={(value) =>
+            handleBasicFieldChange('nonFunctional', {
+              ...draft.nonFunctional,
+              baselineUsers: Number(value ?? draft.nonFunctional.baselineUsers)
+            })
+          }
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Формула расчёта эффекта
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.formula}
+          onChange={(event) => handleBasicFieldChange('formula', event.target.value)}
+        />
+      </label>
+    </>
+  );
+
+  return (
+    <div className={styles.formBody}>
+      <div className={styles.formHeader}>
+        <div>
+          <Text size="l" weight="semibold" className={styles.formTitle}>
+            {mode === 'create' ? 'Создание модуля' : 'Редактирование модуля'}
+          </Text>
+          <Text size="xs" view="secondary" className={styles.formSubtitle}>
+            Заполните ключевые сведения и связи модуля перед публикацией в графе.
+          </Text>
+        </div>
+        {onDelete && <Button size="s" view="clear" label="Удалить модуль" onClick={onDelete} />}
+      </div>
+      {moduleSections.map((section, index) => (
+        <Collapse
+          key={section}
+          isOpen={current === index}
+          onClick={() => goToStep(index)}
+          label={
+            <div className={styles.collapseLabel}>
+              <Text size="s" weight="semibold">
+                {section === 'general'
+                  ? 'Основные сведения'
+                  : section === 'calculation'
+                    ? 'Показатели'
+                    : section === 'technical'
+                      ? 'Технические детали'
+                      : 'Нефункциональные требования'}
+              </Text>
+              <Text size="xs" view="secondary">
+                Раздел {index + 1} из {moduleSections.length}
+              </Text>
+            </div>
+          }
+        >
+          <div className={styles.sectionContent}>
+            {section === 'general' && renderGeneralSection()}
+            {section === 'calculation' && renderCalculationSection()}
+            {section === 'technical' && renderTechnicalSection()}
+            {section === 'nonFunctional' && renderNonFunctionalSection()}
+          </div>
+          <div className={styles.stepActions}>
+            {index > 0 && (
+              <Button size="s" view="ghost" label="Назад" onClick={() => goToStep(index - 1)} />
+            )}
+            {index < moduleSections.length - 1 ? (
+              <Button size="s" label="Далее" onClick={() => goToStep(index + 1)} />
+            ) : (
+              <Button size="s" view="primary" label="Сохранить модуль" onClick={onSubmit} />
+            )}
+          </div>
+        </Collapse>
+      ))}
+    </div>
+  );
+};
+
+type DomainFormProps = {
+  mode: 'create' | 'edit';
+  draft: DomainDraftPayload;
+  step: number;
+  parentCatalogIds: string[];
+  parentDomainIds: string[];
+  forbiddenParentIds: string[];
+  parentLabelMap: Record<string, string>;
+  moduleItems: string[];
+  moduleLabelMap: Record<string, string>;
+  currentDomainId?: string;
+  onChange: (draft: DomainDraftPayload) => void;
+  onStepChange: (step: number) => void;
+  onSubmit: () => void;
+  onDelete?: () => void;
+};
+
+const domainSections: DomainSectionId[] = ['basic', 'relations'];
+
+const DomainForm: React.FC<DomainFormProps> = ({
+  mode,
+  draft,
+  step,
+  parentCatalogIds,
+  parentDomainIds,
+  forbiddenParentIds,
+  parentLabelMap,
+  moduleItems,
+  moduleLabelMap,
+  currentDomainId,
+  onChange,
+  onStepChange,
+  onSubmit,
+  onDelete
+}) => {
+  const goToStep = (next: number) => {
+    onStepChange(Math.min(Math.max(next, 0), domainSections.length - 1));
+  };
+
+  const current = Math.min(Math.max(step, 0), domainSections.length - 1);
+
+  const parentOptions = useMemo<string[]>(() => {
+    const values = new Set<string>();
+    parentCatalogIds.forEach((id) => values.add(id));
+    parentDomainIds.forEach((id) => values.add(id));
+    if (draft.parentId) {
+      values.add(draft.parentId);
+    }
+    const filtered = Array.from(values).filter((id) =>
+      id && id !== currentDomainId && !forbiddenParentIds.includes(id)
+    );
+    return ['__root__', ...filtered];
+  }, [currentDomainId, draft.parentId, forbiddenParentIds, parentCatalogIds, parentDomainIds]);
+
+  const handleParentChange = (value: string | null) => {
+    if (!value || value === '__root__') {
+      onChange({ ...draft, parentId: undefined, isCatalogRoot: false });
+      return;
+    }
+    onChange({ ...draft, parentId: value, isCatalogRoot: false });
+  };
+
+  const renderBasicSection = () => (
+    <>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Название домена
+        </Text>
+        <TextField
+          size="s"
+          value={draft.name}
+          onChange={(value) => onChange({ ...draft, name: value ?? '' })}
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Описание
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.description}
+          onChange={(event) => onChange({ ...draft, description: event.target.value })}
+        />
+      </label>
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Родительский раздел
+          </Text>
+          <Combobox<string>
+            size="s"
+            items={parentOptions}
+            value={draft.parentId ?? '__root__'}
+            getItemKey={(item) => item}
+            getItemLabel={(item) =>
+              item === '__root__' ? 'Корень каталога' : parentLabelMap[item] ?? item
+            }
+            onChange={handleParentChange}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Каталожный раздел
+          </Text>
+          <Switch
+            size="s"
+            checked={draft.isCatalogRoot}
+            onChange={({ checked }) => onChange({ ...draft, isCatalogRoot: !!checked })}
+          />
+        </label>
+      </div>
+    </>
+  );
+
+  const renderRelationsSection = () => (
+    <>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Связанные модули
+        </Text>
+        <Combobox<string>
+          size="s"
+          items={moduleItems}
+          value={draft.moduleIds}
+          multiple
+          getItemKey={(item) => item}
+          getItemLabel={(item) => moduleLabelMap[item] ?? item}
+          onChange={(value) => onChange({ ...draft, moduleIds: value ?? [] })}
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Экспертное сообщество
+        </Text>
+        <TextField
+          size="s"
+          value={draft.experts.join(', ')}
+          placeholder="Через запятую"
+          onChange={(value) =>
+            onChange({
+              ...draft,
+              experts: (value ?? '')
+                .split(',')
+                .map((item) => item.trim())
+                .filter((item) => item.length > 0)
+            })
+          }
+        />
+      </label>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Ссылка на мероприятия
+        </Text>
+        <TextField
+          size="s"
+          value={draft.meetupLink}
+          onChange={(value) => onChange({ ...draft, meetupLink: value ?? '' })}
+        />
+      </label>
+    </>
+  );
+
+  return (
+    <div className={styles.formBody}>
+      <div className={styles.formHeader}>
+        <div>
+          <Text size="l" weight="semibold" className={styles.formTitle}>
+            {mode === 'create' ? 'Создание домена' : 'Редактирование домена'}
+          </Text>
+          <Text size="xs" view="secondary" className={styles.formSubtitle}>
+            Уточните положение в каталоге и связанные модули доменной области.
+          </Text>
+        </div>
+        {onDelete && <Button size="s" view="clear" label="Удалить домен" onClick={onDelete} />}
+      </div>
+      {domainSections.map((section, index) => (
+        <Collapse
+          key={section}
+          isOpen={current === index}
+          onClick={() => goToStep(index)}
+          label={
+            <div className={styles.collapseLabel}>
+              <Text size="s" weight="semibold">
+                {section === 'basic' ? 'Основные сведения' : 'Связи и эксперты'}
+              </Text>
+              <Text size="xs" view="secondary">
+                Раздел {index + 1} из {domainSections.length}
+              </Text>
+            </div>
+          }
+        >
+          <div className={styles.sectionContent}>
+            {section === 'basic' ? renderBasicSection() : renderRelationsSection()}
+          </div>
+          <div className={styles.stepActions}>
+            {index > 0 && (
+              <Button size="s" view="ghost" label="Назад" onClick={() => goToStep(index - 1)} />
+            )}
+            {index < domainSections.length - 1 ? (
+              <Button size="s" label="Далее" onClick={() => goToStep(index + 1)} />
+            ) : (
+              <Button size="s" view="primary" label="Сохранить домен" onClick={onSubmit} />
+            )}
+          </div>
+        </Collapse>
+      ))}
+    </div>
+  );
+};
+
 type ArtifactFormProps = {
   mode: 'create' | 'edit';
   draft: ArtifactDraftPayload;
@@ -1010,15 +2180,6 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
     </div>
   );
 };
-
-function formatPercent(value: number): string {
-  const normalized = Number.isFinite(value) ? value : 0;
-  const formatter = new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: normalized % 1 === 0 ? 0 : 1,
-    maximumFractionDigits: 1
-  });
-  return formatter.format(normalized);
-}
 
 function createDefaultModuleDraft(): ModuleDraftPayload {
   return {
