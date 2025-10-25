@@ -32,6 +32,7 @@ export type ModuleDraftPayload = {
   status: ModuleStatus;
   domainIds: string[];
   dependencyIds: string[];
+  produces: string[];
   dataIn: ModuleInput[];
   dataOut: ModuleOutput[];
   ridOwner: RidOwner;
@@ -269,6 +270,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setArtifactDataTypes((prev) => mergeStringCollections(prev, knownArtifactDataTypes));
   }, [knownArtifactDataTypes]);
 
+  const attachableDomainIds = useMemo(() => collectAttachableDomainIds(domains), [domains]);
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
   const catalogDomainIds = useMemo(() => collectCatalogDomainIds(domains), [domains]);
   const parentDomainIds = useMemo(
@@ -638,7 +640,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedModuleId === '__new__' ? 'create' : 'edit'}
             draft={moduleDraft}
             step={moduleStep}
-            domainItems={leafDomainIds}
+            domainItems={attachableDomainIds}
             domainLabelMap={domainLabelMap}
             moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
@@ -1553,6 +1555,20 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
         </div>
         <Button size="xs" view="secondary" label="Добавить выход" onClick={handleAddDataOut} />
       </div>
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Производимые артефакты
+        </Text>
+        <Combobox<string>
+          size="s"
+          items={artifactItems}
+          value={draft.produces}
+          multiple
+          getItemKey={(item) => item}
+          getItemLabel={(item) => artifactLabelMap[item] ?? item}
+          onChange={(value) => handleBasicFieldChange('produces', value ?? [])}
+        />
+      </label>
     </>
   );
 
@@ -2190,6 +2206,7 @@ function createDefaultModuleDraft(): ModuleDraftPayload {
     status: 'in-dev',
     domainIds: [],
     dependencyIds: [],
+    produces: [],
     dataIn: [{ id: 'input-1', label: '', sourceId: undefined }],
     dataOut: [{ id: 'output-1', label: '', consumerIds: [] }],
     ridOwner: { company: '', division: '' },
@@ -2252,6 +2269,7 @@ function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
     status: module.status,
     domainIds: [...module.domains],
     dependencyIds: [...module.dependencies],
+    produces: [...module.produces],
     dataIn: module.dataIn.map((input) => ({ ...input })),
     dataOut: module.dataOut.map((output) => ({
       ...output,
@@ -2308,6 +2326,11 @@ function applyModuleDraftPrefill(
   if (Array.isArray(patch.domainIds)) {
     ensureCopy();
     next.domainIds = [...patch.domainIds];
+  }
+
+  if (Array.isArray(patch.produces)) {
+    ensureCopy();
+    next.produces = [...patch.produces];
   }
 
   if (Array.isArray(patch.projectTeam)) {
@@ -2371,6 +2394,24 @@ function buildDomainLabelMap(domains: DomainNode[]): Record<string, string> {
 
   visit(domains, 0);
   return map;
+}
+
+function collectAttachableDomainIds(domains: DomainNode[]): string[] {
+  const ids: string[] = [];
+
+  const visit = (nodes: DomainNode[], depth: number) => {
+    nodes.forEach((node) => {
+      if (depth > 0 && !node.isCatalogRoot) {
+        ids.push(node.id);
+      }
+      if (node.children) {
+        visit(node.children, depth + 1);
+      }
+    });
+  };
+
+  visit(domains, 0);
+  return ids;
 }
 
 function collectLeafDomainIds(domains: DomainNode[]): string[] {

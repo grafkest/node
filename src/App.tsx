@@ -1081,14 +1081,15 @@ function App() {
     [graphs, graphSourceIdDraft]
   );
 
-  const defaultDomainId = useMemo(() => {
-    const flattened = flattenDomainTree(domainData);
-    const firstLeaf = flattened.find((domain) => !domain.children || domain.children.length === 0);
-    return firstLeaf ? firstLeaf.id : null;
-  }, [domainData]);
-
-  const leafDomainIds = useMemo(() => collectLeafDomainIds(domainData), [domainData]);
-  const leafDomainIdSet = useMemo(() => new Set(leafDomainIds), [leafDomainIds]);
+  const attachableDomainIds = useMemo(() => collectAttachableDomainIds(domainData), [domainData]);
+  const defaultDomainId = useMemo(
+    () => attachableDomainIds[0] ?? null,
+    [attachableDomainIds]
+  );
+  const attachableDomainIdSet = useMemo(
+    () => new Set(attachableDomainIds),
+    [attachableDomainIds]
+  );
   const catalogDomainIdSet = useMemo(() => new Set(collectCatalogDomainIds(domainData)), [domainData]);
   const domainIdSet = useMemo(
     () => new Set(flattenDomainTree(domainData).map((domain) => domain.id)),
@@ -1675,9 +1676,8 @@ function App() {
               ? [defaultDomainId]
               : [];
 
-      const result = buildModuleFromDraft(moduleId, draft, fallbackDomains, leafDomainIdSet, {
+      const result = buildModuleFromDraft(moduleId, draft, fallbackDomains, attachableDomainIdSet, {
         fallbackName: draft.name.trim() || `Новый модуль ${existingIds.size + 1}`,
-        currentProduces: []
       });
       if (!result) {
         showAdminNotice(
@@ -1741,7 +1741,7 @@ function App() {
     },
     [
       defaultDomainId,
-      leafDomainIdSet,
+      attachableDomainIdSet,
       markGraphDirty,
       moduleData,
       selectedNode,
@@ -1765,9 +1765,8 @@ function App() {
               ? [defaultDomainId]
               : [];
 
-      const result = buildModuleFromDraft(moduleId, draft, fallbackDomains, leafDomainIdSet, {
-        fallbackName: existing.name,
-        currentProduces: existing.produces
+      const result = buildModuleFromDraft(moduleId, draft, fallbackDomains, attachableDomainIdSet, {
+        fallbackName: existing.name
       });
       if (!result) {
         showAdminNotice(
@@ -1823,7 +1822,7 @@ function App() {
         showAdminNotice('success', `Модуль «${recalculatedModule.name}» обновлён.`);
       }
     },
-    [defaultDomainId, leafDomainIdSet, markGraphDirty, moduleData, showAdminNotice]
+    [defaultDomainId, attachableDomainIdSet, markGraphDirty, moduleData, showAdminNotice]
   );
 
   const handleDeleteModule = useCallback(
@@ -2136,7 +2135,7 @@ function App() {
       const producerId = draft.producedBy?.trim();
       const fallbackDomainId =
         draft.domainId ?? (producerId ? moduleById[producerId]?.domains[0] : undefined) ?? defaultDomainId;
-      const domainId = fallbackDomainId && leafDomainIdSet.has(fallbackDomainId) ? fallbackDomainId : null;
+      const domainId = fallbackDomainId && attachableDomainIdSet.has(fallbackDomainId) ? fallbackDomainId : null;
       const consumers = deduplicateNonEmpty(draft.consumerIds);
 
       if (!domainId) {
@@ -2216,7 +2215,7 @@ function App() {
     [
       artifactData,
       defaultDomainId,
-      leafDomainIdSet,
+      attachableDomainIdSet,
       markGraphDirty,
       moduleById,
       showAdminNotice
@@ -2236,7 +2235,7 @@ function App() {
       const normalizedSampleUrl = draft.sampleUrl.trim() || existing.sampleUrl;
       const producerId = draft.producedBy?.trim();
       const candidateDomainId = draft.domainId ?? existing.domainId;
-      if (!candidateDomainId || !leafDomainIdSet.has(candidateDomainId)) {
+      if (!candidateDomainId || !attachableDomainIdSet.has(candidateDomainId)) {
         showAdminNotice('error', 'Не удалось сохранить артефакт: выберите доменную область.');
         return;
       }
@@ -2343,7 +2342,7 @@ function App() {
       );
       showAdminNotice('success', `Артефакт «${normalizedName}» обновлён.`);
     },
-    [artifactData, leafDomainIdSet, markGraphDirty, showAdminNotice]
+    [artifactData, attachableDomainIdSet, markGraphDirty, showAdminNotice]
   );
 
   const handleDeleteArtifact = useCallback(
@@ -3412,7 +3411,7 @@ function buildModuleFromDraft(
   draft: ModuleDraftPayload,
   fallbackDomains: string[],
   allowedDomainIds: Set<string>,
-  options: { fallbackName: string; currentProduces?: string[] }
+  options: { fallbackName: string }
 ): ModuleBuildResult | null {
   const normalizedName = draft.name.trim() || options.fallbackName;
   const normalizedDescription = draft.description.trim() || 'Описание не заполнено';
@@ -3428,7 +3427,7 @@ function buildModuleFromDraft(
   }
 
   const dependencies = deduplicateNonEmpty(draft.dependencyIds).filter((id) => id !== moduleId);
-  const produces = deduplicateNonEmpty(options.currentProduces ?? []);
+  const produces = deduplicateNonEmpty(draft.produces ?? []);
 
   const preparedInputs = (draft.dataIn.length > 0 ? draft.dataIn : [{ id: '', label: '', sourceId: undefined }]).map((input, index) => ({
     id: input.id?.trim() || `input-${index + 1}`,
@@ -4080,10 +4079,22 @@ function flattenDomainTree(domains: DomainNode[]): DomainNode[] {
   return domains.flatMap((domain) => [domain, ...(domain.children ? flattenDomainTree(domain.children) : [])]);
 }
 
-function collectLeafDomainIds(domains: DomainNode[]): string[] {
-  return flattenDomainTree(domains)
-    .filter((domain) => (!domain.children || domain.children.length === 0) && !domain.isCatalogRoot)
-    .map((domain) => domain.id);
+function collectAttachableDomainIds(domains: DomainNode[]): string[] {
+  const result: string[] = [];
+
+  const visit = (nodes: DomainNode[], depth: number) => {
+    nodes.forEach((node) => {
+      if (depth > 0 && !node.isCatalogRoot) {
+        result.push(node.id);
+      }
+      if (node.children) {
+        visit(node.children, depth + 1);
+      }
+    });
+  };
+
+  visit(domains, 0);
+  return result;
 }
 
 function collectCatalogDomainIds(domains: DomainNode[]): string[] {
