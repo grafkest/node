@@ -8,7 +8,14 @@
 
 .gridLayout {
   display: grid;
-  grid-template-columns: minmax(220px, 3fr) 120px 120px 100px 160px minmax(160px, 2fr) minmax(320px, 1fr);
+  grid-template-columns:
+    minmax(160px, 2fr)
+    minmax(72px, 0.7fr)
+    minmax(72px, 0.7fr)
+    minmax(64px, 0.6fr)
+    minmax(110px, 1fr)
+    minmax(130px, 1.2fr)
+    minmax(420px, 3.5fr);
   gap: 12px;
   align-items: stretch;
 }
@@ -215,17 +222,31 @@
 
 @media (max-width: 1280px) {
   .row {
-    grid-template-columns: minmax(220px, 3fr) 100px 100px 90px 140px minmax(140px, 2fr) minmax(260px, 1fr);
+    grid-template-columns:
+      minmax(150px, 2fr)
+      minmax(64px, 0.7fr)
+      minmax(64px, 0.7fr)
+      minmax(56px, 0.6fr)
+      minmax(96px, 0.9fr)
+      minmax(110px, 1fr)
+      minmax(320px, 3fr);
   }
 
   .headerRow {
-    grid-template-columns: minmax(220px, 3fr) 100px 100px 90px 140px minmax(140px, 2fr) minmax(260px, 1fr);
+    grid-template-columns:
+      minmax(150px, 2fr)
+      minmax(64px, 0.7fr)
+      minmax(64px, 0.7fr)
+      minmax(56px, 0.6fr)
+      minmax(96px, 0.9fr)
+      minmax(110px, 1fr)
+      minmax(320px, 3fr);
   }
 }
 
 @media (max-width: 960px) {
   .row {
-    grid-template-columns: minmax(220px, 3fr) minmax(0, 1fr);
+    grid-template-columns: minmax(180px, 3fr) minmax(0, 1fr);
     grid-template-areas:
       'name timeline'
       'meta timeline';
