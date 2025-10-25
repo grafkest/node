@@ -20,19 +20,20 @@ import ForceGraph2D, {
   LinkObject,
   NodeObject
 } from 'react-force-graph-2d';
-import type { ExpertProfile, ExpertSkill } from '../data';
+import type { ExpertProfile, ModuleNode, TeamRole } from '../data';
 import styles from './ExpertExplorer.module.css';
 import SkillEditorModal from './SkillEditorModal';
 
 type ViewOption = {
   label: string;
-  value: 'list' | 'graph';
+  value: 'list' | 'graph' | 'roles';
 };
 
 type ViewMode = ViewOption['value'];
 
 type ExpertExplorerProps = {
   experts: ExpertProfile[];
+  modules: ModuleNode[];
   moduleNameMap: Record<string, string>;
   moduleDomainMap: Record<string, string[]>;
   domainNameMap: Record<string, string>;
@@ -48,14 +49,14 @@ type SkillFocus = {
 
 type ForceNode = NodeObject & {
   id: string;
-  type: SkillFocus['type'] | 'expert';
+  type: SkillFocus['type'] | 'expert' | 'role';
   originId: string;
   label: string;
 };
 
 type ForceLink = LinkObject & {
   id: string;
-  type: SkillFocus['type'];
+  type: SkillFocus['type'] | 'role';
 };
 
 type ExpertPalette = {
@@ -67,8 +68,29 @@ type ExpertPalette = {
   domain: string;
   competency: string;
   consulting: string;
+  role: string;
   edge: string;
   edgeHighlight: string;
+  roleEdge: string;
+};
+
+type RoleAssignmentMap = Map<TeamRole, Map<string, Set<string>>>;
+
+type ExpertRoleMap = Map<string, Map<TeamRole, Set<string>>>;
+
+type RoleAggregate = {
+  role: TeamRole;
+  expertCount: number;
+  experts: {
+    profile: ExpertProfile;
+    moduleIds: string[];
+  }[];
+  moduleIds: string[];
+  topSkills: {
+    id: string;
+    label: string;
+    count: number;
+  }[];
 };
 
 type AvailabilityMeta = {
@@ -78,7 +100,8 @@ type AvailabilityMeta = {
 
 const viewOptions: ViewOption[] = [
   { label: 'Список', value: 'list' },
-  { label: 'Граф навыков', value: 'graph' }
+  { label: 'Граф навыков', value: 'graph' },
+  { label: 'По ролям', value: 'roles' }
 ];
 
 const availabilityMeta: Record<ExpertProfile['availability'], AvailabilityMeta> = {
@@ -96,8 +119,10 @@ const DEFAULT_PALETTE: ExpertPalette = {
   domain: '#FF8C69',
   competency: '#45C7B0',
   consulting: '#A067FF',
+  role: '#FFB347',
   edge: 'rgba(82, 96, 115, 0.35)',
-  edgeHighlight: '#3F8CFF'
+  edgeHighlight: '#3F8CFF',
+  roleEdge: 'rgba(255, 179, 71, 0.45)'
 };
 
 const skillTypeLabel: Record<SkillFocus['type'], string> = {
@@ -110,6 +135,7 @@ const MAX_FOCUSED_EXPERTS = 6;
 
 const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   experts,
+  modules,
   moduleNameMap,
   moduleDomainMap,
   domainNameMap,
@@ -127,20 +153,80 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [domainFilter, setDomainFilter] = useState<string[]>([]);
   const [competencyFilter, setCompetencyFilter] = useState<string[]>([]);
   const [consultingFilter, setConsultingFilter] = useState<string[]>([]);
+  const [roleFilter, setRoleFilter] = useState<TeamRole[]>([]);
   const [selectedExpertId, setSelectedExpertId] = useState<string | null>(null);
   const [isSkillEditorOpen, setIsSkillEditorOpen] = useState(false);
   const [skillEditorExpert, setSkillEditorExpert] = useState<ExpertProfile | null>(null);
   const [focusedSkill, setFocusedSkill] = useState<SkillFocus | null>(null);
+  const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const graphContainerRef = useRef<HTMLDivElement | null>(null);
   const [graphDimensions, setGraphDimensions] = useState({ width: 0, height: 0 });
+  const roleGraphRef = useRef<ForceGraphMethods | null>(null);
+  const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
+  const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
 
   const expertById = useMemo(() => {
     const map = new Map<string, ExpertProfile>();
     experts.forEach((expert) => map.set(expert.id, expert));
     return map;
   }, [experts]);
+
+  const roleAssignments = useMemo<RoleAssignmentMap>(() => {
+    const assignments: RoleAssignmentMap = new Map();
+    const nameIndex = new Map<string, string>();
+
+    experts.forEach((expert) => {
+      nameIndex.set(expert.fullName.toLowerCase(), expert.id);
+    });
+
+    modules.forEach((module) => {
+      module.projectTeam.forEach((member) => {
+        const expertId = nameIndex.get(member.fullName.toLowerCase());
+        if (!expertId) {
+          return;
+        }
+
+        let roleMap = assignments.get(member.role);
+        if (!roleMap) {
+          roleMap = new Map();
+          assignments.set(member.role, roleMap);
+        }
+
+        let moduleSet = roleMap.get(expertId);
+        if (!moduleSet) {
+          moduleSet = new Set();
+          roleMap.set(expertId, moduleSet);
+        }
+
+        moduleSet.add(module.id);
+      });
+    });
+
+    return assignments;
+  }, [experts, modules]);
+
+  const expertRolesMap = useMemo<ExpertRoleMap>(() => {
+    const map: ExpertRoleMap = new Map();
+
+    roleAssignments.forEach((expertMap, role) => {
+      expertMap.forEach((moduleIds, expertId) => {
+        let roles = map.get(expertId);
+        if (!roles) {
+          roles = new Map();
+          map.set(expertId, roles);
+        }
+        roles.set(role, new Set(moduleIds));
+      });
+    });
+
+    return map;
+  }, [roleAssignments]);
+
+  const roleOptions = useMemo<TeamRole[]>(() => {
+    return Array.from(roleAssignments.keys()).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [roleAssignments]);
 
   const domainOptions = useMemo(() => {
     const set = new Set<string>();
@@ -181,6 +267,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     () => new Set(consultingFilter),
     [consultingFilter]
   );
+  const selectedRoleSet = useMemo(() => new Set(roleFilter), [roleFilter]);
 
   const filteredExperts = useMemo(() => {
     return experts
@@ -210,6 +297,20 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           return false;
         }
 
+        const expertRoles = expertRolesMap.get(expert.id);
+        if (selectedRoleSet.size > 0) {
+          if (!expertRoles) {
+            return false;
+          }
+
+          const hasSelectedRole = Array.from(expertRoles.keys()).some((role) =>
+            selectedRoleSet.has(role)
+          );
+          if (!hasSelectedRole) {
+            return false;
+          }
+        }
+
         if (!normalizedSearch) {
           return true;
         }
@@ -220,6 +321,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         const domainNames = expert.domains.map(
           (domainId) => domainNameMap[domainId] ?? domainId
         );
+        const roleLabels = expertRoles ? Array.from(expertRoles.keys()) : [];
         const haystack = [
           expert.fullName,
           expert.title,
@@ -232,7 +334,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           ...expert.consultingSkills,
           ...expert.focusAreas,
           ...expert.notableProjects,
-          ...expert.languages
+          ...expert.languages,
+          ...roleLabels
         ]
           .join(' ')
           .toLowerCase();
@@ -245,6 +348,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     domainNameMap,
     moduleNameMap,
     normalizedSearch,
+    expertRolesMap,
+    moduleNameMap,
+    domainNameMap,
+    normalizedSearch,
+    roleFilter,
     selectedCompetencySet,
     selectedConsultingSet,
     selectedDomainSet
@@ -254,6 +362,123 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     () => filteredExperts.find((expert) => expert.id === selectedExpertId) ?? null,
     [filteredExperts, selectedExpertId]
   );
+
+  const roleAggregations = useMemo<RoleAggregate[]>(() => {
+    const aggregates: RoleAggregate[] = [];
+
+    roleAssignments.forEach((expertMap, role) => {
+      const expertsForRole = filteredExperts.filter((expert) =>
+        expertMap.has(expert.id)
+      );
+
+      if (expertsForRole.length === 0) {
+        return;
+      }
+
+      const moduleSet = new Set<string>();
+      const skillCounts = new Map<string, number>();
+      const expertEntries = expertsForRole.map((expert) => {
+        const moduleIds = Array.from(expertMap.get(expert.id) ?? []);
+        moduleIds.forEach((moduleId) => moduleSet.add(moduleId));
+        expert.competencies.forEach((competency) => {
+          skillCounts.set(competency, (skillCounts.get(competency) ?? 0) + 1);
+        });
+
+        return {
+          profile: expert,
+          moduleIds
+        };
+      });
+
+      const topSkills = Array.from(skillCounts.entries())
+        .sort((a, b) => {
+          if (b[1] !== a[1]) {
+            return b[1] - a[1];
+          }
+          return a[0].localeCompare(b[0], 'ru');
+        })
+        .slice(0, 6)
+        .map(([id, count]) => ({ id, label: id, count }));
+
+      aggregates.push({
+        role,
+        expertCount: expertEntries.length,
+        experts: expertEntries,
+        moduleIds: Array.from(moduleSet),
+        topSkills
+      });
+    });
+
+    return aggregates.sort(
+      (a, b) => b.expertCount - a.expertCount || a.role.localeCompare(b.role, 'ru')
+    );
+  }, [filteredExperts, roleAssignments]);
+
+  const roleAggregationMap = useMemo(
+    () => new Map(roleAggregations.map((item) => [item.role, item])),
+    [roleAggregations]
+  );
+
+  useEffect(() => {
+    if (roleAggregations.length === 0) {
+      setSelectedRole(null);
+      return;
+    }
+
+    if (!selectedRole || !roleAggregationMap.has(selectedRole)) {
+      setSelectedRole(roleAggregations[0].role);
+    }
+  }, [roleAggregationMap, roleAggregations, selectedRole]);
+
+  useEffect(() => {
+    if (viewMode !== 'roles') {
+      return;
+    }
+
+    if (!selectedRole) {
+      return;
+    }
+
+    const aggregate = roleAggregationMap.get(selectedRole);
+    if (!aggregate) {
+      return;
+    }
+
+    if (
+      !selectedExpertId ||
+      !aggregate.experts.some((entry) => entry.profile.id === selectedExpertId)
+    ) {
+      const fallbackId = aggregate.experts[0]?.profile.id ?? null;
+      if (fallbackId !== selectedExpertId) {
+        setSelectedExpertId(fallbackId);
+      }
+    }
+  }, [roleAggregationMap, selectedExpertId, selectedRole, viewMode]);
+
+  const selectedRoleAggregate = selectedRole
+    ? roleAggregationMap.get(selectedRole) ?? null
+    : null;
+
+  const selectedExpertRoles = useMemo(() => {
+    if (!selectedExpert) {
+      return [] as { role: TeamRole; modules: { id: string; name: string }[] }[];
+    }
+
+    const roleEntries = expertRolesMap.get(selectedExpert.id);
+    if (!roleEntries) {
+      return [] as { role: TeamRole; modules: { id: string; name: string }[] }[];
+    }
+
+    return Array.from(roleEntries.entries())
+      .map(([role, moduleIds]) => ({
+        role,
+        modules: Array.from(moduleIds).map((moduleId) => ({
+          id: moduleId,
+          name: moduleNameMap[moduleId] ?? moduleId
+        }))
+      }))
+      .sort((a, b) => a.role.localeCompare(b.role, 'ru'));
+  }, [expertRolesMap, moduleNameMap, selectedExpert]);
 
   useEffect(() => {
     if (filteredExperts.length === 0) {
@@ -346,6 +571,44 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return () => observer.disconnect();
   }, [viewMode]);
 
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || typeof window.ResizeObserver === 'undefined') {
+      return;
+    }
+
+    if (viewMode !== 'roles') {
+      return;
+    }
+
+    const element = roleGraphContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const measure = (target: Element | null) => {
+      if (!target) {
+        return;
+      }
+
+      const { width, height } = (target as HTMLElement).getBoundingClientRect();
+      setRoleGraphDimensions({
+        width: Math.max(0, width),
+        height: Math.max(0, height)
+      });
+    };
+
+    measure(element);
+
+    const observer = new window.ResizeObserver((entries) => {
+      const entry = entries[0];
+      measure(entry?.target ?? null);
+    });
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [viewMode]);
+
   useEffect(() => {
     if (viewMode !== 'graph') {
       return;
@@ -361,6 +624,22 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     return () => window.clearTimeout(timeout);
   }, [filteredExperts, graphDimensions.height, graphDimensions.width, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'roles') {
+      return;
+    }
+
+    if (!roleGraphRef.current) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      roleGraphRef.current?.zoomToFit(400, 40);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [roleGraphData, roleGraphDimensions.height, roleGraphDimensions.width, viewMode]);
 
   const graphData = useMemo(() => {
     const nodes: ForceNode[] = [];
@@ -441,6 +720,78 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return { nodes, links };
   }, [domainNameMap, filteredExperts]);
 
+  const roleGraphData = useMemo(() => {
+    if (!selectedRoleAggregate) {
+      return { nodes: [] as ForceNode[], links: [] as ForceLink[] };
+    }
+
+    const nodes: ForceNode[] = [];
+    const links: ForceLink[] = [];
+    const seenNodes = new Map<string, ForceNode>();
+
+    const ensureNode = (node: ForceNode) => {
+      if (seenNodes.has(node.id)) {
+        return seenNodes.get(node.id)!;
+      }
+      seenNodes.set(node.id, node);
+      nodes.push(node);
+      return node;
+    };
+
+    const appendLink = (link: ForceLink) => {
+      links.push(link);
+    };
+
+    const roleNodeId = `role:${selectedRoleAggregate.role}`;
+    ensureNode({
+      id: roleNodeId,
+      originId: selectedRoleAggregate.role,
+      type: 'role',
+      label: selectedRoleAggregate.role
+    });
+
+    const topSkillSet = new Set(selectedRoleAggregate.topSkills.map((skill) => skill.id));
+
+    selectedRoleAggregate.experts.forEach(({ profile }) => {
+      const expertNodeId = `expert:${profile.id}`;
+      ensureNode({
+        id: expertNodeId,
+        originId: profile.id,
+        type: 'expert',
+        label: profile.fullName
+      });
+
+      appendLink({
+        id: `${roleNodeId}->${expertNodeId}`,
+        source: roleNodeId,
+        target: expertNodeId,
+        type: 'role'
+      });
+
+      profile.competencies.forEach((competency) => {
+        if (!topSkillSet.has(competency)) {
+          return;
+        }
+        const skillNodeId = `competency:${competency}`;
+        ensureNode({
+          id: skillNodeId,
+          originId: competency,
+          type: 'competency',
+          label: competency
+        });
+
+        appendLink({
+          id: `${expertNodeId}->competency:${competency}`,
+          source: expertNodeId,
+          target: skillNodeId,
+          type: 'competency'
+        });
+      });
+    });
+
+    return { nodes, links };
+  }, [selectedRoleAggregate]);
+
   useEffect(() => {
     if (viewMode !== 'graph') {
       return;
@@ -465,6 +816,30 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }
   }, [viewMode, graphData]);
 
+  useEffect(() => {
+    if (viewMode !== 'roles') {
+      return;
+    }
+
+    const graph = roleGraphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    const chargeForce = graph.d3Force('charge');
+    if (chargeForce && typeof (chargeForce as { strength?: unknown }).strength === 'function') {
+      (chargeForce as { strength: (value: number) => void }).strength(-200);
+    }
+
+    const linkForce = graph.d3Force('link');
+    if (linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
+      (linkForce as { distance: (value: number) => void }).distance(110);
+    }
+    if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
+      (linkForce as { strength: (value: number) => void }).strength(0.7);
+    }
+  }, [roleGraphData, viewMode]);
+
   const highlightNodeIds = useMemo(() => {
     const set = new Set<string>();
     if (selectedExpert) {
@@ -483,8 +858,18 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       focusedSkill.expertIds.forEach((expertId) => set.add(`expert:${expertId}`));
     }
 
+    if (viewMode === 'roles' && selectedRoleAggregate) {
+      set.add(`role:${selectedRoleAggregate.role}`);
+      selectedRoleAggregate.experts.forEach(({ profile }) => {
+        set.add(`expert:${profile.id}`);
+      });
+      selectedRoleAggregate.topSkills.forEach((skill) => {
+        set.add(`competency:${skill.id}`);
+      });
+    }
+
     return set;
-  }, [focusedSkill, selectedExpert]);
+  }, [focusedSkill, selectedExpert, selectedRoleAggregate, viewMode]);
 
   const highlightLinkIds = useMemo(() => {
     const set = new Set<string>();
@@ -506,8 +891,19 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       );
     }
 
+    if (viewMode === 'roles' && selectedRoleAggregate) {
+      selectedRoleAggregate.experts.forEach(({ profile }) => {
+        set.add(`role:${selectedRoleAggregate.role}->expert:${profile.id}`);
+        selectedRoleAggregate.topSkills.forEach((skill) => {
+          if (profile.competencies.includes(skill.id)) {
+            set.add(`expert:${profile.id}->competency:${skill.id}`);
+          }
+        });
+      });
+    }
+
     return set;
-  }, [focusedSkill, selectedExpert]);
+  }, [focusedSkill, selectedExpert, selectedRoleAggregate, viewMode]);
 
   const handleSelectExpert = useCallback((expertId: string) => {
     setSelectedExpertId(expertId);
@@ -523,6 +919,17 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const typed = node as ForceNode;
       if (typed.type === 'expert') {
         handleSelectExpert(typed.originId);
+        return;
+      }
+
+      if (typed.type === 'role') {
+        const roleId = typed.originId as TeamRole;
+        setSelectedRole(roleId);
+        const aggregate = roleAggregationMap.get(roleId);
+        const firstExpertId = aggregate?.experts[0]?.profile.id;
+        if (firstExpertId) {
+          handleSelectExpert(firstExpertId);
+        }
         return;
       }
 
@@ -547,25 +954,45 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         handleSelectExpert(relatedExperts[0].id);
       }
     },
-    [filteredExperts, handleSelectExpert]
+    [filteredExperts, handleSelectExpert, roleAggregationMap]
   );
 
   const nodeCanvasObject = useCallback(
     (node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const typed = node as ForceNode;
-      const radius = typed.type === 'expert' ? 14 : typed.type === 'domain' ? 11 : 9;
+
+      const radius =
+        typed.type === 'expert'
+          ? 14
+          : typed.type === 'role'
+            ? 12
+            : typed.type === 'domain'
+              ? 11
+              : 9;
+
       const baseColor =
         typed.type === 'expert'
           ? palette.expert
-          : typed.type === 'domain'
-            ? palette.domain
-            : typed.type === 'competency'
-              ? palette.competency
-              : palette.consulting;
-      const isHighlighted = highlightNodeIds.has(typed.id);
-      const fillColor = isHighlighted ? baseColor : withAlpha(baseColor, 0.22);
+          : typed.type === 'role'
+            ? palette.role
+            : typed.type === 'domain'
+              ? palette.domain
+              : typed.type === 'competency'
+                ? palette.competency
+                : palette.consulting;
 
-      const fontSizeBase = typed.type === 'expert' ? 16 : typed.type === 'domain' ? 14 : 12;
+      const isSolid = typed.type === 'expert' || typed.type === 'role';
+      const isHighlighted = highlightNodeIds.has(typed.id);
+      const fillColor = isHighlighted || isSolid ? baseColor : withAlpha(baseColor, 0.22);
+
+      const fontSizeBase =
+        typed.type === 'expert'
+          ? 16
+          : typed.type === 'role'
+            ? 15
+            : typed.type === 'domain'
+              ? 14
+              : 12;
       const fontSize = fontSizeBase / Math.sqrt(Math.max(globalScale, 0.6));
       const textY = (node.y ?? 0) + radius + 4;
 
@@ -573,7 +1000,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       ctx.beginPath();
       ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
       ctx.fillStyle = fillColor;
-      ctx.globalAlpha = isHighlighted ? 1 : 0.9;
+      ctx.globalAlpha = isHighlighted || isSolid ? 1 : 0.9;
       ctx.fill();
 
       if (isHighlighted) {
@@ -592,7 +1019,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         ctx.lineWidth = Math.max(2, fontSize / 3);
         ctx.strokeStyle = withAlpha(palette.background, 0.9);
         ctx.strokeText(typed.label, node.x ?? 0, textY);
-        ctx.fillStyle = palette.text;
+        ctx.fillStyle = palette.textOnAccent;
+        ctx.globalAlpha = 1;
+      } else if (isSolid) {
+        ctx.fillStyle = palette.textOnAccent;
         ctx.globalAlpha = 1;
       } else {
         ctx.fillStyle = palette.text;
@@ -610,6 +1040,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const typed = link as ForceLink;
       if (typed.id && highlightLinkIds.has(typed.id)) {
         return palette.edgeHighlight;
+      }
+      if (typed.type === 'role') {
+        return palette.roleEdge;
       }
       return palette.edge;
     },
@@ -629,7 +1062,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     setDomainFilter([]);
     setCompetencyFilter([]);
     setConsultingFilter([]);
+    setRoleFilter([]);
     setFocusedSkill(null);
+    setSelectedRole(null);
   }, []);
 
   const summary = useMemo(() => {
@@ -637,21 +1072,25 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     const competencySet = new Set<string>();
     const consultingSet = new Set<string>();
     const moduleSet = new Set<string>();
+    const roleSet = new Set<TeamRole>();
 
     filteredExperts.forEach((expert) => {
       expert.domains.forEach((domainId) => domainSet.add(domainId));
       expert.competencies.forEach((competency) => competencySet.add(competency));
       expert.consultingSkills.forEach((skill) => consultingSet.add(skill));
       expert.modules.forEach((moduleId) => moduleSet.add(moduleId));
+      const roles = expertRolesMap.get(expert.id);
+      roles?.forEach((_, role) => roleSet.add(role));
     });
 
     return {
       domains: domainSet,
       competencies: competencySet,
       consulting: consultingSet,
-      modules: moduleSet
+      modules: moduleSet,
+      roles: roleSet
     };
-  }, [filteredExperts]);
+  }, [expertRolesMap, filteredExperts]);
 
   const activeView =
     viewOptions.find((option) => option.value === viewMode) ?? viewOptions[0];
@@ -716,6 +1155,21 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
             placeholder="Все навыки"
           />
         </div>
+        <div className={styles.field}>
+          <Text size="xs" weight="semibold">
+            Командные роли
+          </Text>
+          <Combobox<TeamRole>
+            size="s"
+            items={roleOptions}
+            value={roleFilter}
+            multiple
+            getItemKey={(item) => item}
+            getItemLabel={(item) => item}
+            onChange={(value) => setRoleFilter(value ?? [])}
+            placeholder="Все роли"
+          />
+        </div>
       </section>
 
       <section className={styles.summaryRow}>
@@ -728,6 +1182,17 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           </Text>
           <Text size="xs" view="ghost">
             из {experts.length} в каталоге
+          </Text>
+        </Card>
+        <Card className={styles.summaryCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
+          <Text size="xs" view="secondary">
+            Командные роли
+          </Text>
+          <Text size="2xl" weight="bold">
+            {summary.roles.size}
+          </Text>
+          <Text size="xs" view="ghost">
+            представлены у выбранных экспертов
           </Text>
         </Card>
         <Card className={styles.summaryCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
@@ -854,7 +1319,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
               </div>
             )}
           </div>
-        ) : (
+        ) : viewMode === 'graph' ? (
           <div className={styles.graphPane}>
             {focusedSkill && (
               <Card className={styles.focusCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
@@ -921,6 +1386,172 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
               )}
             </div>
           </div>
+        ) : (
+          <div className={styles.rolePane}>
+            {roleAggregations.length === 0 ? (
+              <div className={styles.placeholder}>
+                <Text size="s" view="secondary">
+                  Нет экспертов с назначенными ролями для выбранных условий.
+                </Text>
+                <Text size="xs" view="ghost">
+                  Уточните фильтры или уберите ограничение по ролям.
+                </Text>
+              </div>
+            ) : (
+              <>
+                <div className={styles.roleListPane}>
+                  <div className={styles.roleList}>
+                    {roleAggregations.map((aggregate) => {
+                      const isActive = aggregate.role === selectedRole;
+                      const topPreview = aggregate.topSkills.slice(0, 3);
+                      return (
+                        <Card
+                          key={aggregate.role}
+                          className={clsx(styles.roleCard, {
+                            [styles.roleCardActive]: isActive
+                          })}
+                          verticalSpace="l"
+                          horizontalSpace="l"
+                          shadow={false}
+                          tabIndex={0}
+                          role="button"
+                          onClick={() => {
+                            setSelectedRole(aggregate.role);
+                            const firstExpertId = aggregate.experts[0]?.profile.id;
+                            if (firstExpertId) {
+                              handleSelectExpert(firstExpertId);
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setSelectedRole(aggregate.role);
+                              const firstExpertId = aggregate.experts[0]?.profile.id;
+                              if (firstExpertId) {
+                                handleSelectExpert(firstExpertId);
+                              }
+                            }
+                          }}
+                        >
+                          <div className={styles.roleCardHeader}>
+                            <Text size="s" weight="semibold">
+                              {aggregate.role}
+                            </Text>
+                            <Badge
+                              size="xs"
+                              view="stroked"
+                              label={`${aggregate.expertCount} экспертов`}
+                            />
+                          </div>
+                          <Text size="xs" view="ghost">
+                            {aggregate.moduleIds.length} модулей
+                          </Text>
+                          {topPreview.length > 0 && (
+                            <div className={styles.badgeGroup}>
+                              {topPreview.map((skill) => (
+                                <Badge key={skill.id} size="xs" view="stroked" label={skill.label} />
+                              ))}
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className={styles.roleGraphPane}>
+                  {selectedRoleAggregate ? (
+                    <>
+                      <Card className={styles.roleSummaryCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
+                        <Text size="xs" view="secondary">
+                          Обзор роли
+                        </Text>
+                        <Text size="m" weight="semibold">
+                          {selectedRoleAggregate.role}
+                        </Text>
+                        <div className={styles.roleSummaryStats}>
+                          <Badge size="xs" view="filled" label={`${selectedRoleAggregate.expertCount} экспертов`} />
+                          <Badge size="xs" view="stroked" label={`${selectedRoleAggregate.moduleIds.length} модулей`} />
+                        </div>
+                        {selectedRoleAggregate.topSkills.length > 0 && (
+                          <div className={styles.badgeGroup}>
+                            {selectedRoleAggregate.topSkills.map((skill) => (
+                              <Badge
+                                key={skill.id}
+                                size="xs"
+                                view="stroked"
+                                label={`${skill.label} · ${skill.count}`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {selectedRoleAggregate.moduleIds.length > 0 && (
+                          <div className={clsx(styles.badgeGroup, styles.roleModuleBadges)}>
+                            {selectedRoleAggregate.moduleIds.map((moduleId) => (
+                              <Badge
+                                key={moduleId}
+                                size="xs"
+                                view="ghost"
+                                label={moduleNameMap[moduleId] ?? moduleId}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </Card>
+                      <div ref={roleGraphContainerRef} className={styles.graphContainer}>
+                        {roleGraphData.nodes.length === 0 ? (
+                          <div className={styles.graphPlaceholder}>
+                            <Text size="s" view="secondary">
+                              Нет данных для построения графа по выбранной роли.
+                            </Text>
+                          </div>
+                        ) : (
+                          <ForceGraph2D
+                            ref={roleGraphRef}
+                            width={roleGraphDimensions.width}
+                            height={roleGraphDimensions.height}
+                            graphData={roleGraphData}
+                            backgroundColor={palette.background}
+                            nodeRelSize={4}
+                            cooldownTicks={80}
+                            onNodeClick={handleNodeClick}
+                            nodeCanvasObject={nodeCanvasObject}
+                            nodeCanvasObjectMode={() => 'replace'}
+                            linkColor={linkColor}
+                            linkWidth={linkWidth}
+                            enableZoomInteraction
+                            enablePanInteraction
+                          />
+                        )}
+                      </div>
+                      <Card className={styles.roleExpertsCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
+                        <Text size="xs" view="secondary">
+                          Эксперты роли
+                        </Text>
+                        <div className={styles.focusExpertButtons}>
+                          {selectedRoleAggregate.experts.map(({ profile }) => (
+                            <Button
+                              key={profile.id}
+                              size="xs"
+                              view={profile.id === selectedExpertId ? 'primary' : 'ghost'}
+                              label={profile.fullName}
+                              onClick={() => handleSelectExpert(profile.id)}
+                              className={styles.focusExpertButton}
+                            />
+                          ))}
+                        </div>
+                      </Card>
+                    </>
+                  ) : (
+                    <div className={styles.placeholder}>
+                      <Text size="s" view="secondary">
+                        Выберите роль, чтобы увидеть связанных экспертов.
+                      </Text>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         <aside className={styles.detailsPane}>
@@ -930,7 +1561,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
               moduleNameMap={moduleNameMap}
               moduleDomainMap={moduleDomainMap}
               domainNameMap={domainNameMap}
-              onEditSkills={handleOpenSkillEditor}
+              roles={selectedExpertRoles}
             />
           ) : (
             <div className={styles.placeholder}>
@@ -953,12 +1584,17 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   );
 };
 
+type ExpertRoleDetail = {
+  role: TeamRole;
+  modules: { id: string; name: string }[];
+};
+
 type ExpertDetailsProps = {
   expert: ExpertProfile;
   moduleNameMap: Record<string, string>;
   moduleDomainMap: Record<string, string[]>;
   domainNameMap: Record<string, string>;
-  onEditSkills: (expert: ExpertProfile) => void;
+  roles: ExpertRoleDetail[];
 };
 
 const ExpertDetails: React.FC<ExpertDetailsProps> = ({
@@ -966,7 +1602,7 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
   moduleNameMap,
   moduleDomainMap,
   domainNameMap,
-  onEditSkills
+  roles
 }) => {
   const availability = availabilityMeta[expert.availability];
   const modules = expert.modules.map((moduleId) => ({
@@ -1005,6 +1641,28 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
       <Text size="xs" view="ghost">
         {expert.availabilityComment}
       </Text>
+
+      {roles.length > 0 && (
+        <section className={styles.detailSection}>
+          <Text size="xs" weight="semibold" className={styles.sectionTitle}>
+            Командные роли
+          </Text>
+          <ul className={styles.detailList}>
+            {roles.map((role) => (
+              <li key={role.role} className={styles.detailListItem}>
+                <Text size="s" weight="semibold">
+                  {role.role}
+                </Text>
+                <div className={styles.badgeGroup}>
+                  {role.modules.map((module) => (
+                    <Badge key={module.id} size="xs" view="stroked" label={module.name} />
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className={styles.detailSection}>
         <Text size="xs" weight="semibold" className={styles.sectionTitle}>
@@ -1125,8 +1783,10 @@ function resolveExpertPalette(themeClassName?: string): ExpertPalette {
     domain: getVar('--color-bg-warning', DEFAULT_PALETTE.domain),
     competency: getVar('--color-bg-success', DEFAULT_PALETTE.competency),
     consulting: getVar('--color-bg-info', DEFAULT_PALETTE.consulting),
+    role: getVar('--color-bg-alert', DEFAULT_PALETTE.role),
     edge: edgeBase,
-    edgeHighlight: getVar('--color-bg-link', DEFAULT_PALETTE.edgeHighlight)
+    edgeHighlight: getVar('--color-bg-link', DEFAULT_PALETTE.edgeHighlight),
+    roleEdge: withAlpha(getVar('--color-bg-alert', DEFAULT_PALETTE.role), 0.45)
   };
 }
 
