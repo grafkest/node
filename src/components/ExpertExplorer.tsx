@@ -98,6 +98,8 @@ type AvailabilityMeta = {
   status: 'success' | 'warning' | 'system';
 };
 
+type RGBColor = { r: number; g: number; b: number };
+
 const viewOptions: ViewOption[] = [
   { label: 'Список', value: 'list' },
   { label: 'Граф навыков', value: 'graph' },
@@ -981,6 +983,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const isSolid = typed.type === 'expert' || typed.type === 'role';
       const isHighlighted = highlightNodeIds.has(typed.id);
       const fillColor = isHighlighted || isSolid ? baseColor : withAlpha(baseColor, 0.22);
+      const accentTextColor = getReadableTextColor(baseColor, palette);
 
       const fontSizeBase =
         typed.type === 'expert'
@@ -1016,10 +1019,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         ctx.lineWidth = Math.max(2, fontSize / 3);
         ctx.strokeStyle = withAlpha(palette.background, 0.9);
         ctx.strokeText(typed.label, node.x ?? 0, textY);
-        ctx.fillStyle = palette.textOnAccent;
+        ctx.fillStyle = accentTextColor;
         ctx.globalAlpha = 1;
       } else if (isSolid) {
-        ctx.fillStyle = palette.textOnAccent;
+        ctx.fillStyle = accentTextColor;
         ctx.globalAlpha = 1;
       } else {
         ctx.fillStyle = palette.text;
@@ -1788,6 +1791,57 @@ function resolveExpertPalette(themeClassName?: string): ExpertPalette {
     edgeHighlight: getVar('--color-bg-link', DEFAULT_PALETTE.edgeHighlight),
     roleEdge: withAlpha(getVar('--color-bg-alert', DEFAULT_PALETTE.role), 0.45)
   };
+}
+
+function getReadableTextColor(backgroundColor: string, palette: ExpertPalette): string {
+  const rgb = parseColor(backgroundColor);
+  if (!rgb) {
+    return palette.textOnAccent;
+  }
+
+  const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+  return brightness > 180 ? palette.text : palette.textOnAccent;
+}
+
+function parseColor(color: string): RGBColor | null {
+  const trimmed = color.trim();
+
+  if (trimmed.startsWith('#')) {
+    const hex = trimmed.slice(1);
+    if (hex.length === 3) {
+      const r = Number.parseInt(hex[0] + hex[0], 16);
+      const g = Number.parseInt(hex[1] + hex[1], 16);
+      const b = Number.parseInt(hex[2] + hex[2], 16);
+      return { r, g, b };
+    }
+    if (hex.length === 6) {
+      const numeric = Number.parseInt(hex, 16);
+      return {
+        r: (numeric >> 16) & 255,
+        g: (numeric >> 8) & 255,
+        b: numeric & 255
+      };
+    }
+    return null;
+  }
+
+  const rgbMatch = trimmed.match(/rgba?\(([^)]+)\)/);
+  if (!rgbMatch) {
+    return null;
+  }
+
+  const components = rgbMatch[1]
+    .split(',')
+    .map((value) => Number.parseFloat(value.trim()))
+    .slice(0, 3);
+
+  if (components.length < 3 || components.some((component) => Number.isNaN(component))) {
+    return null;
+  }
+
+  const [r, g, b] = components as [number, number, number];
+
+  return { r, g, b };
 }
 
 function withAlpha(color: string, alpha: number) {
