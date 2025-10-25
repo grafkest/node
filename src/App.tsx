@@ -59,10 +59,13 @@ import {
   type DomainNode,
   type GraphLink,
   type Initiative,
+  type InitiativeApprovalStage,
   type InitiativeRequirement,
   type InitiativeRolePlan,
   type InitiativeRoleWork,
   type InitiativeWork,
+  type InitiativeWorkItem,
+  type InitiativeWorkItemStatus,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -72,6 +75,7 @@ import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
 import InitiativePlanner from './components/InitiativePlanner';
 import type { InitiativeCreationRequest } from './types/initiativeCreation';
+import { getSkillNameById } from './data/skills';
 import {
   assignExpertsToWorkItems,
   buildCandidatesFromReport,
@@ -2340,6 +2344,7 @@ function App() {
     (request: InitiativeCreationRequest): Initiative => {
       const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
       const initiativeId = createEntityId('initiative', request.name, existingIds);
+      const expertNameById = new Map(expertProfiles.map((expert) => [expert.id, expert.fullName]));
       const normalizedName = request.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
       const normalizedDescription = request.description.trim() || 'Описание не заполнено';
       const normalizedOwner = request.owner.trim() || 'Ответственный не указан';
@@ -2397,6 +2402,141 @@ function App() {
         };
       });
 
+      const requiredSkillLabels = new Set<string>();
+      const workScheduleLookup = new Map<
+        string,
+        { startDay: number; durationDays: number; roleName: InitiativeRolePlan['role'] }
+      >();
+      roleEntries.forEach((entry) => {
+        entry.draft.skills.forEach((skillId) => {
+          if (!skillId) {
+            return;
+          }
+          requiredSkillLabels.add(getSkillNameById(skillId) ?? skillId);
+        });
+        entry.draft.workItems.forEach((item) => {
+          workScheduleLookup.set(item.id, {
+            startDay: item.startDay,
+            durationDays: item.durationDays,
+            roleName: entry.draft.role
+          });
+          item.tasks.forEach((taskId) => {
+            if (!taskId) {
+              return;
+            }
+            requiredSkillLabels.add(getSkillNameById(taskId) ?? taskId);
+          });
+        });
+      });
+
+      const requiredSkills = Array.from(requiredSkillLabels).sort((a, b) =>
+        a.localeCompare(b, 'ru')
+      );
+
+      const assignedExpertNameByWorkItem = new Map<string, string>();
+      roles.forEach((rolePlan) => {
+        (rolePlan.workItems ?? []).forEach((item) => {
+          if (!item.assignedExpertId) {
+            return;
+          }
+          const expertName = expertNameById.get(item.assignedExpertId) ?? item.assignedExpertId;
+          assignedExpertNameByWorkItem.set(item.id, expertName);
+        });
+      });
+
+      const normalizedWorkItemsFromRequest: InitiativeWorkItem[] = (request.workItems ?? []).map(
+        (item, index) => {
+          const rawId = item.id?.trim() ?? '';
+          const lookupKey = rawId || item.id || '';
+          const schedule = lookupKey ? workScheduleLookup.get(lookupKey) : undefined;
+          const id = rawId || `${initiativeId}-timeline-${index + 1}`;
+          const title = item.title.trim() || `Работа ${index + 1}`;
+          const description = item.description.trim() || 'Описание не заполнено';
+          const ownerCandidate = item.owner.trim();
+          const owner =
+            ownerCandidate ||
+            (lookupKey ? assignedExpertNameByWorkItem.get(lookupKey) : undefined) ||
+            (schedule ? schedule.roleName : undefined) ||
+            normalizedOwner;
+          const timeframeCandidate = item.timeframe.trim();
+          const timeframe =
+            timeframeCandidate ||
+            (schedule
+              ? `Д${schedule.startDay + 1} – Д${schedule.startDay + schedule.durationDays}`
+              : 'Срок не определён');
+          const status = item.status ?? 'discovery';
+
+          return {
+            id,
+            title,
+            description,
+            owner,
+            status,
+            timeframe
+          } satisfies InitiativeWorkItem;
+        }
+      );
+
+      const fallbackStatusOrder: InitiativeWorkItemStatus[] = [
+        'discovery',
+        'design',
+        'pilot',
+        'delivery'
+      ];
+      let fallbackStatusIndex = 0;
+      const fallbackWorkItemMap = new Map<string, InitiativeWorkItem>();
+      roleEntries.forEach((entry) => {
+        entry.draft.workItems.forEach((item) => {
+          if (fallbackWorkItemMap.has(item.id)) {
+            return;
+          }
+          const schedule = workScheduleLookup.get(item.id);
+          const timeframe = schedule
+            ? `Д${schedule.startDay + 1} – Д${schedule.startDay + schedule.durationDays}`
+            : 'Срок не определён';
+          const status =
+            fallbackStatusOrder[
+              Math.min(fallbackStatusOrder.length - 1, fallbackStatusIndex)
+            ];
+          fallbackStatusIndex += 1;
+          fallbackWorkItemMap.set(item.id, {
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            owner: schedule?.roleName ?? entry.draft.role,
+            status,
+            timeframe
+          });
+        });
+      });
+
+      const workItemsSource =
+        normalizedWorkItemsFromRequest.length > 0
+          ? normalizedWorkItemsFromRequest
+          : Array.from(fallbackWorkItemMap.values());
+
+      const workItems: InitiativeWorkItem[] = workItemsSource.filter(
+        (item, index, array) =>
+          array.findIndex((candidate) => candidate.id === item.id) === index
+      );
+
+      const approvalStages: InitiativeApprovalStage[] = [];
+      (request.approvalStages ?? []).forEach((stage, index) => {
+        const trimmedTitle = stage.title.trim();
+        const trimmedApprover = stage.approver.trim();
+        const trimmedComment = stage.comment?.trim() ?? '';
+        if (!trimmedTitle && !trimmedApprover && !trimmedComment) {
+          return;
+        }
+        approvalStages.push({
+          id: stage.id?.trim() || `${initiativeId}-approval-${index + 1}`,
+          title: trimmedTitle || `Этап согласования ${index + 1}`,
+          approver: trimmedApprover || 'Не назначен',
+          status: stage.status ?? 'pending',
+          comment: trimmedComment || undefined
+        });
+      });
+
       const works: InitiativeWork[] = roles.flatMap((rolePlan) =>
         (rolePlan.workItems ?? []).map((item) => ({
           id: `${rolePlan.id}-${item.id}`,
@@ -2420,9 +2560,9 @@ function App() {
         description: normalizedDescription,
         domains,
         plannedModuleIds,
-        requiredSkills: [],
-        workItems: [],
-        approvalStages: [],
+        requiredSkills,
+        workItems,
+        approvalStages,
         status: request.status,
         owner: normalizedOwner,
         expectedImpact: normalizedImpact,

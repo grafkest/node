@@ -1,4 +1,9 @@
-import type { InitiativeStatus, TeamRole } from '../data';
+import type {
+  InitiativeApprovalStatus,
+  InitiativeStatus,
+  InitiativeWorkItemStatus,
+  TeamRole
+} from '../data';
 
 export type InitiativeCreationWorkTaskDraft = {
   id: string;
@@ -15,6 +20,23 @@ export type InitiativeCreationWorkDraft = {
   durationDays: number;
   effortDays: number;
   tasks: InitiativeCreationWorkTaskDraft[];
+};
+
+export type InitiativeCreationWorkItemDraft = {
+  id: string;
+  title: string;
+  description: string;
+  owner: string;
+  timeframe: string;
+  status: InitiativeWorkItemStatus;
+};
+
+export type InitiativeCreationApprovalStageDraft = {
+  id: string;
+  title: string;
+  approver: string;
+  status: InitiativeApprovalStatus;
+  comment?: string;
 };
 
 export type InitiativeCreationRoleDraft = {
@@ -45,4 +67,6 @@ export type InitiativeCreationRequest = {
   potentialModules: string[];
   customer: InitiativeCustomerDraft;
   roles: InitiativeCreationRoleDraft[];
+  workItems: InitiativeCreationWorkItemDraft[];
+  approvalStages: InitiativeCreationApprovalStageDraft[];
 };

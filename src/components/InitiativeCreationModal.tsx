@@ -8,7 +8,14 @@ import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { domainNameById, domainTree, modules } from '../data';
-import type { DomainNode, ExpertProfile, InitiativeStatus, TeamRole } from '../data';
+import type {
+  DomainNode,
+  ExpertProfile,
+  InitiativeApprovalStatus,
+  InitiativeStatus,
+  InitiativeWorkItemStatus,
+  TeamRole
+} from '../data';
 import { getSkillNameById, getSkillsByRole } from '../data/skills';
 import InitiativeGanttChart, {
   type InitiativeGanttBlocker,
@@ -108,7 +115,18 @@ type WorkDraft = {
   title: string;
   description: string;
   assumptions: string;
+  owner: string;
+  timeframe: string;
+  status: InitiativeWorkItemStatus;
   assignments: WorkAssignmentDraft[];
+};
+
+type ApprovalStageDraft = {
+  id: string;
+  title: string;
+  approver: string;
+  status: InitiativeApprovalStatus;
+  comment: string;
 };
 
 type CreationStep = 'details' | 'work' | 'team';
@@ -138,6 +156,19 @@ const roleOptions: SelectOption<TeamRole>[] = [
   { label: 'Тестировщик', value: 'Тестировщик' },
   { label: 'Руководитель проекта', value: 'Руководитель проекта' },
   { label: 'UX', value: 'UX' }
+];
+
+const workItemStatusOptions: SelectOption<InitiativeWorkItemStatus>[] = [
+  { label: 'Исследование', value: 'discovery' },
+  { label: 'Проектирование', value: 'design' },
+  { label: 'Пилот', value: 'pilot' },
+  { label: 'Внедрение', value: 'delivery' }
+];
+
+const approvalStatusOptions: SelectOption<InitiativeApprovalStatus>[] = [
+  { label: 'Ожидание', value: 'pending' },
+  { label: 'В работе', value: 'in-progress' },
+  { label: 'Одобрено', value: 'approved' }
 ];
 
 const creationStepOrder: CreationStep[] = ['details', 'work', 'team'];
@@ -181,7 +212,18 @@ const createWorkDraft = (offset = 0): WorkDraft => ({
   title: '',
   description: '',
   assumptions: '',
+  owner: '',
+  timeframe: '',
+  status: 'discovery',
   assignments: [createWorkAssignmentDraft(roleOptions[0].value, offset)]
+});
+
+const createApprovalStageDraft = (): ApprovalStageDraft => ({
+  id: createId(),
+  title: '',
+  approver: '',
+  status: 'pending',
+  comment: ''
 });
 
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
@@ -244,6 +286,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
   const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft()]);
+  const [approvalStages, setApprovalStages] = useState<ApprovalStageDraft[]>([
+    createApprovalStageDraft()
+  ]);
   const [activeStep, setActiveStep] = useState<CreationStep>('details');
   const baseRoleSkillOptions = useMemo<Record<TeamRole, OptionItem[]>>(
     () =>
@@ -297,6 +342,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setCustomerContact('');
       setCustomerComment('');
       setWorks([createWorkDraft()]);
+      setApprovalStages([createApprovalStageDraft()]);
       setRoleSkillOptions(createRoleSkillState());
       setActiveStep('details');
     }
@@ -599,6 +645,31 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const draftPayload = useMemo<InitiativeCreationRequest>(
     () => {
       const workLookup = new Map(works.map((work) => [work.id, work]));
+      const workItemsPayload = works.map((work) => ({
+        id: work.id,
+        title: work.title.trim(),
+        description: work.description.trim(),
+        owner: work.owner.trim(),
+        timeframe: work.timeframe.trim(),
+        status: work.status
+      }));
+      const approvalStagePayload = approvalStages
+        .map((stage) => {
+          const title = stage.title.trim();
+          const approver = stage.approver.trim();
+          const comment = stage.comment.trim();
+          if (!title && !approver && !comment) {
+            return null;
+          }
+          return {
+            id: stage.id,
+            title,
+            approver,
+            status: stage.status,
+            comment: comment || undefined
+          };
+        })
+        .filter((stage): stage is NonNullable<typeof stage> => stage !== null);
       return {
         name: name.trim(),
         description: description.trim(),
@@ -646,10 +717,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
             skills: role.skills,
             workItems
           };
-        })
+        }),
+        workItems: workItemsPayload,
+        approvalStages: approvalStagePayload
       };
     },
     [
+      approvalStages,
       customerComment,
       customerContact,
       customerRepresentative,
@@ -811,6 +885,25 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 
   const handleAddWork = () => {
     setWorks((prev) => [...prev, createWorkDraft(prev.length * 5)]);
+  };
+
+  const handleApprovalStageChange = (
+    stageId: string,
+    patch: Partial<ApprovalStageDraft>
+  ) => {
+    setApprovalStages((prev) =>
+      prev.map((stage) => (stage.id === stageId ? { ...stage, ...patch } : stage))
+    );
+  };
+
+  const handleAddApprovalStage = () => {
+    setApprovalStages((prev) => [...prev, createApprovalStageDraft()]);
+  };
+
+  const handleRemoveApprovalStage = (stageId: string) => {
+    setApprovalStages((prev) =>
+      prev.length <= 1 ? prev : prev.filter((stage) => stage.id !== stageId)
+    );
   };
 
   const handleRemoveWork = (workId: string) => {
@@ -1114,6 +1207,87 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   minRows={2}
                 />
               </section>
+              <section className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <Text size="s" weight="semibold">
+                    Этапы согласования
+                  </Text>
+                  <Button
+                    size="s"
+                    view="ghost"
+                    label="Добавить этап"
+                    onClick={handleAddApprovalStage}
+                  />
+                </div>
+                <div className={styles.workList}>
+                  {approvalStages.map((stage) => {
+                    const statusOption =
+                      approvalStatusOptions.find((option) => option.value === stage.status) ??
+                      approvalStatusOptions[0];
+                    return (
+                      <Card
+                        key={stage.id}
+                        className={styles.workCard}
+                        verticalSpace="l"
+                        horizontalSpace="l"
+                      >
+                        <div className={styles.workHeader}>
+                          <TextField
+                            size="s"
+                            label="Название этапа"
+                            placeholder="Например, Архитектурный комитет"
+                            value={stage.title}
+                            onChange={(value) =>
+                              handleApprovalStageChange(stage.id, { title: value ?? '' })
+                            }
+                          />
+                          <Button
+                            size="s"
+                            view="ghost"
+                            label="Удалить"
+                            onClick={() => handleRemoveApprovalStage(stage.id)}
+                            disabled={approvalStages.length <= 1}
+                          />
+                        </div>
+                        <div className={styles.gridTwoCols}>
+                          <TextField
+                            size="s"
+                            label="Согласующий"
+                            placeholder="ФИО или роль"
+                            value={stage.approver}
+                            onChange={(value) =>
+                              handleApprovalStageChange(stage.id, { approver: value ?? '' })
+                            }
+                          />
+                          <Select<SelectOption<InitiativeApprovalStatus>>
+                            size="s"
+                            label="Статус"
+                            items={approvalStatusOptions}
+                            value={statusOption}
+                            getItemLabel={(item) => item.label}
+                            getItemKey={(item) => item.value}
+                            onChange={(option) =>
+                              option &&
+                              handleApprovalStageChange(stage.id, { status: option.value })
+                            }
+                          />
+                        </div>
+                        <TextField
+                          size="s"
+                          label="Комментарий"
+                          placeholder="Дополнительные детали или требования"
+                          value={stage.comment}
+                          onChange={(value) =>
+                            handleApprovalStageChange(stage.id, { comment: value ?? '' })
+                          }
+                          type="textarea"
+                          minRows={2}
+                        />
+                      </Card>
+                    );
+                  })}
+                </div>
+              </section>
             </>
           )}
           {activeStep === 'work' && (
@@ -1192,6 +1366,38 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                             onChange={(value) => handleWorkChange(work.id, { assumptions: value ?? '' })}
                             type="textarea"
                             minRows={2}
+                          />
+                          <div className={styles.gridTwoCols}>
+                            <TextField
+                              size="s"
+                              label="Ответственный за этап"
+                              placeholder="ФИО или роль"
+                              value={work.owner}
+                              onChange={(value) => handleWorkChange(work.id, { owner: value ?? '' })}
+                            />
+                            <TextField
+                              size="s"
+                              label="Период / таймфрейм"
+                              placeholder="Например, Q1 2025"
+                              value={work.timeframe}
+                              onChange={(value) =>
+                                handleWorkChange(work.id, { timeframe: value ?? '' })
+                              }
+                            />
+                          </div>
+                          <Select<SelectOption<InitiativeWorkItemStatus>>
+                            size="s"
+                            label="Статус этапа"
+                            items={workItemStatusOptions}
+                            value={
+                              workItemStatusOptions.find((option) => option.value === work.status) ??
+                              workItemStatusOptions[0]
+                            }
+                            getItemLabel={(item) => item.label}
+                            getItemKey={(item) => item.value}
+                            onChange={(option) =>
+                              option && handleWorkChange(work.id, { status: option.value })
+                            }
                           />
                           <Text size="xs" view="secondary" className={styles.workTiming}>
                             {hasAssignments
