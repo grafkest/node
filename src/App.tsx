@@ -24,7 +24,6 @@ import DomainTree from './components/DomainTree';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
-  type InitiativeDraftPayload,
   type ModuleDraftPayload,
   type ModuleDraftPrefillRequest
 } from './components/AdminPanel';
@@ -57,12 +56,16 @@ import {
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
+  type ExpertSkill,
   type GraphLink,
   type Initiative,
+  type InitiativeApprovalStage,
   type InitiativeRequirement,
   type InitiativeRolePlan,
   type InitiativeRoleWork,
   type InitiativeWork,
+  type InitiativeWorkItem,
+  type InitiativeWorkItemStatus,
   type ModuleMetrics,
   type ModuleNode,
   type ModuleStatus,
@@ -72,6 +75,7 @@ import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
 import InitiativePlanner from './components/InitiativePlanner';
 import type { InitiativeCreationRequest } from './types/initiativeCreation';
+import { getSkillNameById } from './data/skills';
 import {
   assignExpertsToWorkItems,
   buildCandidatesFromReport,
@@ -83,6 +87,7 @@ import { preparePlannerModuleSelections } from './utils/initiativePlanner';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
+const MAX_LAYOUT_SPAN = 1800;
 
 const StatsDashboard = lazy(async () => ({
   default: (await import('./components/StatsDashboard')).default
@@ -104,6 +109,9 @@ type AdminNotice = {
   message: string;
 };
 
+const isAnalyticsPanelEnabled =
+  (import.meta.env.VITE_ENABLE_ANALYTICS_PANEL ?? 'true').toLowerCase() !== 'false';
+
 function App() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
   const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
@@ -115,7 +123,7 @@ function App() {
   );
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
   const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
-  const [expertProfiles] = useState(initialExperts);
+  const [expertProfiles, setExpertProfiles] = useState(initialExperts);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
   );
@@ -152,6 +160,7 @@ function App() {
     setModuleDraftPrefill(null);
   }, []);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
+  const [layoutNormalizationRequest, setLayoutNormalizationRequest] = useState(0);
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
@@ -170,6 +179,11 @@ function App() {
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
+  const handleUpdateExpertSkills = useCallback((expertId: string, skills: ExpertSkill[]) => {
+    setExpertProfiles((prev) =>
+      prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
+    );
+  }, []);
   useLayoutEffect(() => {
     const element = sidebarRef.current;
     if (!element) {
@@ -264,6 +278,7 @@ function App() {
       setCompanyFilter(null);
       setSelectedDomains(new Set(domainIds));
       let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
+      let shouldRequestLayoutNormalization = false;
       setLayoutPositions((prev) => {
         const serverPositions = snapshot.layout?.nodes ?? {};
         const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
@@ -273,6 +288,14 @@ function App() {
           if (layoutsEqual(prev, prunedServerPositions)) {
             resolvedLayoutPositions = prev;
             return prev;
+          }
+          const { positions: normalizedInitial, changed: initialAdjusted } = normalizeLayoutPositions(
+            prunedServerPositions
+          );
+          if (initialAdjusted) {
+            shouldRequestLayoutNormalization = true;
+            resolvedLayoutPositions = normalizedInitial;
+            return normalizedInitial;
           }
           resolvedLayoutPositions = prunedServerPositions;
           return prunedServerPositions;
@@ -292,17 +315,39 @@ function App() {
           }
         });
 
-        const nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        let nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        const layoutNodeCount = Object.keys(nextLayout).length;
+        if (layoutNodeCount !== activeNodeIds.size) {
+          shouldRequestLayoutNormalization = true;
+        }
+
+        const { positions: normalizedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
+          nextLayout
+        );
+
+        if (layoutAdjusted) {
+          shouldRequestLayoutNormalization = true;
+          resolvedLayoutPositions = normalizedLayout;
+          return normalizedLayout;
+        }
+
         resolvedLayoutPositions = nextLayout;
         return nextLayout;
       });
       const nextLayoutPositions = resolvedLayoutPositions ?? {};
-      shouldCaptureEngineLayoutRef.current = needsEngineLayoutCapture(
-        nextLayoutPositions,
-        activeNodeIds
-      );
+      const needsEngineCapture = needsEngineLayoutCapture(nextLayoutPositions, activeNodeIds);
+      shouldCaptureEngineLayoutRef.current = needsEngineCapture;
+      if (needsEngineCapture) {
+        shouldRequestLayoutNormalization = true;
+      }
+      if (shouldRequestLayoutNormalization) {
+        hasPendingPersistRef.current = true;
+        setLayoutNormalizationRequest((prev) => prev + 1);
+      }
       hasLoadedSnapshotRef.current = true;
-      hasPendingPersistRef.current = false;
+      if (!shouldRequestLayoutNormalization) {
+        hasPendingPersistRef.current = false;
+      }
     },
     []
   );
@@ -646,15 +691,34 @@ function App() {
         });
       });
 
+      const moduleCandidates = [
+        ...initiative.plannedModuleIds,
+        ...initiative.potentialModules
+      ];
+      const linkedModule = moduleCandidates
+        .map((moduleId) => moduleData.find((module) => module.id === moduleId))
+        .find((module): module is ModuleNode => Boolean(module));
+
+      const productName = linkedModule?.productName?.trim()
+        ? linkedModule.productName
+        : initiative.targetModuleName;
+
       moduleDraftPrefillIdRef.current += 1;
+      const prefillDraft: Partial<ModuleDraftPayload> = {};
+      if (!linkedModule) {
+        prefillDraft.name = initiative.targetModuleName;
+        prefillDraft.productName = productName;
+        prefillDraft.domainIds = initiative.domains;
+      }
+      if (team.length > 0) {
+        prefillDraft.projectTeam = team;
+      }
+
       setModuleDraftPrefill({
         id: moduleDraftPrefillIdRef.current,
-        draft: {
-          name: initiative.targetModuleName,
-          productName: initiative.targetModuleName,
-          domainIds: initiative.domains,
-          projectTeam: team
-        }
+        mode: linkedModule ? 'edit' : 'create',
+        moduleId: linkedModule?.id,
+        draft: prefillDraft
       });
 
       patchInitiative(initiativeId, (current) => {
@@ -673,6 +737,7 @@ function App() {
     [
       initiativeData,
       expertProfiles,
+      moduleData,
       patchInitiative,
       setViewMode,
       showAdminNotice,
@@ -829,6 +894,16 @@ function App() {
 
     hasPendingPersistRef.current = false;
 
+    const { positions: constrainedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
+      layoutPositions
+    );
+
+    if (layoutAdjusted) {
+      setLayoutPositions(constrainedLayout);
+      hasPendingPersistRef.current = true;
+      return;
+    }
+
     const controller = new AbortController();
     let cancelled = false;
 
@@ -851,7 +926,7 @@ function App() {
         domains: domainData,
         artifacts: artifactData,
         initiatives: initiativeData,
-        layout: { nodes: layoutPositions }
+        layout: { nodes: constrainedLayout }
       },
       controller.signal
     )
@@ -931,6 +1006,8 @@ function App() {
     [moduleData, matchesModuleFilters]
   );
 
+  const shouldShowAnalytics = isAnalyticsPanelEnabled && filteredModules.length > 0;
+
   const artifactMap = useMemo(
     () => new Map(artifactData.map((artifact) => [artifact.id, artifact])),
     [artifactData]
@@ -947,7 +1024,6 @@ function App() {
     });
     return map;
   }, [moduleData]);
-  const moduleIdSet = useMemo(() => new Set(moduleData.map((module) => module.id)), [moduleData]);
 
   const graphSelectOptions = useMemo(
     () =>
@@ -1556,13 +1632,21 @@ function App() {
         const ensuredActiveIds = new Set(activeNodeIds);
         Object.keys(positions).forEach((id) => ensuredActiveIds.add(id));
         const pruned = pruneLayoutPositions(merged, ensuredActiveIds);
-        if (layoutsEqual(prev, pruned)) {
+        const { positions: constrained, changed: adjusted } = normalizeLayoutPositions(pruned);
+        const nextLayout = adjusted ? constrained : pruned;
+        if (layoutsEqual(prev, nextLayout)) {
           return prev;
         }
         didChange = true;
-        return pruned;
+        if (adjusted) {
+          setLayoutNormalizationRequest((value) => value + 1);
+        }
+        return nextLayout;
       });
 
+      if (didChange) {
+        hasPendingPersistRef.current = true;
+      }
       if (didChange && reason === 'drag') {
         markGraphDirty();
       }
@@ -2296,50 +2380,11 @@ function App() {
     [artifactData, markGraphDirty, showAdminNotice]
   );
 
-  const handleCreateInitiative = useCallback(
-    (draft: InitiativeDraftPayload) => {
-      const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
-      const initiativeId = createEntityId('initiative', draft.name, existingIds);
-      const fallbackName = draft.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
-      const defaults = {
-        name: fallbackName,
-        description: draft.description.trim() || 'Описание не заполнено',
-        owner: draft.owner.trim() || 'Ответственный не указан',
-        expectedImpact: draft.expectedImpact.trim() || 'Эффект не оценён',
-        status: draft.status,
-        targetModuleName: fallbackName,
-        plannedModuleIds: [],
-        requiredSkills: [],
-        workItems: [],
-        approvalStages: [],
-        roles: [],
-        risks: [],
-        potentialModules: [],
-        works: [],
-        requirements: [],
-        lastUpdated: new Date().toISOString(),
-        customer: undefined
-      } as const;
-
-      const initiative = buildInitiativeFromDraft(
-        initiativeId,
-        draft,
-        displayableDomainIdSet,
-        moduleIdSet,
-        defaults
-      );
-
-      markGraphDirty();
-      setInitiativeData((prev) => [...prev, initiative]);
-      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
-    },
-    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
-  );
-
   const handlePlannerCreateInitiative = useCallback(
     (request: InitiativeCreationRequest): Initiative => {
       const existingIds = new Set(initiativeData.map((initiative) => initiative.id));
       const initiativeId = createEntityId('initiative', request.name, existingIds);
+      const expertNameById = new Map(expertProfiles.map((expert) => [expert.id, expert.fullName]));
       const normalizedName = request.name.trim() || `Новая инициатива ${existingIds.size + 1}`;
       const normalizedDescription = request.description.trim() || 'Описание не заполнено';
       const normalizedOwner = request.owner.trim() || 'Ответственный не указан';
@@ -2349,6 +2394,263 @@ function App() {
       const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
         request.potentialModules
       );
+      const roleEntries = request.roles.map((role, index) => {
+        const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
+        const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
+          id: item.id?.trim() || `${roleId}-work-${workIndex + 1}`,
+          title: item.title.trim() || `Работа ${workIndex + 1}`,
+          description: item.description.trim() || 'Описание не заполнено',
+          startDay: Math.max(0, Math.round(item.startDay)),
+          durationDays: Math.max(1, Math.round(item.durationDays)),
+          effortDays: Math.max(1, Math.round(item.effortDays)),
+          tasks: (item.tasks ?? [])
+            .map((task) => task.skill.trim())
+            .filter(Boolean)
+        }));
+
+        return {
+          draft: {
+            id: roleId,
+            role: role.role,
+            required: Math.max(1, Math.round(role.required)),
+            skills: role.skills.map((skill) => skill.trim()).filter(Boolean),
+            workItems: sanitizedWorkItems
+          } satisfies RolePlanningDraft,
+          comment: role.comment?.trim() || undefined
+        };
+      });
+
+      const planningRoles = roleEntries.map((entry) => entry.draft);
+      const matchReports = buildRoleMatchReports(planningRoles, expertProfiles);
+
+      const roles: InitiativeRolePlan[] = planningRoles.map((planningRole, index) => {
+        const report = matchReports[index];
+        const candidates = buildCandidatesFromReport(report);
+        const pinnedExpertIds = selectPinnedExperts(candidates, planningRole.required);
+        const workItems: InitiativeRoleWork[] = assignExpertsToWorkItems(
+          planningRole.workItems,
+          pinnedExpertIds
+        );
+
+        return {
+          id: planningRole.id,
+          role: planningRole.role,
+          required: planningRole.required,
+          pinnedExpertIds,
+          candidates,
+          workItems
+        };
+      });
+
+      const requiredSkillLabels = new Set<string>();
+      const workScheduleLookup = new Map<
+        string,
+        { startDay: number; durationDays: number; roleName: InitiativeRolePlan['role'] }
+      >();
+      roleEntries.forEach((entry) => {
+        entry.draft.skills.forEach((skillId) => {
+          if (!skillId) {
+            return;
+          }
+          requiredSkillLabels.add(getSkillNameById(skillId) ?? skillId);
+        });
+        entry.draft.workItems.forEach((item) => {
+          workScheduleLookup.set(item.id, {
+            startDay: item.startDay,
+            durationDays: item.durationDays,
+            roleName: entry.draft.role
+          });
+          item.tasks.forEach((taskId) => {
+            if (!taskId) {
+              return;
+            }
+            requiredSkillLabels.add(getSkillNameById(taskId) ?? taskId);
+          });
+        });
+      });
+
+      const requiredSkills = Array.from(requiredSkillLabels).sort((a, b) =>
+        a.localeCompare(b, 'ru')
+      );
+
+      const assignedExpertNameByWorkItem = new Map<string, string>();
+      roles.forEach((rolePlan) => {
+        (rolePlan.workItems ?? []).forEach((item) => {
+          if (!item.assignedExpertId) {
+            return;
+          }
+          const expertName = expertNameById.get(item.assignedExpertId) ?? item.assignedExpertId;
+          assignedExpertNameByWorkItem.set(item.id, expertName);
+        });
+      });
+
+      const normalizedWorkItemsFromRequest: InitiativeWorkItem[] = (request.workItems ?? []).map(
+        (item, index) => {
+          const rawId = item.id?.trim() ?? '';
+          const lookupKey = rawId || item.id || '';
+          const schedule = lookupKey ? workScheduleLookup.get(lookupKey) : undefined;
+          const id = rawId || `${initiativeId}-timeline-${index + 1}`;
+          const title = item.title.trim() || `Работа ${index + 1}`;
+          const description = item.description.trim() || 'Описание не заполнено';
+          const ownerCandidate = item.owner.trim();
+          const owner =
+            ownerCandidate ||
+            (lookupKey ? assignedExpertNameByWorkItem.get(lookupKey) : undefined) ||
+            (schedule ? schedule.roleName : undefined) ||
+            normalizedOwner;
+          const timeframeCandidate = item.timeframe.trim();
+          const timeframe =
+            timeframeCandidate ||
+            (schedule
+              ? `Д${schedule.startDay + 1} – Д${schedule.startDay + schedule.durationDays}`
+              : 'Срок не определён');
+          const status = item.status ?? 'discovery';
+
+          return {
+            id,
+            title,
+            description,
+            owner,
+            status,
+            timeframe
+          } satisfies InitiativeWorkItem;
+        }
+      );
+
+      const fallbackStatusOrder: InitiativeWorkItemStatus[] = [
+        'discovery',
+        'design',
+        'pilot',
+        'delivery'
+      ];
+      let fallbackStatusIndex = 0;
+      const fallbackWorkItemMap = new Map<string, InitiativeWorkItem>();
+      roleEntries.forEach((entry) => {
+        entry.draft.workItems.forEach((item) => {
+          if (fallbackWorkItemMap.has(item.id)) {
+            return;
+          }
+          const schedule = workScheduleLookup.get(item.id);
+          const timeframe = schedule
+            ? `Д${schedule.startDay + 1} – Д${schedule.startDay + schedule.durationDays}`
+            : 'Срок не определён';
+          const status =
+            fallbackStatusOrder[
+              Math.min(fallbackStatusOrder.length - 1, fallbackStatusIndex)
+            ];
+          fallbackStatusIndex += 1;
+          fallbackWorkItemMap.set(item.id, {
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            owner: schedule?.roleName ?? entry.draft.role,
+            status,
+            timeframe
+          });
+        });
+      });
+
+      const workItemsSource =
+        normalizedWorkItemsFromRequest.length > 0
+          ? normalizedWorkItemsFromRequest
+          : Array.from(fallbackWorkItemMap.values());
+
+      const workItems: InitiativeWorkItem[] = workItemsSource.filter(
+        (item, index, array) =>
+          array.findIndex((candidate) => candidate.id === item.id) === index
+      );
+
+      const approvalStages: InitiativeApprovalStage[] = [];
+      (request.approvalStages ?? []).forEach((stage, index) => {
+        const trimmedTitle = stage.title.trim();
+        const trimmedApprover = stage.approver.trim();
+        const trimmedComment = stage.comment?.trim() ?? '';
+        if (!trimmedTitle && !trimmedApprover && !trimmedComment) {
+          return;
+        }
+        approvalStages.push({
+          id: stage.id?.trim() || `${initiativeId}-approval-${index + 1}`,
+          title: trimmedTitle || `Этап согласования ${index + 1}`,
+          approver: trimmedApprover || 'Не назначен',
+          status: stage.status ?? 'pending',
+          comment: trimmedComment || undefined
+        });
+      });
+
+      const works: InitiativeWork[] = roles.flatMap((rolePlan) =>
+        (rolePlan.workItems ?? []).map((item) => ({
+          id: `${rolePlan.id}-${item.id}`,
+          title: item.title,
+          description: item.description,
+          effortHours: Math.max(0, Math.round(item.effortDays)) * 8
+        }))
+      );
+
+      const requirements: InitiativeRequirement[] = roleEntries.map((entry) => ({
+        id: `${entry.draft.id}-req`,
+        role: entry.draft.role,
+        skills: entry.draft.skills,
+        count: entry.draft.required,
+        comment: entry.comment
+      }));
+
+      const initiative: Initiative = {
+        id: initiativeId,
+        name: normalizedName,
+        description: normalizedDescription,
+        domains,
+        plannedModuleIds,
+        requiredSkills,
+        workItems,
+        approvalStages,
+        status: request.status,
+        owner: normalizedOwner,
+        expectedImpact: normalizedImpact,
+        targetModuleName: normalizedTarget,
+        lastUpdated: new Date().toISOString(),
+        risks: [],
+        roles,
+        potentialModules,
+        works,
+        requirements,
+        customer: {
+          companies: request.customer.companies
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+          units: request.customer.units
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+          representative: request.customer.representative.trim(),
+          contact: request.customer.contact.trim(),
+          comment: request.customer.comment?.trim() || undefined
+        }
+      };
+
+      markGraphDirty();
+      setInitiativeData((prev) => [...prev, initiative]);
+      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
+      return initiative;
+    },
+    [expertProfiles, initiativeData, markGraphDirty, showAdminNotice]
+  );
+
+  const handlePlannerUpdateInitiative = useCallback(
+    (initiativeId: string, request: InitiativeCreationRequest): Initiative => {
+      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
+      if (!existing) {
+        throw new Error('Инициатива не найдена. Обновление невозможно.');
+      }
+
+      const normalizedName = request.name.trim() || existing.name;
+      const normalizedDescription = request.description.trim() || existing.description;
+      const normalizedOwner = request.owner.trim() || existing.owner;
+      const normalizedImpact = request.expectedImpact.trim() || existing.expectedImpact;
+      const normalizedTarget = request.targetModuleName.trim() || existing.targetModuleName;
+      const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
+      const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
+        request.potentialModules
+      );
+
       const roleEntries = request.roles.map((role, index) => {
         const roleId = role.id?.trim() || `${initiativeId}-role-${index + 1}`;
         const sanitizedWorkItems = role.workItems.map((item, workIndex) => ({
@@ -2414,21 +2716,17 @@ function App() {
         comment: entry.comment
       }));
 
-      const initiative: Initiative = {
-        id: initiativeId,
+      const updated: Initiative = {
+        ...existing,
         name: normalizedName,
         description: normalizedDescription,
         domains,
         plannedModuleIds,
-        requiredSkills: [],
-        workItems: [],
-        approvalStages: [],
         status: request.status,
         owner: normalizedOwner,
         expectedImpact: normalizedImpact,
         targetModuleName: normalizedTarget,
         lastUpdated: new Date().toISOString(),
-        risks: [],
         roles,
         potentialModules,
         works,
@@ -2443,69 +2741,13 @@ function App() {
       };
 
       markGraphDirty();
-      setInitiativeData((prev) => [...prev, initiative]);
-      showAdminNotice('success', `Инициатива «${initiative.name}» создана.`);
-      return initiative;
-    },
-    [expertProfiles, initiativeData, markGraphDirty, showAdminNotice]
-  );
-
-  const handleUpdateInitiative = useCallback(
-    (initiativeId: string, draft: InitiativeDraftPayload) => {
-      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
-      if (!existing) {
-        return;
-      }
-
-      const defaults = {
-        name: existing.name,
-        description: existing.description,
-        owner: existing.owner,
-        expectedImpact: existing.expectedImpact,
-        status: existing.status,
-        targetModuleName: existing.targetModuleName,
-        plannedModuleIds: [...existing.plannedModuleIds],
-        requiredSkills: [...existing.requiredSkills],
-        workItems: [...existing.workItems],
-        approvalStages: [...existing.approvalStages],
-        roles: [...existing.roles],
-        risks: [...existing.risks],
-        potentialModules: [...existing.potentialModules],
-        works: [...existing.works],
-        requirements: [...existing.requirements],
-        lastUpdated: existing.lastUpdated,
-        customer: existing.customer
-      } as const;
-
-      const updated = buildInitiativeFromDraft(
-        initiativeId,
-        draft,
-        displayableDomainIdSet,
-        moduleIdSet,
-        defaults
-      );
-
-      markGraphDirty();
       setInitiativeData((prev) =>
         prev.map((initiative) => (initiative.id === initiativeId ? updated : initiative))
       );
-      showAdminNotice('success', `Инициатива «${updated.name}» обновлена.`);
-    },
-    [displayableDomainIdSet, initiativeData, markGraphDirty, moduleIdSet, showAdminNotice]
-  );
 
-  const handleDeleteInitiative = useCallback(
-    (initiativeId: string) => {
-      const existing = initiativeData.find((initiative) => initiative.id === initiativeId);
-      if (!existing) {
-        return;
-      }
-
-      markGraphDirty();
-      setInitiativeData((prev) => prev.filter((initiative) => initiative.id !== initiativeId));
-      showAdminNotice('success', `Инициатива «${existing.name}» удалена.`);
+      return updated;
     },
-    [initiativeData, markGraphDirty, showAdminNotice]
+    [expertProfiles, initiativeData, markGraphDirty]
   );
 
   const handleImportGraph = useCallback(
@@ -3048,12 +3290,15 @@ function App() {
                 visibleDomainIds={relevantDomainIds}
                 visibleModuleStatuses={statusFilters}
                 layoutPositions={layoutPositions}
+                normalizationRequest={layoutNormalizationRequest}
                 onLayoutChange={handleLayoutChange}
               />
             </div>
-            <div className={styles.analytics}>
-              <AnalyticsPanel modules={filteredModules} domainNameMap={domainNameMap} />
-            </div>
+            {shouldShowAnalytics && (
+              <div className={styles.analytics}>
+                <AnalyticsPanel modules={filteredModules} domainNameMap={domainNameMap} />
+              </div>
+            )}
           </section>
           <aside className={styles.details}>
             <NodeDetails
@@ -3091,9 +3336,11 @@ function App() {
       >
         <ExpertExplorer
           experts={expertProfiles}
+          modules={moduleData}
           moduleNameMap={moduleNameMap}
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
+          onUpdateExpertSkills={handleUpdateExpertSkills}
         />
       </main>
       <main
@@ -3112,6 +3359,7 @@ function App() {
           onStatusChange={handleInitiativeStatusChange}
           onExport={handleInitiativeExport}
           onCreateInitiative={handlePlannerCreateInitiative}
+          onUpdateInitiative={handlePlannerUpdateInitiative}
         />
       </main>
       <main
@@ -3137,7 +3385,6 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
-          initiatives={initiativeData}
           moduleDraftPrefill={moduleDraftPrefill}
           onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
@@ -3149,9 +3396,6 @@ function App() {
           onCreateArtifact={handleCreateArtifact}
           onUpdateArtifact={handleUpdateArtifact}
           onDeleteArtifact={handleDeleteArtifact}
-          onCreateInitiative={handleCreateInitiative}
-          onUpdateInitiative={handleUpdateInitiative}
-          onDeleteInitiative={handleDeleteInitiative}
         />
       </main>
     </Layout>
@@ -3295,136 +3539,6 @@ function buildModuleFromDraft(
   return { module, consumedArtifactIds };
 }
 
-type InitiativeBuildDefaults = {
-  name: string;
-  description: string;
-  owner: string;
-  expectedImpact: string;
-  status: Initiative['status'];
-  targetModuleName?: string;
-  plannedModuleIds?: string[];
-  requiredSkills?: string[];
-  workItems?: Initiative['workItems'];
-  approvalStages?: Initiative['approvalStages'];
-  lastUpdated?: string;
-  risks?: Initiative['risks'];
-  roles?: Initiative['roles'];
-  potentialModules?: string[];
-  works?: Initiative['works'];
-  requirements?: Initiative['requirements'];
-  customer?: Initiative['customer'];
-};
-
-function buildInitiativeFromDraft(
-  initiativeId: string,
-  draft: InitiativeDraftPayload,
-  allowedDomainIds: Set<string>,
-  allowedModuleIds: Set<string>,
-  defaults: InitiativeBuildDefaults
-): Initiative {
-  const normalizedName = draft.name.trim() || defaults.name;
-  const normalizedDescription = draft.description.trim() || defaults.description;
-  const normalizedOwner = draft.owner.trim() || defaults.owner;
-  const normalizedImpact = draft.expectedImpact.trim() || defaults.expectedImpact;
-  const normalizedStatus = draft.status ?? defaults.status;
-
-  const domains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
-  const draftModuleIds = deduplicateNonEmpty(draft.moduleIds).filter((id) =>
-    allowedModuleIds.has(id)
-  );
-  const potentialModules =
-    draftModuleIds.length > 0
-      ? draftModuleIds
-      : deduplicateNonEmpty(defaults.potentialModules ?? []).filter((id) =>
-          allowedModuleIds.has(id)
-        );
-  const plannedModuleIds =
-    draftModuleIds.length > 0
-      ? draftModuleIds
-      : deduplicateNonEmpty(defaults.plannedModuleIds ?? []).filter((id) =>
-          allowedModuleIds.has(id)
-        );
-
-  const worksDraft = draft.works.map((work, index) => {
-    const effortValue = Number(work.effortHours);
-    const normalizedEffort = Number.isFinite(effortValue) ? Math.max(0, effortValue) : 0;
-    return {
-      id: work.id.trim() || `work-${index + 1}-${initiativeId}`,
-      title: work.title.trim() || `Работа ${index + 1}`,
-      description: work.description.trim() || 'Описание не заполнено',
-      effortHours: normalizedEffort
-    };
-  });
-  const works =
-    worksDraft.length > 0
-      ? worksDraft
-      : (defaults.works ?? []).map((work) => ({ ...work }));
-
-  const requirementsDraft = draft.requirements.map((requirement, index) => {
-    const countValue = Number(requirement.count);
-    const normalizedCount = Number.isFinite(countValue) ? Math.max(1, Math.round(countValue)) : 1;
-    const skills = deduplicateNonEmpty(requirement.skills.map((skill) => skill.trim()));
-    const comment = requirement.comment?.trim() ?? '';
-    return {
-      id: requirement.id.trim() || `requirement-${index + 1}-${initiativeId}`,
-      role: requirement.role,
-      skills,
-      count: normalizedCount,
-      comment: comment || undefined
-    };
-  });
-  const requirements =
-    requirementsDraft.length > 0
-      ? requirementsDraft
-      : (defaults.requirements ?? []).map((requirement) => ({
-          ...requirement,
-          skills: [...requirement.skills]
-        }));
-
-  const requiredSkillsDraft = deduplicateNonEmpty(
-    requirements.flatMap((requirement) => requirement.skills)
-  );
-  const requiredSkills =
-    requiredSkillsDraft.length > 0 ? requiredSkillsDraft : [...(defaults.requiredSkills ?? [])];
-
-  const normalizedTarget = defaults.targetModuleName?.trim() || normalizedName;
-  const workItems = (defaults.workItems ?? []).map((item) => ({ ...item }));
-  const approvalStages = (defaults.approvalStages ?? []).map((stage) => ({ ...stage }));
-  const risks = (defaults.risks ?? []).map((risk) => ({ ...risk }));
-  const roles = (defaults.roles ?? []).map((role) => ({
-    ...role,
-    pinnedExpertIds: [...role.pinnedExpertIds],
-    candidates: role.candidates.map((candidate) => ({
-      ...candidate,
-      scoreDetails: candidate.scoreDetails.map((detail) => ({ ...detail }))
-    })),
-    workItems: role.workItems?.map((item) => ({ ...item }))
-  }));
-  const customer = defaults.customer ? { ...defaults.customer } : undefined;
-
-  return {
-    id: initiativeId,
-    name: normalizedName,
-    description: normalizedDescription,
-    owner: normalizedOwner,
-    status: normalizedStatus,
-    expectedImpact: normalizedImpact,
-    domains,
-    plannedModuleIds,
-    requiredSkills,
-    workItems,
-    approvalStages,
-    targetModuleName: normalizedTarget,
-    lastUpdated: new Date().toISOString(),
-    risks,
-    roles,
-    potentialModules,
-    works,
-    requirements,
-    customer
-  };
-}
-
 function recalculateReuseScores(modules: ModuleNode[]): ModuleNode[] {
   if (modules.length === 0) {
     return modules;
@@ -3504,6 +3618,104 @@ function buildProductList(modules: ModuleNode[]): string[] {
     }
   });
   return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function normalizeLayoutPositions(
+  positions: Record<string, GraphLayoutNodePosition>,
+  maxSpan = MAX_LAYOUT_SPAN
+): { positions: Record<string, GraphLayoutNodePosition>; changed: boolean } {
+  const entries = Object.entries(positions);
+  if (entries.length === 0) {
+    return { positions, changed: false };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  entries.forEach(([, position]) => {
+    if (!position) {
+      return;
+    }
+
+    if (typeof position.x === 'number' && Number.isFinite(position.x)) {
+      minX = Math.min(minX, position.x);
+      maxX = Math.max(maxX, position.x);
+    }
+
+    if (typeof position.y === 'number' && Number.isFinite(position.y)) {
+      minY = Math.min(minY, position.y);
+      maxY = Math.max(maxY, position.y);
+    }
+  });
+
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+    return { positions, changed: false };
+  }
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const span = Math.max(width, height);
+
+  if (!Number.isFinite(span) || span <= 0 || span <= maxSpan) {
+    return { positions, changed: false };
+  }
+
+  const scale = maxSpan / span;
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return { positions, changed: false };
+  }
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  let changed = false;
+  const normalized: Record<string, GraphLayoutNodePosition> = {};
+
+  entries.forEach(([id, position]) => {
+    if (!position) {
+      return;
+    }
+
+    const { x, y, fx, fy } = position;
+    if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+      normalized[id] = position;
+      return;
+    }
+
+    const normalizedX = roundCoordinate(centerX + (x - centerX) * scale);
+    const normalizedY = roundCoordinate(centerY + (y - centerY) * scale);
+    const next: GraphLayoutNodePosition = { x: normalizedX, y: normalizedY };
+
+    if (typeof fx === 'number' && Number.isFinite(fx)) {
+      const normalizedFx = roundCoordinate(centerX + (fx - centerX) * scale);
+      next.fx = normalizedFx;
+      if (normalizedFx !== fx) {
+        changed = true;
+      }
+    }
+
+    if (typeof fy === 'number' && Number.isFinite(fy)) {
+      const normalizedFy = roundCoordinate(centerY + (fy - centerY) * scale);
+      next.fy = normalizedFy;
+      if (normalizedFy !== fy) {
+        changed = true;
+      }
+    }
+
+    if (normalizedX !== x || normalizedY !== y) {
+      changed = true;
+    }
+
+    normalized[id] = next;
+  });
+
+  if (!changed) {
+    return { positions, changed: false };
+  }
+
+  return { positions: normalized, changed: true };
 }
 
 function needsEngineLayoutCapture(

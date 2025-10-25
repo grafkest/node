@@ -20,7 +20,9 @@ import InitiativeGanttChart, {
   type InitiativeGanttTask
 } from './InitiativeGanttChart';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
+import { buildCreationRequestFromInitiative } from '../utils/initiativePlanner';
 import styles from './InitiativePlanner.module.css';
+import { getSkillNameById } from '../data/skills';
 
 type SelectItem<Value extends string> = {
   label: string;
@@ -40,6 +42,10 @@ type InitiativePlannerProps = {
   onStatusChange: (initiativeId: string, status: InitiativeStatus) => void;
   onExport: (initiativeId: string) => void;
   onCreateInitiative: (draft: InitiativeCreationRequest) => Initiative | Promise<Initiative>;
+  onUpdateInitiative: (
+    initiativeId: string,
+    draft: InitiativeCreationRequest
+  ) => Initiative | Promise<Initiative>;
 };
 
 type CandidateKey = `${string}:${string}`;
@@ -59,6 +65,18 @@ const statusBadgeMeta: Record<InitiativeStatus, { label: string; view: 'system' 
   initiated: { label: 'Инициирована', view: 'warning' },
   'in-progress': { label: 'В работе', view: 'system' },
   converted: { label: 'Конвертирована', view: 'success' }
+};
+
+const resolveWorkItemTaskName = (taskIds: string[] | undefined, fallback: string): string => {
+  if (!taskIds || taskIds.length === 0) {
+    return fallback;
+  }
+  const candidate = taskIds.find((task) => task.trim().length > 0);
+  if (!candidate) {
+    return fallback;
+  }
+  const trimmed = candidate.trim();
+  return getSkillNameById(trimmed) ?? trimmed;
 };
 
 const severityOptions: SeverityOption[] = [
@@ -83,15 +101,19 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   onRemoveRisk,
   onStatusChange,
   onExport,
-  onCreateInitiative
+  onCreateInitiative,
+  onUpdateInitiative
 }) => {
   const [selectedId, setSelectedId] = useState<string | null>(() => initiatives[0]?.id ?? null);
   const [riskDescription, setRiskDescription] = useState('');
   const [riskSeverity, setRiskSeverity] = useState<InitiativeRisk['severity']>('medium');
   const [openCandidates, setOpenCandidates] = useState<Set<CandidateKey>>(new Set());
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreateSubmitting, setIsCreateSubmitting] = useState(false);
-  const [creationError, setCreationError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [modalTargetId, setModalTargetId] = useState<string | null>(null);
+  const [modalInitialDraft, setModalInitialDraft] = useState<InitiativeCreationRequest | null>(null);
+  const [isModalSubmitting, setIsModalSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedId && initiatives.length > 0) {
@@ -138,6 +160,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         const assignedExpertName = item.assignedExpertId
           ? expertMap.get(item.assignedExpertId)?.fullName ?? item.assignedExpertId
           : undefined;
+        const taskName = resolveWorkItemTaskName(item.tasks, item.title);
         const resources: InitiativeGanttResource[] = assignedExpertName
           ? [
               {
@@ -172,7 +195,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
 
         return {
           id: `${role.id}-${item.id}`,
-          name: item.title,
+          name: taskName,
           role: role.role,
           projectId: selectedInitiative.id,
           projectName: selectedInitiative.name,
@@ -198,65 +221,50 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         } satisfies InitiativeGanttTask;
       });
 
-      const subTasks = workTasks.flatMap((task) => {
-        const workItem = role.workItems?.find((item) => `${role.id}-${item.id}` === task.id);
-        const tasks = workItem?.tasks ?? [];
-        if (tasks.length === 0) {
-          return [];
-        }
-        const sliceDuration = Math.max(1, Math.round(task.durationDays / tasks.length));
-        const sliceEffort = Math.max(1, Math.round(task.effortDays / tasks.length));
-        return tasks.map((taskName, idx) => ({
-          id: `${task.id}-sub-${idx + 1}`,
-          name: taskName,
-          role: task.role,
-          projectId: task.projectId,
-          projectName: task.projectName,
-          workId: task.workId,
-          workName: task.workName,
-          parentTaskId: task.id,
-          startDay: task.startDay + idx * sliceDuration,
-          durationDays: sliceDuration,
-          effortDays: sliceEffort,
-          minUnits: task.minUnits,
-          maxUnits: task.maxUnits,
-          canSplit: task.canSplit,
-          parallelAllowed: task.parallelAllowed,
-          durationMode: 'fixed-effort',
-          priority: task.priority,
-          wipLimitTag: task.wipLimitTag,
-          assignedExpert: task.assignedExpert,
-          resources: task.resources,
-          scenarioBranch: task.scenarioBranch
-        } satisfies InitiativeGanttTask));
-      });
-
-      return [...workTasks, ...subTasks];
+      return workTasks;
     });
   }, [expertMap, selectedInitiative]);
 
   const handleOpenCreate = () => {
-    setCreationError(null);
-    setIsCreateModalOpen(true);
+    setModalMode('create');
+    setModalTargetId(null);
+    setModalInitialDraft(null);
+    setModalError(null);
+    setIsModalOpen(true);
   };
 
-  const handleCreateInitiative = useCallback(
+  const handleSubmitModal = useCallback(
     async (draft: InitiativeCreationRequest) => {
       try {
-        setIsCreateSubmitting(true);
-        setCreationError(null);
-        const result = await Promise.resolve(onCreateInitiative(draft));
-        setIsCreateModalOpen(false);
+        setIsModalSubmitting(true);
+        setModalError(null);
+        const result = await Promise.resolve(
+          modalMode === 'edit'
+            ? (() => {
+                if (!modalTargetId) {
+                  throw new Error('Не выбрана инициатива для редактирования.');
+                }
+                return onUpdateInitiative(modalTargetId, draft);
+              })()
+            : onCreateInitiative(draft)
+        );
+        setIsModalOpen(false);
+        setModalInitialDraft(null);
+        setModalTargetId(null);
+        setModalMode('create');
         setSelectedId(result.id);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Не удалось создать инициативу. Попробуйте ещё раз.';
-        setCreationError(message);
+        const fallbackMessage =
+          modalMode === 'edit'
+            ? 'Не удалось обновить инициативу. Попробуйте ещё раз.'
+            : 'Не удалось создать инициативу. Попробуйте ещё раз.';
+        const message = error instanceof Error ? error.message : fallbackMessage;
+        setModalError(message);
       } finally {
-        setIsCreateSubmitting(false);
+        setIsModalSubmitting(false);
       }
     },
-    [onCreateInitiative]
+    [modalMode, modalTargetId, onCreateInitiative, onUpdateInitiative]
   );
 
   const handleToggleCandidateDetails = (candidateId: CandidateKey) => {
@@ -271,15 +279,78 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     });
   };
 
+  const modal = (
+    <InitiativeCreationModal
+      isOpen={isModalOpen}
+      experts={experts}
+      onClose={() => {
+        setIsModalOpen(false);
+        setModalError(null);
+        setModalInitialDraft(null);
+        setModalTargetId(null);
+        setModalMode('create');
+      }}
+      onSubmit={handleSubmitModal}
+      isSubmitting={isModalSubmitting}
+      errorMessage={modalError}
+      mode={modalMode}
+      initialDraft={modalInitialDraft}
+    />
+  );
+
   if (!selectedInitiative) {
     return (
       <section className={styles.container} aria-label="Инициативы">
-        <Text size="s" view="secondary">
-          Инициативы не найдены. Добавьте их в данных графа, чтобы начать планирование команды.
-        </Text>
+        <div className={styles.emptyState}>
+          <Card className={styles.emptyCard} verticalSpace="2xl" horizontalSpace="2xl">
+            <div>
+              <Text size="2xl" weight="bold">
+                Пока нет инициатив для планирования
+              </Text>
+              <Text size="s" view="secondary">
+                Создайте первую инициативу, чтобы сформировать команду и увидеть дорожку планирования работ.
+              </Text>
+            </div>
+            <div className={styles.emptyActions}>
+              <Button size="m" view="primary" label="Создать инициативу" onClick={handleOpenCreate} />
+            </div>
+            <div className={styles.emptyHints}>
+              <div className={styles.emptyHintItem}>
+                <Badge size="xs" view="stroked" label="1" />
+                <Text size="xs" view="secondary">
+                  Добавьте краткое описание и владельца — так участникам будет проще понять контекст.
+                </Text>
+              </div>
+              <div className={styles.emptyHintItem}>
+                <Badge size="xs" view="stroked" label="2" />
+                <Text size="xs" view="secondary">
+                  Укажите домены и требуемые роли, чтобы подобрать подходящих экспертов.
+                </Text>
+              </div>
+              <div className={styles.emptyHintItem}>
+                <Badge size="xs" view="stroked" label="3" />
+                <Text size="xs" view="secondary">
+                  Заполните работы по ролям — после этого появится диаграмма с дорожкой реализации.
+                </Text>
+              </div>
+            </div>
+          </Card>
+        </div>
+        {modal}
       </section>
     );
   }
+
+  const handleOpenEdit = () => {
+    if (!selectedInitiative) {
+      return;
+    }
+    setModalMode('edit');
+    setModalTargetId(selectedInitiative.id);
+    setModalInitialDraft(buildCreationRequestFromInitiative(selectedInitiative));
+    setModalError(null);
+    setIsModalOpen(true);
+  };
 
   const domainLabels = selectedInitiative.domains.map(
     (domainId) => domainNameMap[domainId] ?? domainId
@@ -424,6 +495,13 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
         </div>
         <div className={styles.headerControls}>
           <Button size="s" view="secondary" label="Создать инициативу" onClick={handleOpenCreate} />
+          <Button
+            size="s"
+            view="secondary"
+            label="Редактировать инициативу"
+            onClick={handleOpenEdit}
+            disabled={!selectedInitiative}
+          />
           <Select<SelectItem<string>>
             size="s"
             items={initiativeOptions}
@@ -468,13 +546,21 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
                   <Text size="xs" view="secondary">
                     Компания
                   </Text>
-                  <Text size="s">{selectedInitiative.customer.company || '—'}</Text>
+                  <Text size="s">
+                    {selectedInitiative.customer.companies.length > 0
+                      ? selectedInitiative.customer.companies.join(', ')
+                      : '—'}
+                  </Text>
                 </div>
                 <div>
                   <Text size="xs" view="secondary">
                     Подразделение
                   </Text>
-                  <Text size="s">{selectedInitiative.customer.unit || '—'}</Text>
+                  <Text size="s">
+                    {selectedInitiative.customer.units.length > 0
+                      ? selectedInitiative.customer.units.join(', ')
+                      : '—'}
+                  </Text>
                 </div>
                 <div>
                   <Text size="xs" view="secondary">
@@ -575,17 +661,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
           </aside>
         </div>
       </div>
-      <InitiativeCreationModal
-        isOpen={isCreateModalOpen}
-        experts={experts}
-        onClose={() => {
-          setIsCreateModalOpen(false);
-          setCreationError(null);
-        }}
-        onSubmit={handleCreateInitiative}
-        isSubmitting={isCreateSubmitting}
-        errorMessage={creationError}
-      />
+      {modal}
     </section>
   );
 };

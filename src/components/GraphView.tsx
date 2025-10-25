@@ -38,6 +38,7 @@ type GraphViewProps = {
   visibleDomainIds: Set<string>;
   visibleModuleStatuses: Set<ModuleStatus>;
   layoutPositions: Record<string, GraphLayoutNodePosition>;
+  normalizationRequest?: number;
   onLayoutChange?: (
     positions: Record<string, GraphLayoutNodePosition>,
     reason: LayoutChangeReason
@@ -63,6 +64,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   visibleDomainIds,
   visibleModuleStatuses,
   layoutPositions,
+  normalizationRequest,
   onLayoutChange
 }) => {
   const { theme } = useTheme();
@@ -292,6 +294,24 @@ const GraphView: React.FC<GraphViewProps> = ({
       reheat();
     }
   }, [nodeCount, linkCount]);
+
+  useEffect(() => {
+    if (!normalizationRequest) {
+      return;
+    }
+
+    if (!graphRef.current || nodes.length === 0) {
+      return;
+    }
+
+    const graph = graphRef.current;
+    graph.zoomToFit?.(400, 80);
+
+    const reheat = (graph as ForceGraphMethods & { d3ReheatSimulation?: () => void }).d3ReheatSimulation;
+    if (typeof reheat === 'function') {
+      reheat();
+    }
+  }, [normalizationRequest, nodes.length]);
 
   useEffect(() => {
     return () => {
