@@ -3091,6 +3091,7 @@ function App() {
       >
         <ExpertExplorer
           experts={expertProfiles}
+          modules={moduleData}
           moduleNameMap={moduleNameMap}
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
