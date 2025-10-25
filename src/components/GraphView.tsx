@@ -19,6 +19,8 @@ import type {
 import type { GraphLayoutNodePosition } from '../types/graph';
 import styles from './GraphView.module.css';
 
+const CAMERA_STORAGE_KEY = 'graph-view:camera-main';
+
 type GraphNode =
   | ({ type: 'module' } & ModuleNode)
   | ({ type: 'domain' } & DomainNode)
@@ -53,6 +55,64 @@ type CameraState = {
   zoom: number;
 };
 
+function readStoredCameraState(): CameraState | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawValue = window.sessionStorage.getItem(CAMERA_STORAGE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      'zoom' in parsed &&
+      'center' in parsed &&
+      parsed.center &&
+      typeof (parsed as { zoom: unknown }).zoom === 'number' &&
+      Number.isFinite((parsed as { zoom: number }).zoom) &&
+      (parsed as { zoom: number }).zoom > 0 &&
+      typeof (parsed as { center: { x: unknown } }).center.x === 'number' &&
+      Number.isFinite((parsed as { center: { x: number } }).center.x) &&
+      typeof (parsed as { center: { y: unknown } }).center.y === 'number' &&
+      Number.isFinite((parsed as { center: { y: number } }).center.y)
+    ) {
+      return {
+        zoom: (parsed as { zoom: number }).zoom,
+        center: {
+          x: (parsed as { center: { x: number } }).center.x,
+          y: (parsed as { center: { y: number } }).center.y
+        }
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to read camera state from storage', error);
+  }
+
+  return null;
+}
+
+function writeStoredCameraState(state: CameraState | null): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    if (!state) {
+      window.sessionStorage.removeItem(CAMERA_STORAGE_KEY);
+      return;
+    }
+
+    window.sessionStorage.setItem(CAMERA_STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn('Failed to persist camera state', error);
+  }
+}
+
 const GraphView: React.FC<GraphViewProps> = ({
   modules,
   domains,
@@ -71,11 +131,12 @@ const GraphView: React.FC<GraphViewProps> = ({
   const themeClassName = theme?.className ?? 'default';
 
   const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
+  const initialCameraState = useMemo(() => readStoredCameraState(), []);
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeCacheRef = useRef<Map<string, ForceNode>>(new Map());
   const lastReportedLayoutRef = useRef<string>('');
-  const cameraStateRef = useRef<CameraState | null>(null);
+  const cameraStateRef = useRef<CameraState | null>(initialCameraState);
   const captureTimeoutRef = useRef<number | null>(null);
   const lastFocusedNodeRef = useRef<string | null>(null);
   const hasInitialFitRef = useRef(false);
@@ -342,10 +403,12 @@ const GraphView: React.FC<GraphViewProps> = ({
       typeof center.y === 'number' &&
       Number.isFinite(center.y)
     ) {
-      cameraStateRef.current = {
+      const nextState: CameraState = {
         center: { x: center.x, y: center.y },
         zoom: zoomValue
       };
+      cameraStateRef.current = nextState;
+      writeStoredCameraState(nextState);
     }
   }, [getViewportSize]);
 
@@ -544,10 +607,12 @@ const GraphView: React.FC<GraphViewProps> = ({
       graph.centerAt(target.x, target.y, 400);
       const zoomValue =
         typeof graph.zoom === 'function' ? (graph.zoom() as number) : cameraStateRef.current?.zoom ?? 1;
-      cameraStateRef.current = {
+      const nextState: CameraState = {
         center: { x: target.x, y: target.y },
         zoom: zoomValue
       };
+      cameraStateRef.current = nextState;
+      writeStoredCameraState(nextState);
       scheduleCameraCapture(420);
     }
   }, [getViewportSize, highlightedNode, scheduleCameraCapture]);
@@ -568,10 +633,12 @@ const GraphView: React.FC<GraphViewProps> = ({
       }
       graph.centerAt(node.x, node.y, 400);
 
-      cameraStateRef.current = {
+      const nextState: CameraState = {
         center: { x: node.x, y: node.y },
         zoom: targetZoom
       };
+      cameraStateRef.current = nextState;
+      writeStoredCameraState(nextState);
       lastFocusedNodeRef.current = node.id;
       scheduleCameraCapture(420);
       return true;
@@ -588,6 +655,7 @@ const GraphView: React.FC<GraphViewProps> = ({
     lastFocusedNodeRef.current = null;
     setIsFocusedView(false);
     cameraStateRef.current = null;
+    writeStoredCameraState(null);
     graph.zoomToFit?.(400, 80);
     scheduleCameraCapture(450);
   }, [scheduleCameraCapture]);
@@ -669,13 +737,15 @@ const GraphView: React.FC<GraphViewProps> = ({
         return;
       }
 
-      cameraStateRef.current = {
+      const nextState: CameraState = {
         center: {
           x: (width / 2 - x) / k,
           y: (height / 2 - y) / k
         },
         zoom: k
       };
+      cameraStateRef.current = nextState;
+      writeStoredCameraState(nextState);
     },
     [getViewportSize]
   );
