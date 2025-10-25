@@ -2434,8 +2434,12 @@ function App() {
         works,
         requirements,
         customer: {
-          company: request.customer.company.trim(),
-          unit: request.customer.unit.trim(),
+          companies: request.customer.companies
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+          units: request.customer.units
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
           representative: request.customer.representative.trim(),
           contact: request.customer.contact.trim(),
           comment: request.customer.comment?.trim() || undefined
