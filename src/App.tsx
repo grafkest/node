@@ -87,6 +87,7 @@ import { preparePlannerModuleSelections } from './utils/initiativePlanner';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
+const MAX_LAYOUT_SPAN = 1800;
 
 const StatsDashboard = lazy(async () => ({
   default: (await import('./components/StatsDashboard')).default
@@ -156,6 +157,7 @@ function App() {
     setModuleDraftPrefill(null);
   }, []);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
+  const [layoutNormalizationRequest, setLayoutNormalizationRequest] = useState(0);
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
@@ -273,6 +275,7 @@ function App() {
       setCompanyFilter(null);
       setSelectedDomains(new Set(domainIds));
       let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
+      let shouldRequestLayoutNormalization = false;
       setLayoutPositions((prev) => {
         const serverPositions = snapshot.layout?.nodes ?? {};
         const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
@@ -282,6 +285,14 @@ function App() {
           if (layoutsEqual(prev, prunedServerPositions)) {
             resolvedLayoutPositions = prev;
             return prev;
+          }
+          const { positions: normalizedInitial, changed: initialAdjusted } = normalizeLayoutPositions(
+            prunedServerPositions
+          );
+          if (initialAdjusted) {
+            shouldRequestLayoutNormalization = true;
+            resolvedLayoutPositions = normalizedInitial;
+            return normalizedInitial;
           }
           resolvedLayoutPositions = prunedServerPositions;
           return prunedServerPositions;
@@ -301,17 +312,39 @@ function App() {
           }
         });
 
-        const nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        let nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+        const layoutNodeCount = Object.keys(nextLayout).length;
+        if (layoutNodeCount !== activeNodeIds.size) {
+          shouldRequestLayoutNormalization = true;
+        }
+
+        const { positions: normalizedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
+          nextLayout
+        );
+
+        if (layoutAdjusted) {
+          shouldRequestLayoutNormalization = true;
+          resolvedLayoutPositions = normalizedLayout;
+          return normalizedLayout;
+        }
+
         resolvedLayoutPositions = nextLayout;
         return nextLayout;
       });
       const nextLayoutPositions = resolvedLayoutPositions ?? {};
-      shouldCaptureEngineLayoutRef.current = needsEngineLayoutCapture(
-        nextLayoutPositions,
-        activeNodeIds
-      );
+      const needsEngineCapture = needsEngineLayoutCapture(nextLayoutPositions, activeNodeIds);
+      shouldCaptureEngineLayoutRef.current = needsEngineCapture;
+      if (needsEngineCapture) {
+        shouldRequestLayoutNormalization = true;
+      }
+      if (shouldRequestLayoutNormalization) {
+        hasPendingPersistRef.current = true;
+        setLayoutNormalizationRequest((prev) => prev + 1);
+      }
       hasLoadedSnapshotRef.current = true;
-      hasPendingPersistRef.current = false;
+      if (!shouldRequestLayoutNormalization) {
+        hasPendingPersistRef.current = false;
+      }
     },
     []
   );
@@ -858,6 +891,16 @@ function App() {
 
     hasPendingPersistRef.current = false;
 
+    const { positions: constrainedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
+      layoutPositions
+    );
+
+    if (layoutAdjusted) {
+      setLayoutPositions(constrainedLayout);
+      hasPendingPersistRef.current = true;
+      return;
+    }
+
     const controller = new AbortController();
     let cancelled = false;
 
@@ -880,7 +923,7 @@ function App() {
         domains: domainData,
         artifacts: artifactData,
         initiatives: initiativeData,
-        layout: { nodes: layoutPositions }
+        layout: { nodes: constrainedLayout }
       },
       controller.signal
     )
@@ -1585,13 +1628,21 @@ function App() {
         const ensuredActiveIds = new Set(activeNodeIds);
         Object.keys(positions).forEach((id) => ensuredActiveIds.add(id));
         const pruned = pruneLayoutPositions(merged, ensuredActiveIds);
-        if (layoutsEqual(prev, pruned)) {
+        const { positions: constrained, changed: adjusted } = normalizeLayoutPositions(pruned);
+        const nextLayout = adjusted ? constrained : pruned;
+        if (layoutsEqual(prev, nextLayout)) {
           return prev;
         }
         didChange = true;
-        return pruned;
+        if (adjusted) {
+          setLayoutNormalizationRequest((value) => value + 1);
+        }
+        return nextLayout;
       });
 
+      if (didChange) {
+        hasPendingPersistRef.current = true;
+      }
       if (didChange && reason === 'drag') {
         markGraphDirty();
       }
@@ -3293,6 +3344,7 @@ function App() {
                 visibleDomainIds={relevantDomainIds}
                 visibleModuleStatuses={statusFilters}
                 layoutPositions={layoutPositions}
+                normalizationRequest={layoutNormalizationRequest}
                 onLayoutChange={handleLayoutChange}
               />
             </div>
@@ -3558,6 +3610,630 @@ type InitiativeBuildDefaults = {
   requirements?: Initiative['requirements'];
   customer?: Initiative['customer'];
 };
+
+function buildInitiativeFromDraft(
+  initiativeId: string,
+  draft: InitiativeDraftPayload,
+  allowedDomainIds: Set<string>,
+  allowedModuleIds: Set<string>,
+  defaults: InitiativeBuildDefaults
+): Initiative {
+  const normalizedName = draft.name.trim() || defaults.name;
+  const normalizedDescription = draft.description.trim() || defaults.description;
+  const normalizedOwner = draft.owner.trim() || defaults.owner;
+  const normalizedImpact = draft.expectedImpact.trim() || defaults.expectedImpact;
+  const normalizedStatus = draft.status ?? defaults.status;
+
+  const domains = deduplicateNonEmpty(draft.domainIds).filter((id) => allowedDomainIds.has(id));
+  const draftModuleIds = deduplicateNonEmpty(draft.moduleIds).filter((id) =>
+    allowedModuleIds.has(id)
+  );
+  const potentialModules =
+    draftModuleIds.length > 0
+      ? draftModuleIds
+      : deduplicateNonEmpty(defaults.potentialModules ?? []).filter((id) =>
+          allowedModuleIds.has(id)
+        );
+  const plannedModuleIds =
+    draftModuleIds.length > 0
+      ? draftModuleIds
+      : deduplicateNonEmpty(defaults.plannedModuleIds ?? []).filter((id) =>
+          allowedModuleIds.has(id)
+        );
+
+  const worksDraft = draft.works.map((work, index) => {
+    const effortValue = Number(work.effortHours);
+    const normalizedEffort = Number.isFinite(effortValue) ? Math.max(0, effortValue) : 0;
+    return {
+      id: work.id.trim() || `work-${index + 1}-${initiativeId}`,
+      title: work.title.trim() || `Работа ${index + 1}`,
+      description: work.description.trim() || 'Описание не заполнено',
+      effortHours: normalizedEffort
+    };
+  });
+  const works =
+    worksDraft.length > 0
+      ? worksDraft
+      : (defaults.works ?? []).map((work) => ({ ...work }));
+
+  const requirementsDraft = draft.requirements.map((requirement, index) => {
+    const countValue = Number(requirement.count);
+    const normalizedCount = Number.isFinite(countValue) ? Math.max(1, Math.round(countValue)) : 1;
+    const skills = deduplicateNonEmpty(requirement.skills.map((skill) => skill.trim()));
+    const comment = requirement.comment?.trim() ?? '';
+    return {
+      id: requirement.id.trim() || `requirement-${index + 1}-${initiativeId}`,
+      role: requirement.role,
+      skills,
+      count: normalizedCount,
+      comment: comment || undefined
+    };
+  });
+  const requirements =
+    requirementsDraft.length > 0
+      ? requirementsDraft
+      : (defaults.requirements ?? []).map((requirement) => ({
+          ...requirement,
+          skills: [...requirement.skills]
+        }));
+
+  const requiredSkillsDraft = deduplicateNonEmpty(
+    requirements.flatMap((requirement) => requirement.skills)
+  );
+  const requiredSkills =
+    requiredSkillsDraft.length > 0 ? requiredSkillsDraft : [...(defaults.requiredSkills ?? [])];
+
+  const normalizedTarget = defaults.targetModuleName?.trim() || normalizedName;
+  const workItems = (defaults.workItems ?? []).map((item) => ({ ...item }));
+  const approvalStages = (defaults.approvalStages ?? []).map((stage) => ({ ...stage }));
+  const risks = (defaults.risks ?? []).map((risk) => ({ ...risk }));
+  const roles = (defaults.roles ?? []).map((role) => ({
+    ...role,
+    pinnedExpertIds: [...role.pinnedExpertIds],
+    candidates: role.candidates.map((candidate) => ({
+      ...candidate,
+      scoreDetails: candidate.scoreDetails.map((detail) => ({ ...detail }))
+    })),
+    workItems: role.workItems?.map((item) => ({ ...item }))
+  }));
+  const customer = defaults.customer ? { ...defaults.customer } : undefined;
+
+  return {
+    id: initiativeId,
+    name: normalizedName,
+    description: normalizedDescription,
+    owner: normalizedOwner,
+    status: normalizedStatus,
+    expectedImpact: normalizedImpact,
+    domains,
+    plannedModuleIds,
+    requiredSkills,
+    workItems,
+    approvalStages,
+    targetModuleName: normalizedTarget,
+    lastUpdated: new Date().toISOString(),
+    risks,
+    roles,
+    potentialModules,
+    works,
+    requirements,
+    customer
+  };
+}
+
+function recalculateReuseScores(modules: ModuleNode[]): ModuleNode[] {
+  if (modules.length === 0) {
+    return modules;
+  }
+
+  const integrationMap = buildModuleIntegrationMap(modules);
+  const denominator = Math.max(1, modules.length - 1);
+
+  return modules.map((module) => {
+    const connections = integrationMap.get(module.id);
+    const score = connections ? Math.min(1, connections.size / denominator) : 0;
+    return { ...module, reuseScore: score };
+  });
+}
+
+function buildModuleIntegrationMap(modules: ModuleNode[]): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+
+  modules.forEach((module) => {
+    map.set(module.id, new Set());
+  });
+
+  modules.forEach((module) => {
+    module.dependencies.forEach((dependencyId) => {
+      if (!map.has(dependencyId) || dependencyId === module.id) {
+        return;
+      }
+      map.get(module.id)?.add(dependencyId);
+      map.get(dependencyId)?.add(module.id);
+    });
+
+    module.dataOut.forEach((output) => {
+      (output.consumerIds ?? []).forEach((consumerId) => {
+        if (!map.has(consumerId) || consumerId === module.id) {
+          return;
+        }
+        map.get(module.id)?.add(consumerId);
+        map.get(consumerId)?.add(module.id);
+      });
+    });
+  });
+
+  return map;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  const normalized = Number.isFinite(value) ? value : min;
+  if (normalized < min) {
+    return min;
+  }
+  if (normalized > max) {
+    return max;
+  }
+  return normalized;
+}
+
+function buildCompanyList(modules: ModuleNode[]): string[] {
+  const names = new Set<string>();
+
+  modules.forEach((module) => {
+    module.userStats.companies.forEach((company) => {
+      const normalized = company.name.trim();
+      if (normalized) {
+        names.add(normalized);
+      }
+    });
+  });
+
+  return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function buildProductList(modules: ModuleNode[]): string[] {
+  const products = new Set<string>();
+  modules.forEach((module) => {
+    if (module.productName) {
+      products.add(module.productName);
+    }
+  });
+  return Array.from(products).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function normalizeLayoutPositions(
+  positions: Record<string, GraphLayoutNodePosition>,
+  maxSpan = MAX_LAYOUT_SPAN
+): { positions: Record<string, GraphLayoutNodePosition>; changed: boolean } {
+  const entries = Object.entries(positions);
+  if (entries.length === 0) {
+    return { positions, changed: false };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  entries.forEach(([, position]) => {
+    if (!position) {
+      return;
+    }
+
+    if (typeof position.x === 'number' && Number.isFinite(position.x)) {
+      minX = Math.min(minX, position.x);
+      maxX = Math.max(maxX, position.x);
+    }
+
+    if (typeof position.y === 'number' && Number.isFinite(position.y)) {
+      minY = Math.min(minY, position.y);
+      maxY = Math.max(maxY, position.y);
+    }
+  });
+
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+    return { positions, changed: false };
+  }
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const span = Math.max(width, height);
+
+  if (!Number.isFinite(span) || span <= 0 || span <= maxSpan) {
+    return { positions, changed: false };
+  }
+
+  const scale = maxSpan / span;
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return { positions, changed: false };
+  }
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  let changed = false;
+  const normalized: Record<string, GraphLayoutNodePosition> = {};
+
+  entries.forEach(([id, position]) => {
+    if (!position) {
+      return;
+    }
+
+    const { x, y, fx, fy } = position;
+    if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+      normalized[id] = position;
+      return;
+    }
+
+    const normalizedX = roundCoordinate(centerX + (x - centerX) * scale);
+    const normalizedY = roundCoordinate(centerY + (y - centerY) * scale);
+    const next: GraphLayoutNodePosition = { x: normalizedX, y: normalizedY };
+
+    if (typeof fx === 'number' && Number.isFinite(fx)) {
+      const normalizedFx = roundCoordinate(centerX + (fx - centerX) * scale);
+      next.fx = normalizedFx;
+      if (normalizedFx !== fx) {
+        changed = true;
+      }
+    }
+
+    if (typeof fy === 'number' && Number.isFinite(fy)) {
+      const normalizedFy = roundCoordinate(centerY + (fy - centerY) * scale);
+      next.fy = normalizedFy;
+      if (normalizedFy !== fy) {
+        changed = true;
+      }
+    }
+
+    if (normalizedX !== x || normalizedY !== y) {
+      changed = true;
+    }
+
+    normalized[id] = next;
+  });
+
+  if (!changed) {
+    return { positions, changed: false };
+  }
+
+  return { positions: normalized, changed: true };
+}
+
+function needsEngineLayoutCapture(
+  layout: Record<string, GraphLayoutNodePosition>,
+  activeIds: Set<string>
+): boolean {
+  for (const id of activeIds) {
+    const position = layout[id];
+    if (!position) {
+      return true;
+    }
+
+    if (typeof position.x !== 'number' || Number.isNaN(position.x)) {
+      return true;
+    }
+
+    if (typeof position.y !== 'number' || Number.isNaN(position.y)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function mergeLayoutPositions(
+  prev: Record<string, GraphLayoutNodePosition>,
+  next: Record<string, GraphLayoutNodePosition>
+): Record<string, GraphLayoutNodePosition> {
+  const merged: Record<string, GraphLayoutNodePosition> = { ...prev };
+
+  Object.entries(next).forEach(([id, position]) => {
+    const existing = merged[id];
+    if (!existing || !layoutPositionsEqual(existing, position)) {
+      merged[id] = position;
+    }
+  });
+
+  return merged;
+}
+
+function pruneLayoutPositions(
+  positions: Record<string, GraphLayoutNodePosition>,
+  activeIds: Set<string>
+): Record<string, GraphLayoutNodePosition> {
+  const result: Record<string, GraphLayoutNodePosition> = {};
+
+  Object.entries(positions).forEach(([id, position]) => {
+    if (activeIds.has(id)) {
+      result[id] = position;
+    }
+  });
+
+  return result;
+}
+
+function layoutsEqual(
+  prev: Record<string, GraphLayoutNodePosition>,
+  next: Record<string, GraphLayoutNodePosition>
+): boolean {
+  const prevKeys = Object.keys(prev);
+  const nextKeys = Object.keys(next);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  return prevKeys.every((key) => {
+    const prevPosition = prev[key];
+    const nextPosition = next[key];
+
+    if (!nextPosition) {
+      return false;
+    }
+
+    return layoutPositionsEqual(prevPosition, nextPosition);
+  });
+}
+
+function layoutPositionsEqual(
+  prev: GraphLayoutNodePosition,
+  next: GraphLayoutNodePosition
+): boolean {
+  if (prev.x !== next.x || prev.y !== next.y) {
+    return false;
+  }
+
+  const prevFx = prev.fx ?? null;
+  const nextFx = next.fx ?? null;
+  if (prevFx !== nextFx) {
+    return false;
+  }
+
+  const prevFy = prev.fy ?? null;
+  const nextFy = next.fy ?? null;
+  return prevFy === nextFy;
+}
+
+function resolveInitialModulePosition(
+  positions: Record<string, GraphLayoutNodePosition>,
+  anchorIds: string[]
+): GraphLayoutNodePosition | null {
+  const anchors = anchorIds
+    .map((id) => positions[id])
+    .filter((position): position is GraphLayoutNodePosition => Boolean(position));
+  const fallbackEntries = Object.values(positions);
+
+  const anchorValues = extractAxisValues(anchors);
+  const fallbackValues = extractAxisValues(fallbackEntries);
+
+  const xValues = anchorValues.x.length > 0 ? anchorValues.x : fallbackValues.x;
+  const yValues = anchorValues.y.length > 0 ? anchorValues.y : fallbackValues.y;
+
+  if (xValues.length === 0 || yValues.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const anchorAverageX = anchorValues.x.length > 0
+    ? anchorValues.x.reduce((sum, value) => sum + value, 0) / anchorValues.x.length
+    : Math.max(...xValues);
+  const averageY = yValues.reduce((sum, value) => sum + value, 0) / yValues.length;
+
+  const horizontalOffset = anchorValues.x.length > 0 ? 80 : 140;
+  const jitterSeed = Object.keys(positions).length;
+  const verticalJitter = ((jitterSeed % 5) - 2) * 45;
+
+  return {
+    x: roundCoordinate(anchorAverageX + horizontalOffset),
+    y: roundCoordinate(averageY + verticalJitter)
+  };
+}
+
+function extractAxisValues(positions: GraphLayoutNodePosition[]): {
+  x: number[];
+  y: number[];
+} {
+  const x = positions
+    .map((position) => getAxisCoordinate(position, 'x'))
+    .filter((value): value is number => value !== null);
+  const y = positions
+    .map((position) => getAxisCoordinate(position, 'y'))
+    .filter((value): value is number => value !== null);
+
+  return { x, y };
+}
+
+function getAxisCoordinate(
+  position: GraphLayoutNodePosition,
+  axis: 'x' | 'y'
+): number | null {
+  const fixed = axis === 'x' ? position.fx : position.fy;
+  if (typeof fixed === 'number' && Number.isFinite(fixed)) {
+    return fixed;
+  }
+
+  const fallback = axis === 'x' ? position.x : position.y;
+  if (typeof fallback === 'number' && Number.isFinite(fallback)) {
+    return fallback;
+  }
+
+  return null;
+}
+
+function roundCoordinate(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+function collectSearchableValues(value: unknown, target: string[]): void {
+  if (value === null || value === undefined) {
+    return;
+  }
+
+  if (typeof value === 'string') {
+    target.push(value);
+    return;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    target.push(String(value));
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSearchableValues(item, target));
+    return;
+  }
+
+  if (typeof value === 'object') {
+    Object.values(value as Record<string, unknown>).forEach((item) => {
+      collectSearchableValues(item, target);
+    });
+  }
+}
+
+function deduplicateNonEmpty(values: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  values.forEach((value) => {
+    if (!value) {
+      return;
+    }
+    if (!seen.has(value)) {
+      seen.add(value);
+      result.push(value);
+    }
+  });
+  return result;
+}
+
+function createEntityId(prefix: string, name: string, existing: Set<string>): string {
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const base = normalized ? `${prefix}-${normalized}` : `${prefix}-${Date.now()}`;
+  let candidate = base;
+  let counter = 1;
+  while (existing.has(candidate)) {
+    candidate = `${base}-${counter++}`;
+  }
+  return candidate;
+}
+
+function addDomainToTree(domains: DomainNode[], parentId: string | undefined, newDomain: DomainNode): DomainNode[] {
+  if (!parentId) {
+    return [...domains, newDomain];
+  }
+
+  const [next, inserted] = insertDomain(domains, parentId, newDomain);
+  if (inserted) {
+    return next;
+  }
+
+  return [...domains, newDomain];
+}
+
+function insertDomain(domains: DomainNode[], parentId: string, newDomain: DomainNode): [DomainNode[], boolean] {
+  let inserted = false;
+  const next = domains.map((domain) => {
+    if (domain.id === parentId) {
+      inserted = true;
+      const children = domain.children ? [...domain.children, newDomain] : [newDomain];
+      return { ...domain, children };
+    }
+
+    if (domain.children) {
+      const [childUpdated, childInserted] = insertDomain(domain.children, parentId, newDomain);
+      if (childInserted) {
+        inserted = true;
+        return { ...domain, children: childUpdated };
+      }
+    }
+
+    return domain;
+  });
+
+  return [next, inserted];
+}
+
+function removeDomainFromTree(
+  domains: DomainNode[],
+  targetId: string,
+  parentId: string | null = null
+): [DomainNode[], DomainNode | null, string | null] {
+  let removed: DomainNode | null = null;
+  let removedParent: string | null = null;
+
+  const next = domains
+    .map((domain) => {
+      if (domain.id === targetId) {
+        removed = domain;
+        removedParent = parentId;
+        return null;
+      }
+
+      if (domain.children) {
+        const [children, childRemoved, childParent] = removeDomainFromTree(domain.children, targetId, domain.id);
+        if (childRemoved) {
+          removed = childRemoved;
+          removedParent = childParent;
+          return { ...domain, children };
+        }
+      }
+
+      return domain;
+    })
+    .filter((domain): domain is DomainNode => Boolean(domain));
+
+  return [next, removed, removedParent];
+}
+
+function collectDomainIds(domain: DomainNode): string[] {
+  const children = domain.children ?? [];
+  return [domain.id, ...children.flatMap((child) => collectDomainIds(child))];
+}
+
+function buildModuleLinks(
+  modules: ModuleNode[],
+  artifacts: ArtifactNode[],
+  allowedDomainIds: Set<string>
+): GraphLink[] {
+  const artifactMap = new Map<string, ArtifactNode>();
+  artifacts.forEach((artifact) => artifactMap.set(artifact.id, artifact));
+
+  return modules.flatMap((module) => {
+    const domainLinks: GraphLink[] = module.domains
+      .filter((domainId) => allowedDomainIds.has(domainId))
+      .map((domainId) => ({
+        source: module.id,
+        target: domainId,
+        type: 'domain'
+      }));
+
+    const dependencyLinks: GraphLink[] = module.dependencies.map((dependencyId) => ({
+      source: module.id,
+      target: dependencyId,
+      type: 'dependency'
+    }));
+
+    const produceLinks: GraphLink[] = module.produces.map((artifactId) => ({
+      source: module.id,
+      target: artifactId,
+      type: 'produces'
+    }));
+
+    const consumeLinks: GraphLink[] = module.dataIn
+      .filter((input) => input.sourceId && artifactMap.has(input.sourceId))
+      .map((input) => ({
+        source: input.sourceId as string,
+        target: module.id,
+        type: 'consumes'
+      }));
+
+    return [...domainLinks, ...dependencyLinks, ...produceLinks, ...consumeLinks];
+  });
+}
 
 function buildInitiativeLinks(
   initiatives: Initiative[],
