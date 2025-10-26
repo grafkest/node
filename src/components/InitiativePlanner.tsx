@@ -130,6 +130,21 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     setOpenCandidates(new Set());
   }, [selectedId]);
 
+  const initiativeOptions = useMemo<SelectItem<string>[]>(
+    () => initiatives.map((initiative) => ({ label: initiative.name, value: initiative.id })),
+    [initiatives]
+  );
+
+  const selectValue = useMemo(
+    () => initiativeOptions.find((option) => option.value === selectedId) ?? null,
+    [initiativeOptions, selectedId]
+  );
+
+  const selectedInitiative = useMemo(
+    () => initiatives.find((initiative) => initiative.id === selectedId) ?? null,
+    [initiatives, selectedId]
+  );
+
   useEffect(() => {
     if (!selectedInitiative) {
       setCollapsedRoles(new Set());
@@ -159,21 +174,6 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     lastInitiativeIdRef.current = selectedInitiative.id;
     lastRoleIdsRef.current = currentRoleIds;
   }, [selectedInitiative]);
-
-  const initiativeOptions = useMemo<SelectItem<string>[]>(
-    () => initiatives.map((initiative) => ({ label: initiative.name, value: initiative.id })),
-    [initiatives]
-  );
-
-  const selectValue = useMemo(
-    () => initiativeOptions.find((option) => option.value === selectedId) ?? null,
-    [initiativeOptions, selectedId]
-  );
-
-  const selectedInitiative = useMemo(
-    () => initiatives.find((initiative) => initiative.id === selectedId) ?? null,
-    [initiatives, selectedId]
-  );
 
   const expertMap = useMemo(() => {
     const map = new Map<string, ExpertProfile>();
