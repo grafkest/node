@@ -5,7 +5,7 @@ import { Select } from '@consta/uikit/Select';
 import { Steps } from '@consta/uikit/Steps';
 import { Text } from '@consta/uikit/Text';
 import clsx from 'clsx';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ExpertProfile,
   Initiative,
@@ -108,12 +108,15 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   const [riskDescription, setRiskDescription] = useState('');
   const [riskSeverity, setRiskSeverity] = useState<InitiativeRisk['severity']>('medium');
   const [openCandidates, setOpenCandidates] = useState<Set<CandidateKey>>(new Set());
+  const [collapsedRoles, setCollapsedRoles] = useState<Set<string>>(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [modalTargetId, setModalTargetId] = useState<string | null>(null);
   const [modalInitialDraft, setModalInitialDraft] = useState<InitiativeCreationRequest | null>(null);
   const [isModalSubmitting, setIsModalSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const lastInitiativeIdRef = useRef<string | null>(null);
+  const lastRoleIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!selectedId && initiatives.length > 0) {
@@ -141,6 +144,36 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     () => initiatives.find((initiative) => initiative.id === selectedId) ?? null,
     [initiatives, selectedId]
   );
+
+  useEffect(() => {
+    if (!selectedInitiative) {
+      setCollapsedRoles(new Set());
+      lastInitiativeIdRef.current = null;
+      lastRoleIdsRef.current = new Set();
+      return;
+    }
+
+    const currentRoleIds = new Set(selectedInitiative.roles.map((role) => role.id));
+
+    setCollapsedRoles((prev) => {
+      if (lastInitiativeIdRef.current !== selectedInitiative.id) {
+        return new Set(currentRoleIds);
+      }
+
+      const next = new Set(Array.from(prev).filter((roleId) => currentRoleIds.has(roleId)));
+
+      selectedInitiative.roles.forEach((role) => {
+        if (!lastRoleIdsRef.current.has(role.id)) {
+          next.add(role.id);
+        }
+      });
+
+      return next;
+    });
+
+    lastInitiativeIdRef.current = selectedInitiative.id;
+    lastRoleIdsRef.current = currentRoleIds;
+  }, [selectedInitiative]);
 
   const expertMap = useMemo(() => {
     const map = new Map<string, ExpertProfile>();
@@ -279,6 +312,18 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     });
   };
 
+  const handleToggleRoleCollapse = (roleId: string) => {
+    setCollapsedRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) {
+        next.delete(roleId);
+      } else {
+        next.add(roleId);
+      }
+      return next;
+    });
+  };
+
   const modal = (
     <InitiativeCreationModal
       isOpen={isModalOpen}
@@ -369,11 +414,19 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   const renderRoleCard = (role: Initiative['roles'][number]) => {
     const pinnedSet = new Set(role.pinnedExpertIds);
     const sortedCandidates = [...role.candidates].sort((a, b) => b.score - a.score);
+    const isCollapsed = collapsedRoles.has(role.id);
+    const candidateListId = `${role.id}-candidates`;
 
     return (
-      <Card key={role.id} className={styles.roleCard} verticalSpace="xl" horizontalSpace="xl">
+      <Card
+        key={role.id}
+        className={clsx(styles.roleCard, isCollapsed && styles.roleCardCollapsed)}
+        verticalSpace="xl"
+        horizontalSpace="xl"
+        data-collapsed={isCollapsed}
+      >
         <div className={styles.roleHeader}>
-          <div>
+          <div className={styles.roleInfo}>
             <Text size="s" weight="semibold">
               {role.role}
             </Text>
@@ -381,23 +434,32 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
               Требуется: {role.required} · Закреплено: {role.pinnedExpertIds.length}
             </Text>
           </div>
-          {pinnedSet.size > 0 && (
-            <Badge size="s" status="success" label="Есть закрепления" />
-          )}
+          <div className={styles.roleActions}>
+            {pinnedSet.size > 0 && <Badge size="s" status="success" label="Есть закрепления" />}
+            <Button
+              size="xs"
+              view="ghost"
+              label={isCollapsed ? 'Развернуть' : 'Свернуть'}
+              onClick={() => handleToggleRoleCollapse(role.id)}
+              aria-expanded={!isCollapsed}
+              aria-controls={candidateListId}
+            />
+          </div>
         </div>
-        <div className={styles.candidateList}>
-          {sortedCandidates.map((candidate) => {
-            const candidateKey: CandidateKey = `${role.id}:${candidate.expertId}`;
-            const expert = expertMap.get(candidate.expertId);
-            const isPinned = pinnedSet.has(candidate.expertId);
-            const isOpen = openCandidates.has(candidateKey);
-            const scoreLabel = `${Math.round(candidate.score)} баллов`;
+        {!isCollapsed && (
+          <div className={styles.candidateList} id={candidateListId}>
+            {sortedCandidates.map((candidate) => {
+              const candidateKey: CandidateKey = `${role.id}:${candidate.expertId}`;
+              const expert = expertMap.get(candidate.expertId);
+              const isPinned = pinnedSet.has(candidate.expertId);
+              const isOpen = openCandidates.has(candidateKey);
+              const scoreLabel = `${Math.round(candidate.score)} баллов`;
 
-            return (
-              <div
-                key={candidateKey}
-                className={clsx(styles.candidateCard, isPinned && styles.candidatePinned)}
-              >
+              return (
+                <div
+                  key={candidateKey}
+                  className={clsx(styles.candidateCard, isPinned && styles.candidatePinned)}
+                >
                 <div className={styles.candidateHeader}>
                   <div className={styles.candidateTitle}>
                     <Text size="s" weight="semibold">
@@ -463,8 +525,9 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
                 )}
               </div>
             );
-          })}
-        </div>
+            })}
+          </div>
+        )}
       </Card>
     );
   };

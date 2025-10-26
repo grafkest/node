@@ -579,14 +579,37 @@ function App() {
           if (!hasExpert && role.required > 0 && nextPinned.length > role.required) {
             nextPinned = nextPinned.slice(nextPinned.length - role.required);
           }
-          const changed =
+          const pinnedChanged =
             nextPinned.length !== role.pinnedExpertIds.length ||
             nextPinned.some((id, index) => role.pinnedExpertIds[index] !== id);
-          if (!changed) {
+
+          let workItemsChanged = false;
+          let updatedWorkItems: typeof role.workItems = role.workItems;
+
+          if (role.workItems && role.workItems.length > 0) {
+            const nextWorkItems = role.workItems.map((item, index) => {
+              const nextAssigned =
+                nextPinned.length > 0 ? nextPinned[index % nextPinned.length] : undefined;
+              if (nextAssigned === item.assignedExpertId) {
+                return item;
+              }
+              workItemsChanged = true;
+              return { ...item, assignedExpertId: nextAssigned };
+            });
+            if (workItemsChanged) {
+              updatedWorkItems = nextWorkItems;
+            }
+          }
+
+          if (!pinnedChanged && !workItemsChanged) {
             return role;
           }
           updated = true;
-          return { ...role, pinnedExpertIds: nextPinned };
+          return {
+            ...role,
+            pinnedExpertIds: nextPinned,
+            ...(role.workItems ? { workItems: updatedWorkItems } : {})
+          };
         });
         if (!updated) {
           return initiative;
