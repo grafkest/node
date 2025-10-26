@@ -282,7 +282,7 @@ const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraf
         id: createId(),
         role: role.role,
         task: tasks[0]?.skill ?? '',
-        description: item.description,
+        description: item.description ?? '',
         effortDays: Math.max(1, Math.round(item.effortDays)),
         startDay: Math.max(0, Math.round(item.startDay)),
         durationDays: Math.max(1, Math.round(item.durationDays)),
