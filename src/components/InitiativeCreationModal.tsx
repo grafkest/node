@@ -237,21 +237,44 @@ const createApprovalStageDraft = (): ApprovalStageDraft => ({
 
 const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraft[] => {
   const workMap = new Map<string, WorkDraft>();
+  const workItemMetadata = new Map(
+    draft.workItems.map((item) => [item.id, item])
+  );
 
   draft.roles.forEach((role) => {
     role.workItems.forEach((item, index) => {
       const workId = item.id || `${role.id}-work-${index + 1}`;
+      const metadata = workItemMetadata.get(workId);
       let work = workMap.get(workId);
 
       if (!work) {
         work = {
           id: workId,
-          title: item.title,
-          description: item.description,
-          assumptions: item.assumptions ?? '',
+          title: item.title || metadata?.title || '',
+          description: item.description || metadata?.description || '',
+          assumptions: item.assumptions?.trim() ?? '',
+          owner: metadata?.owner ?? '',
+          timeframe: metadata?.timeframe ?? '',
+          status: metadata?.status ?? 'discovery',
           assignments: []
         };
         workMap.set(workId, work);
+      } else {
+        if (!work.owner && metadata?.owner) {
+          work.owner = metadata.owner;
+        }
+        if (!work.timeframe && metadata?.timeframe) {
+          work.timeframe = metadata.timeframe;
+        }
+        if (!metadata && !work.status) {
+          work.status = 'discovery';
+        } else if (metadata?.status) {
+          work.status = metadata.status;
+        }
+      }
+
+      if (metadata) {
+        workItemMetadata.delete(workId);
       }
 
       const tasks = item.tasks ?? [];
@@ -271,8 +294,32 @@ const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraf
     });
   });
 
+  workItemMetadata.forEach((metadata, workId) => {
+    const existing = workMap.get(workId);
+    if (existing) {
+      existing.title = existing.title || metadata.title;
+      existing.description = existing.description || metadata.description;
+      existing.owner = metadata.owner;
+      existing.timeframe = metadata.timeframe;
+      existing.status = metadata.status;
+      return;
+    }
+
+    workMap.set(workId, {
+      id: workId,
+      title: metadata.title,
+      description: metadata.description,
+      assumptions: '',
+      owner: metadata.owner,
+      timeframe: metadata.timeframe,
+      status: metadata.status,
+      assignments: [createWorkAssignmentDraft()]
+    });
+  });
+
   const works = Array.from(workMap.values()).map((work) => ({
     ...work,
+    assumptions: work.assumptions ?? '',
     assignments:
       work.assignments.length > 0 ? work.assignments : [createWorkAssignmentDraft()]
   }));
