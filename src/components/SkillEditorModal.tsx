@@ -26,11 +26,11 @@ type SelectOption<Value> = {
 };
 
 const skillLevelLabels: Record<SkillLevel, string> = {
-  A: 'A — Эксперт',
-  B: 'B — Продвинутый',
-  C: 'C — Уверенный',
-  D: 'D — Базовый',
-  E: 'E — Новичок'
+  A: 'A — Awareness',
+  W: 'W — Working',
+  P: 'P — Practitioner',
+  Ad: 'Ad — Advanced',
+  E: 'E — Expert'
 };
 
 const proofStatusLabels: Record<SkillEvidenceStatus, string> = {
@@ -39,9 +39,9 @@ const proofStatusLabels: Record<SkillEvidenceStatus, string> = {
   'self-reported': 'Самооценка'
 };
 
-const skillLevelOptions: SelectOption<SkillLevel>[] = (
-  Object.keys(skillLevelLabels) as SkillLevel[]
-).map((value) => ({
+const skillLevelOrder: SkillLevel[] = ['A', 'W', 'P', 'Ad', 'E'];
+
+const skillLevelOptions: SelectOption<SkillLevel>[] = skillLevelOrder.map((value) => ({
   value,
   label: skillLevelLabels[value]
 }));
@@ -61,7 +61,7 @@ const cloneSkill = (skill: ExpertSkill): ExpertSkill => ({
 
 const createEmptySkill = (): ExpertSkill => ({
   id: '',
-  level: 'C',
+  level: 'P',
   proofStatus: 'self-reported',
   artifacts: [],
   interest: 'medium',
