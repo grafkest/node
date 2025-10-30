@@ -1,7 +1,6 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Collapse } from '@consta/uikit/Collapse';
-import { Select } from '@consta/uikit/Select';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
 import React, { useEffect, useState } from 'react';
@@ -28,11 +27,6 @@ const statusBadgeView: Record<string, 'success' | 'warning' | 'alert' | 'normal'
   production: 'success',
   'in-dev': 'warning',
   deprecated: 'alert'
-};
-
-type ConsumerOption = {
-  id: string;
-  label: string;
 };
 
 type SectionId = 'general' | 'calculation' | 'technical' | 'nonFunctional';
@@ -543,7 +537,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
             onNavigate={onNavigate}
             resolveName={resolveEntityName}
           />
-          <InfoRow label="Формула расчёта">
+          <InfoRow label="Описание алгоритма расчёта модуля">
             <Text size="s" className={styles.code}>
               {node.formula}
             </Text>
@@ -876,25 +870,29 @@ const ModuleOutputSection: React.FC<ModuleOutputSectionProps> = ({
       </Text>
       <ul className={styles.ioList}>
         {items.map((item) => {
-          const consumerOptions: ConsumerOption[] = (item.consumerIds ?? []).map((consumerId) => ({
-            id: consumerId,
-            label: resolveName(consumerId)
-          }));
-
+          const hasArtifact = Boolean(item.artifactId);
+          const artifactLabel = item.artifactId ? resolveName(item.artifactId) : null;
           return (
             <li key={item.id} className={styles.ioItem}>
               <Text size="s" weight="semibold">
                 {item.label}
               </Text>
-              {consumerOptions.length > 0 ? (
-                <ConsumerSelect
-                  options={consumerOptions}
-                  onNavigate={onNavigate}
-                  placeholder="Перейти к потребителю"
-                />
+              {hasArtifact ? (
+                <a
+                  href="#"
+                  className={styles.link}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (item.artifactId) {
+                      onNavigate(item.artifactId);
+                    }
+                  }}
+                >
+                  {artifactLabel ?? item.artifactId}
+                </a>
               ) : (
                 <Text size="xs" view="secondary">
-                  Потребители отсутствуют
+                  Артефакт не назначен
                 </Text>
               )}
             </li>
@@ -902,45 +900,6 @@ const ModuleOutputSection: React.FC<ModuleOutputSectionProps> = ({
         })}
       </ul>
     </div>
-  );
-};
-
-type ConsumerSelectProps = {
-  options: ConsumerOption[];
-  placeholder: string;
-  onNavigate: (nodeId: string) => void;
-};
-
-const ConsumerSelect: React.FC<ConsumerSelectProps> = ({ options, placeholder, onNavigate }) => {
-  const [value, setValue] = useState<ConsumerOption | null>(null);
-
-  return (
-    <Select<ConsumerOption>
-      size="xs"
-      placeholder={placeholder}
-      items={options}
-      value={value}
-      getItemLabel={(option) => option.label}
-      getItemKey={(option) => option.id}
-      onChange={(nextValue) => {
-        setValue(nextValue ?? null);
-
-        if (!nextValue) {
-          return;
-        }
-
-        const runNavigation = () => {
-          onNavigate(nextValue.id);
-          setValue(null);
-        };
-
-        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-          window.requestAnimationFrame(runNavigation);
-        } else {
-          setTimeout(runNavigation, 0);
-        }
-      }}
-    />
   );
 };
 

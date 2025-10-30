@@ -22,7 +22,7 @@ export type ModuleInput = {
 export type ModuleOutput = {
   id: string;
   label: string;
-  consumerIds?: string[];
+  artifactId?: string;
 };
 
 export type TeamRole =
@@ -532,11 +532,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'normalized-inputs',
         label: 'Стандартизированный пакет исходных данных',
-        consumerIds: [
-          'module-infraplan-layout',
-          'module-infraplan-economics',
-          'module-dtwin-optimizer'
-        ]
+        artifactId: 'artifact-infraplan-source-pack'
       }
     ],
     formula: 'normalized = preprocess(raw) ⊕ constraints',
@@ -616,7 +612,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'layout-scenarios',
         label: 'Сценарии размещения объектов',
-        consumerIds: ['module-infraplan-economics']
+        artifactId: 'artifact-infraplan-layout'
       }
     ],
     formula: 'total_cost = Σ(distance_i * cost_i) + Σ(site_j * capex_j)',
@@ -698,7 +694,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'investment-scenarios',
         label: 'Инвестиционные сценарии по вариантам',
-        consumerIds: []
+        artifactId: 'artifact-infraplan-economic-report'
       }
     ],
     formula: 'NPV_variant = Σ((cash_flow_t - opex_t) / (1 + WACC)^t) - capex_variant',
@@ -783,7 +779,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'telemetry-cube',
         label: 'Интегрированный куб телеметрии',
-        consumerIds: ['module-dtwin-optimizer']
+        artifactId: 'artifact-dtwin-telemetry-cube'
       }
     ],
     formula: 'metric = smooth(raw_signal, window=5)',
@@ -869,7 +865,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'optimization-orders',
         label: 'Команды оптимизации режимов',
-        consumerIds: ['module-dtwin-remote-control']
+        artifactId: 'artifact-dtwin-optimization-orders'
       }
     ],
     formula: 'optimal_mode = argmax(strategy_score)',
@@ -949,7 +945,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'remote-command-stream',
         label: 'Поток дистанционных команд',
-        consumerIds: []
+        artifactId: 'artifact-dtwin-remote-commands'
       }
     ],
     formula: 'command = translate(order, device_profile)',
@@ -1030,7 +1026,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'approved-workover-plan',
         label: 'Утверждённые программы работ по скважинам',
-        consumerIds: ['module-wwo-execution', 'module-wwo-analytics']
+        artifactId: 'artifact-wwo-plan'
       }
     ],
     formula: 'schedule = optimize(tasks, crews, constraints)',
@@ -1110,7 +1106,7 @@ export const modules: ModuleNode[] = [
       {
         id: 'operations-log',
         label: 'Фактический журнал операций',
-        consumerIds: ['module-wwo-analytics']
+        artifactId: 'artifact-wwo-operations-log'
       }
     ],
     formula: 'compliance_rate = completed_operations / planned_operations',
@@ -1194,7 +1190,8 @@ export const modules: ModuleNode[] = [
     dataOut: [
       {
         id: 'workover-kpi',
-        label: 'Индекс эффективности внутрискважинных работ'
+        label: 'Индекс эффективности внутрискважинных работ',
+        artifactId: 'artifact-wwo-performance-dashboard'
       }
     ],
     formula: 'kpi = Σ(metric_i * weight_i)',
@@ -1267,8 +1264,7 @@ export const modules: ModuleNode[] = [
     dataOut: [
       {
         id: 'lab-insights',
-        label: 'Отчёт по проведённым экспериментам',
-        consumerIds: ['module-dtwin-optimizer', 'module-wwo-analytics']
+        label: 'Отчёт по проведённым экспериментам'
       }
     ],
     formula: 'insight = normalize(stream) ⊕ simulate(layout)',

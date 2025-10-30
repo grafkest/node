@@ -32,7 +32,6 @@ export type ModuleDraftPayload = {
   status: ModuleStatus;
   domainIds: string[];
   dependencyIds: string[];
-  produces: string[];
   dataIn: ModuleInput[];
   dataOut: ModuleOutput[];
   ridOwner: RidOwner;
@@ -1463,7 +1462,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   const handleAddDataOut = () => {
     onChange({
       ...draft,
-      dataOut: [...draft.dataOut, { id: `output-${draft.dataOut.length + 1}`, label: '', consumerIds: [] }]
+      dataOut: [...draft.dataOut, { id: `output-${draft.dataOut.length + 1}`, label: '', artifactId: undefined }]
     });
   };
 
@@ -1979,13 +1978,12 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
               />
               <Combobox<string>
                 size="s"
-                items={moduleItems}
-                value={output.consumerIds ?? []}
-                multiple
+                items={artifactItems}
+                value={output.artifactId ?? null}
                 getItemKey={(item) => item}
-                getItemLabel={(item) => moduleLabelMap[item] ?? item}
-                placeholder="Потребители"
-                onChange={(value) => handleDataOutChange(index, { consumerIds: value ?? [] })}
+                getItemLabel={(item) => artifactLabelMap[item] ?? item}
+                placeholder="Артефакт"
+                onChange={(value) => handleDataOutChange(index, { artifactId: value ?? undefined })}
               />
               <Button
                 size="xs"
@@ -2000,22 +1998,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
       </div>
       <label className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
-          Производимые артефакты
-        </Text>
-        <Combobox<string>
-          size="s"
-          items={artifactItems}
-          value={draft.produces}
-          multiple
-          getItemKey={(item) => item}
-          getItemLabel={(item) => artifactLabelMap[item] ?? item}
-          placeholder="Выберите артефакты"
-          onChange={(value) => handleBasicFieldChange('produces', value ?? [])}
-        />
-      </label>
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Формула расчёта эффекта
+          Описание алгоритма расчёта модуля
         </Text>
         <textarea
           className={styles.textarea}
@@ -2907,9 +2890,8 @@ function createDefaultModuleDraft(): ModuleDraftPayload {
     status: 'in-dev',
     domainIds: [],
     dependencyIds: [],
-    produces: [],
     dataIn: [{ id: 'input-1', label: '', sourceId: undefined }],
-    dataOut: [{ id: 'output-1', label: '', consumerIds: [] }],
+    dataOut: [{ id: 'output-1', label: '', artifactId: undefined }],
     ridOwner: { company: '', division: '' },
     localization: 'ru',
     userStats: { companies: [{ name: '', licenses: 0 }] },
@@ -2970,12 +2952,8 @@ function moduleToDraft(module: ModuleNode): ModuleDraftPayload {
     status: module.status,
     domainIds: [...module.domains],
     dependencyIds: [...module.dependencies],
-    produces: [...module.produces],
     dataIn: module.dataIn.map((input) => ({ ...input })),
-    dataOut: module.dataOut.map((output) => ({
-      ...output,
-      consumerIds: output.consumerIds ? [...output.consumerIds] : []
-    })),
+    dataOut: module.dataOut.map((output) => ({ ...output })),
     ridOwner: { ...module.ridOwner },
     localization: module.localization,
     userStats: {
@@ -3029,10 +3007,6 @@ function applyModuleDraftPrefill(
     next.domainIds = [...patch.domainIds];
   }
 
-  if (Array.isArray(patch.produces)) {
-    ensureCopy();
-    next.produces = [...patch.produces];
-  }
 
   if (Array.isArray(patch.projectTeam)) {
     ensureCopy();

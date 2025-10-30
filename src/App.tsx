@@ -883,12 +883,13 @@ function App() {
       });
 
       module.dataOut.forEach((output) => {
-        output.consumerIds?.forEach((consumerId) => {
-          const consumerName = moduleNameMap[consumerId];
-          if (consumerName) {
-            collected.push(consumerName);
-          }
-        });
+        if (!output.artifactId) {
+          return;
+        }
+        const producedName = artifactNameMap[output.artifactId];
+        if (producedName) {
+          collected.push(producedName);
+        }
       });
 
       const normalized = collected
@@ -1874,10 +1875,11 @@ function App() {
         .map((module) => ({
           ...module,
           dependencies: module.dependencies.filter((dependencyId) => dependencyId !== moduleId),
-          dataOut: module.dataOut.map((output) => ({
-            ...output,
-            consumerIds: (output.consumerIds ?? []).filter((consumerId) => consumerId !== moduleId)
-          })),
+          dataOut: module.dataOut
+            .filter((output) =>
+              output.artifactId ? !removedArtifactIds.has(output.artifactId) : true
+            )
+            .map((output) => ({ ...output })),
           produces: module.produces.filter((artifactId) => !removedArtifactIds.has(artifactId)),
           dataIn: module.dataIn.filter((input) =>
             input.sourceId ? !removedArtifactIds.has(input.sourceId) : true
@@ -2189,11 +2191,13 @@ function App() {
               const produces = module.produces.includes(artifactId)
                 ? module.produces
                 : [...module.produces, artifactId];
-              const existingOutputIndex = module.dataOut.findIndex((output) => output.label === normalizedName);
+              const existingOutputIndex = module.dataOut.findIndex(
+                (output) => output.artifactId === artifactId || output.label === normalizedName
+              );
               const dataOut = existingOutputIndex >= 0
                 ? module.dataOut.map((output, index) =>
                     index === existingOutputIndex
-                      ? { ...output, label: normalizedName, consumerIds: consumers }
+                      ? { ...output, label: normalizedName, artifactId }
                       : output
                   )
                 : [
@@ -2201,7 +2205,7 @@ function App() {
                     {
                       id: `output-${module.dataOut.length + 1}-${artifactId}`,
                       label: normalizedName,
-                      consumerIds: consumers
+                      artifactId
                     }
                   ];
               next = { ...next, produces, dataOut };
@@ -2295,7 +2299,7 @@ function App() {
                 produces = [...produces, artifactId];
               }
               const outputIndex = dataOut.findIndex(
-                (output) => output.label === existing.name || output.label === normalizedName
+                (output) => output.artifactId === artifactId
               );
               if (outputIndex >= 0) {
                 dataOut = dataOut.map((output, index) =>
@@ -2303,7 +2307,7 @@ function App() {
                     ? {
                         ...output,
                         label: normalizedName,
-                        consumerIds: consumers
+                        artifactId
                       }
                     : output
                 );
@@ -2313,15 +2317,13 @@ function App() {
                   {
                     id: `output-${dataOut.length + 1}-${artifactId}`,
                     label: normalizedName,
-                    consumerIds: consumers
+                    artifactId
                   }
                 ];
               }
             } else if (wasProducer) {
               produces = produces.filter((id) => id !== artifactId);
-              dataOut = dataOut.filter(
-                (output) => output.label !== existing.name && output.label !== normalizedName
-              );
+              dataOut = dataOut.filter((output) => output.artifactId !== artifactId);
             }
 
             const isConsumer = consumers.includes(module.id);
@@ -3451,7 +3453,6 @@ function buildModuleFromDraft(
   }
 
   const dependencies = deduplicateNonEmpty(draft.dependencyIds).filter((id) => id !== moduleId);
-  const produces = deduplicateNonEmpty(draft.produces ?? []);
 
   const preparedInputs = (draft.dataIn.length > 0 ? draft.dataIn : [{ id: '', label: '', sourceId: undefined }]).map((input, index) => ({
     id: input.id?.trim() || `input-${index + 1}`,
@@ -3460,11 +3461,15 @@ function buildModuleFromDraft(
   }));
   const consumedArtifactIds = deduplicateNonEmpty(preparedInputs.map((input) => input.sourceId ?? null));
 
-  const preparedOutputs = (draft.dataOut.length > 0 ? draft.dataOut : [{ id: '', label: '', consumerIds: [] }]).map((output, index) => ({
+  const preparedOutputs = (draft.dataOut.length > 0
+    ? draft.dataOut
+    : [{ id: '', label: '', artifactId: undefined }]
+  ).map((output, index) => ({
     id: output.id?.trim() || `output-${index + 1}`,
     label: output.label.trim() || `Выход ${index + 1}`,
-    consumerIds: deduplicateNonEmpty(output.consumerIds ?? [])
+    artifactId: output.artifactId?.trim() || undefined
   }));
+  const produces = deduplicateNonEmpty(preparedOutputs.map((output) => output.artifactId ?? null));
 
   const technologyStack = deduplicateNonEmpty(draft.technologyStack.map((item) => item.trim())).filter(Boolean);
 
@@ -3584,6 +3589,19 @@ function buildModuleIntegrationMap(modules: ModuleNode[]): Map<string, Set<strin
     map.set(module.id, new Set());
   });
 
+  const artifactConsumers = new Map<string, Set<string>>();
+
+  modules.forEach((module) => {
+    module.dataIn.forEach((input) => {
+      if (!input.sourceId) {
+        return;
+      }
+      const consumers = artifactConsumers.get(input.sourceId) ?? new Set<string>();
+      consumers.add(module.id);
+      artifactConsumers.set(input.sourceId, consumers);
+    });
+  });
+
   modules.forEach((module) => {
     module.dependencies.forEach((dependencyId) => {
       if (!map.has(dependencyId) || dependencyId === module.id) {
@@ -3594,7 +3612,11 @@ function buildModuleIntegrationMap(modules: ModuleNode[]): Map<string, Set<strin
     });
 
     module.dataOut.forEach((output) => {
-      (output.consumerIds ?? []).forEach((consumerId) => {
+      if (!output.artifactId) {
+        return;
+      }
+      const consumers = artifactConsumers.get(output.artifactId);
+      consumers?.forEach((consumerId) => {
         if (!map.has(consumerId) || consumerId === module.id) {
           return;
         }
