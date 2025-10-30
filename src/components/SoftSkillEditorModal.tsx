@@ -33,7 +33,11 @@ const SoftSkillEditorModal: React.FC<SoftSkillEditorModalProps> = ({
       return;
     }
 
-    setDraftSoftSkills(expert.softSkills.map((skill) => skill));
+    const currentSoftSkills = Array.isArray(expert.softSkills)
+      ? expert.softSkills
+      : [];
+
+    setDraftSoftSkills(currentSoftSkills.map((skill) => skill));
     setNewSkill('');
     setError(null);
     setIsSubmitting(false);
@@ -61,7 +65,10 @@ const SoftSkillEditorModal: React.FC<SoftSkillEditorModalProps> = ({
   }, [normalizedSoftSkills]);
 
   const hasChanges = useMemo(() => {
-    const current = expert.softSkills.map((skill) => skill.trim());
+    const currentSoftSkills = Array.isArray(expert.softSkills)
+      ? expert.softSkills
+      : [];
+    const current = currentSoftSkills.map((skill) => skill.trim());
     if (normalizedSoftSkills.length !== current.length) {
       return true;
     }

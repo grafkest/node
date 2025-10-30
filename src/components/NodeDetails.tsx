@@ -146,10 +146,15 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
                 return (
                   <li key={expert} className={styles.listItem}>
                     <Text size="s">{trimmed}</Text>
-                    {profile?.softSkills.length ? (
+                    {(profile?.softSkills ?? []).length ? (
                       <div className={styles.tagList}>
-                        {profile.softSkills.map((skill) => (
-                          <Badge key={`${trimmed}-${skill}`} size="xs" view="ghost" label={skill} />
+                        {(profile?.softSkills ?? []).map((skill) => (
+                          <Badge
+                            key={`${trimmed}-${skill}`}
+                            size="xs"
+                            view="ghost"
+                            label={skill}
+                          />
                         ))}
                       </div>
                     ) : null}
@@ -964,9 +969,9 @@ const TeamRoster: React.FC<TeamRosterProps> = ({ members, expanded, onToggle, ex
                 <Text size="xs" view="secondary">
                   {member.role}
                 </Text>
-                {profile?.softSkills.length ? (
+                {(profile?.softSkills ?? []).length ? (
                   <div className={styles.tagList}>
-                    {profile.softSkills.map((skill) => (
+                    {(profile?.softSkills ?? []).map((skill) => (
                       <Badge key={`${member.id}-${skill}`} label={skill} size="xs" view="ghost" />
                     ))}
                   </div>
