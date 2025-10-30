@@ -180,77 +180,18 @@ function App() {
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
-  const handleCreateExpert = useCallback(
-    (draft: ExpertDraftPayload) => {
-      let created: ExpertProfile | null = null;
-      setExpertProfiles((prev) => {
-        const existingIds = new Set(prev.map((expert) => expert.id));
-        const expertId = createEntityId('expert', draft.fullName, existingIds);
-        const fallbackName = draft.fullName.trim() || `Новый сотрудник ${existingIds.size + 1}`;
-        const expert = buildExpertFromDraft(expertId, draft, {
-          domainIdSet,
-          moduleIdSet,
-          fallbackName
-        });
-        created = expert;
-        return [...prev, expert];
-      });
-      if (created) {
-        markGraphDirty();
-        showAdminNotice('success', `Сотрудник «${created.fullName}» создан.`);
-      }
+  const handleUpdateExpertSkills = useCallback((expertId: string, skills: ExpertSkill[]) => {
+    setExpertProfiles((prev) =>
+      prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
+    );
+  }, []);
+  const handleUpdateExpertSoftSkills = useCallback(
+    (expertId: string, softSkills: string[]) => {
+      setExpertProfiles((prev) =>
+        prev.map((expert) => (expert.id === expertId ? { ...expert, softSkills } : expert))
+      );
     },
-    [domainIdSet, markGraphDirty, moduleIdSet, showAdminNotice]
-  );
-
-  const handleUpdateExpert = useCallback(
-    (expertId: string, draft: ExpertDraftPayload) => {
-      let updated: ExpertProfile | null = null;
-      setExpertProfiles((prev) => {
-        let changed = false;
-        const next = prev.map((expert) => {
-          if (expert.id !== expertId) {
-            return expert;
-          }
-          const resolved = buildExpertFromDraft(expertId, draft, {
-            domainIdSet,
-            moduleIdSet,
-            fallbackName: expert.fullName,
-            fallbackProfile: expert
-          });
-          updated = resolved;
-          changed = true;
-          return resolved;
-        });
-        return changed ? next : prev;
-      });
-      if (updated) {
-        markGraphDirty();
-        showAdminNotice('success', `Профиль «${updated.fullName}» обновлён.`);
-      }
-    },
-    [domainIdSet, markGraphDirty, moduleIdSet, showAdminNotice]
-  );
-
-  const handleDeleteExpert = useCallback(
-    (expertId: string) => {
-      let removed: ExpertProfile | null = null;
-      setExpertProfiles((prev) => {
-        const next = prev.filter((expert) => {
-          if (expert.id === expertId) {
-            removed = expert;
-            return false;
-          }
-          return true;
-        });
-        return removed ? next : prev;
-      });
-      if (removed) {
-        markGraphDirty();
-        showAdminNotice('success', `Сотрудник «${removed.fullName}» удалён.`);
-      }
-    },
-    [markGraphDirty, showAdminNotice]
+    []
   );
   useLayoutEffect(() => {
     const element = sidebarRef.current;
@@ -3402,6 +3343,7 @@ function App() {
               moduleNameMap={moduleNameMap}
               artifactNameMap={artifactNameMap}
               domainNameMap={domainNameMap}
+              expertProfiles={expertProfiles}
             />
           </aside>
       </main>
@@ -3435,7 +3377,8 @@ function App() {
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
           initiatives={initiativeData}
-          onUpdateExpert={handleUpdateExpert}
+          onUpdateExpertSkills={handleUpdateExpertSkills}
+          onUpdateExpertSoftSkills={handleUpdateExpertSoftSkills}
         />
       </main>
       <main

@@ -165,6 +165,7 @@ function hasSkillInProfile(
   const normalizedCompetencies = [
     ...expert.competencies,
     ...expert.consultingSkills,
+    ...expert.softSkills,
     ...expert.focusAreas
   ].map((skill) => skill.toLowerCase());
 

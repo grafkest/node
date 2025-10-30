@@ -16,6 +16,7 @@ const baseExpert: ExpertProfile = {
   modules: [],
   competencies: [],
   consultingSkills: [],
+  softSkills: [],
   focusAreas: [],
   experienceYears: 5,
   location: 'Москва',
