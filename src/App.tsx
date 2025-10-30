@@ -184,6 +184,14 @@ function App() {
       prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
     );
   }, []);
+  const handleUpdateExpertSoftSkills = useCallback(
+    (expertId: string, softSkills: string[]) => {
+      setExpertProfiles((prev) =>
+        prev.map((expert) => (expert.id === expertId ? { ...expert, softSkills } : expert))
+      );
+    },
+    []
+  );
   useLayoutEffect(() => {
     const element = sidebarRef.current;
     if (!element) {
@@ -3332,6 +3340,7 @@ function App() {
               moduleNameMap={moduleNameMap}
               artifactNameMap={artifactNameMap}
               domainNameMap={domainNameMap}
+              expertProfiles={expertProfiles}
             />
           </aside>
       </main>
@@ -3366,6 +3375,7 @@ function App() {
           domainNameMap={domainNameMap}
           initiatives={initiativeData}
           onUpdateExpertSkills={handleUpdateExpertSkills}
+          onUpdateExpertSoftSkills={handleUpdateExpertSoftSkills}
         />
       </main>
       <main

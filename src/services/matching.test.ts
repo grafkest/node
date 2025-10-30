@@ -18,6 +18,7 @@ function createExpert(overrides: Partial<MatchableExpertProfile>): MatchableExpe
     modules: [],
     competencies: [],
     consultingSkills: [],
+    softSkills: [],
     focusAreas: [],
     experienceYears: 10,
     location: 'Москва',
@@ -36,6 +37,7 @@ function createExpert(overrides: Partial<MatchableExpertProfile>): MatchableExpe
     // Deep merge arrays when not provided in overrides
     competencies: overrides.competencies ?? base.competencies,
     consultingSkills: overrides.consultingSkills ?? base.consultingSkills,
+    softSkills: overrides.softSkills ?? base.softSkills,
     focusAreas: overrides.focusAreas ?? base.focusAreas,
     languages: overrides.languages ?? base.languages,
     skillEvidence: overrides.skillEvidence ?? base.skillEvidence

@@ -225,6 +225,13 @@
   gap: 6px;
 }
 
+.softSkillBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 .placeholder {
   display: flex;
   flex-direction: column;

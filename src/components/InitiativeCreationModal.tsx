@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   DomainNode,
   ExpertProfile,
+  ModuleNode,
   InitiativeApprovalStatus,
   InitiativeStatus,
   InitiativeWorkItemStatus,
