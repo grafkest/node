@@ -7,7 +7,6 @@ import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { domainNameById, domainTree, modules } from '../data';
 import type {
   DomainNode,
   ExpertProfile,
@@ -91,8 +90,6 @@ const collectGraphDomainIds = (domains: DomainNode[]): string[] => {
   return result;
 };
 
-const graphDomainIds = collectGraphDomainIds(domainTree);
-
 type WorkAssignmentDraft = {
   id: string;
   role: TeamRole;
@@ -141,6 +138,9 @@ type CreationStep = 'details' | 'work' | 'team';
 type InitiativeCreationModalProps = {
   isOpen: boolean;
   experts: ExpertProfile[];
+  domains: DomainNode[];
+  modules: ModuleNode[];
+  domainNameMap: Record<string, string>;
   onClose: () => void;
   onSubmit: (draft: InitiativeCreationRequest) => void | Promise<void>;
   isSubmitting?: boolean;
@@ -344,6 +344,9 @@ const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraf
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   isOpen,
   experts,
+  domains,
+  modules,
+  domainNameMap,
   onClose,
   onSubmit,
   isSubmitting = false,
@@ -351,12 +354,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   mode = 'create',
   initialDraft = null
 }) => {
+  const graphDomainIds = useMemo(() => collectGraphDomainIds(domains), [domains]);
   const domainBaseItems = useMemo<OptionItem[]>(
     () =>
       graphDomainIds
-        .map((id) => ({ id, label: domainNameById[id], value: id }))
+        .map((id) => ({ id, label: domainNameMap[id] ?? id, value: id }))
         .sort((a, b) => a.label.localeCompare(b.label, 'ru')),
-    []
+    [domainNameMap, graphDomainIds]
   );
 
   const moduleBaseItems = useMemo<OptionItem[]>(
@@ -364,7 +368,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       modules
         .map((module) => ({ id: module.id, label: module.name, value: module.id }))
         .sort((a, b) => a.label.localeCompare(b.label, 'ru')),
-    []
+    [modules]
   );
 
   const companyBaseItems = useMemo<OptionItem[]>(() => {
@@ -378,7 +382,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     return Array.from(companyNames)
       .sort((a, b) => a.localeCompare(b, 'ru'))
       .map((name) => ({ id: name, label: name, value: name }));
-  }, []);
+  }, [modules]);
 
   const unitBaseItems = useMemo<OptionItem[]>(() => {
     const unitNames = new Set<string>();
@@ -390,7 +394,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     return Array.from(unitNames)
       .sort((a, b) => a.localeCompare(b, 'ru'))
       .map((name) => ({ id: name, label: name, value: name }));
-  }, []);
+  }, [modules]);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

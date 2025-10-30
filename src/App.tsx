@@ -3377,6 +3377,8 @@ function App() {
         <InitiativePlanner
           initiatives={initiativeData}
           experts={expertProfiles}
+          domains={domainData}
+          modules={moduleData}
           domainNameMap={domainNameMap}
           onTogglePin={handleToggleInitiativePin}
           onAddRisk={handleAddInitiativeRisk}

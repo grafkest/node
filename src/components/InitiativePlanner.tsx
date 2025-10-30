@@ -7,10 +7,12 @@ import { Text } from '@consta/uikit/Text';
 import clsx from 'clsx';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  DomainNode,
   ExpertProfile,
   Initiative,
   InitiativeRisk,
-  InitiativeStatus
+  InitiativeStatus,
+  ModuleNode
 } from '../data';
 import InitiativeCreationModal from './InitiativeCreationModal';
 import InitiativeGanttChart, {
@@ -32,6 +34,8 @@ type SelectItem<Value extends string> = {
 type InitiativePlannerProps = {
   initiatives: Initiative[];
   experts: ExpertProfile[];
+  domains: DomainNode[];
+  modules: ModuleNode[];
   domainNameMap: Record<string, string>;
   onTogglePin: (initiativeId: string, roleId: string, expertId: string) => void;
   onAddRisk: (
@@ -95,6 +99,8 @@ const severityBadgeMeta: Record<InitiativeRisk['severity'], { label: string; sta
 const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   initiatives,
   experts,
+  domains,
+  modules,
   domainNameMap,
   onTogglePin,
   onAddRisk,
@@ -328,6 +334,9 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     <InitiativeCreationModal
       isOpen={isModalOpen}
       experts={experts}
+      domains={domains}
+      modules={modules}
+      domainNameMap={domainNameMap}
       onClose={() => {
         setIsModalOpen(false);
         setModalError(null);
