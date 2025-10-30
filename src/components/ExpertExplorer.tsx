@@ -25,6 +25,8 @@ import styles from './ExpertExplorer.module.css';
 import SkillEditorModal from './SkillEditorModal';
 import SoftSkillEditorModal from './SoftSkillEditorModal';
 
+type ExpertUpdatePayload = Omit<ExpertProfile, 'id'>;
+
 type ViewOption = {
   label: string;
   value: 'list' | 'graph' | 'roles' | 'assignments';
@@ -583,11 +585,16 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (!targetExpert) {
         return;
       }
-      await Promise.resolve(onUpdateExpertSkills(targetExpert.id, skills));
+      const { id: _ignore, ...rest } = targetExpert;
+      const draft: ExpertUpdatePayload = {
+        ...rest,
+        skills
+      };
+      await Promise.resolve(onUpdateExpert(targetExpert.id, draft));
       setIsSkillEditorOpen(false);
       setSkillEditorExpert(null);
     },
-    [onUpdateExpertSkills, selectedExpert, skillEditorExpert]
+    [onUpdateExpert, selectedExpert, skillEditorExpert]
   );
 
   const handleOpenSoftSkillEditor = useCallback((expert: ExpertProfile) => {
