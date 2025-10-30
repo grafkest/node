@@ -357,24 +357,6 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, [nodeCount, linkCount]);
 
   useEffect(() => {
-    if (!normalizationRequest) {
-      return;
-    }
-
-    if (!graphRef.current || nodes.length === 0) {
-      return;
-    }
-
-    const graph = graphRef.current;
-    graph.zoomToFit?.(400, 80);
-
-    const reheat = (graph as ForceGraphMethods & { d3ReheatSimulation?: () => void }).d3ReheatSimulation;
-    if (typeof reheat === 'function') {
-      reheat();
-    }
-  }, [normalizationRequest, nodes.length]);
-
-  useEffect(() => {
     return () => {
       if (captureTimeoutRef.current !== null && typeof window !== 'undefined') {
         window.clearTimeout(captureTimeoutRef.current);
@@ -462,6 +444,24 @@ const GraphView: React.FC<GraphViewProps> = ({
   useEffect(() => {
     restoreCamera();
   }, [graphData, restoreCamera]);
+
+  useEffect(() => {
+    if (!normalizationRequest || nodes.length === 0) {
+      return;
+    }
+
+    restoreCamera();
+
+    const graph = graphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    const reheat = (graph as ForceGraphMethods & { d3ReheatSimulation?: () => void }).d3ReheatSimulation;
+    if (typeof reheat === 'function') {
+      reheat();
+    }
+  }, [normalizationRequest, nodes.length, restoreCamera]);
 
   const configureSimulation = useCallback(() => {
     if (!graphRef.current || nodes.length === 0) {
