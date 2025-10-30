@@ -24,6 +24,8 @@ import type { Initiative, ExpertProfile, ExpertSkill, ModuleNode, TeamRole } fro
 import styles from './ExpertExplorer.module.css';
 import SkillEditorModal from './SkillEditorModal';
 
+type ExpertUpdatePayload = Omit<ExpertProfile, 'id'>;
+
 type ViewOption = {
   label: string;
   value: 'list' | 'graph' | 'roles' | 'assignments';
@@ -38,7 +40,7 @@ type ExpertExplorerProps = {
   moduleDomainMap: Record<string, string[]>;
   domainNameMap: Record<string, string>;
   initiatives: Initiative[];
-  onUpdateExpertSkills: (expertId: string, skills: ExpertSkill[]) => void | Promise<void>;
+  onUpdateExpert: (expertId: string, draft: ExpertUpdatePayload) => void | Promise<void>;
 };
 
 type SkillFocus = {
@@ -165,7 +167,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   moduleDomainMap,
   domainNameMap,
   initiatives,
-  onUpdateExpertSkills
+  onUpdateExpert
 }) => {
   const { theme } = useTheme();
   const themeClassName = theme?.className;
@@ -543,11 +545,16 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (!targetExpert) {
         return;
       }
-      await Promise.resolve(onUpdateExpertSkills(targetExpert.id, skills));
+      const { id: _ignore, ...rest } = targetExpert;
+      const draft: ExpertUpdatePayload = {
+        ...rest,
+        skills
+      };
+      await Promise.resolve(onUpdateExpert(targetExpert.id, draft));
       setIsSkillEditorOpen(false);
       setSkillEditorExpert(null);
     },
-    [onUpdateExpertSkills, selectedExpert, skillEditorExpert]
+    [onUpdateExpert, selectedExpert, skillEditorExpert]
   );
 
   useEffect(() => {
