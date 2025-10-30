@@ -49,7 +49,7 @@ export type RidOwner = {
 
 export type ExpertAvailability = 'available' | 'partial' | 'busy';
 
-export type SkillLevel = 'A' | 'B' | 'C' | 'D' | 'E';
+export type SkillLevel = 'A' | 'W' | 'P' | 'Ad' | 'E';
 
 export type SkillEvidenceStatus =
   | 'claimed'
