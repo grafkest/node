@@ -4,6 +4,11 @@ import type {
   SkillEvidenceStatus
 } from '../data';
 
+const collectSkillStatuses = (skill: ExpertSkill): SkillEvidenceStatus[] => {
+  const evidenceStatuses = skill.evidence?.map((entry) => entry.status) ?? [];
+  return Array.from(new Set([skill.proofStatus, ...evidenceStatuses]));
+};
+
 /**
  * Возвращает последнюю дату использования навыка.
  * При наличии периода приоритет отдаётся дате окончания, иначе — дате начала.
@@ -57,7 +62,10 @@ export const filterSkillsByEvidenceStatus = (
   const statuses = Array.isArray(status) ? status : [status];
   const uniqueStatuses = new Set(statuses);
 
-  return skills.filter((skill) => uniqueStatuses.has(skill.proofStatus));
+  return skills.filter((skill) => {
+    const skillStatuses = collectSkillStatuses(skill);
+    return skillStatuses.some((item) => uniqueStatuses.has(item));
+  });
 };
 
 /**
