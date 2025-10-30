@@ -14,7 +14,8 @@ import {
   type ExpertProfile,
   type ExpertSkill,
   type InitiativeCandidate,
-  type TeamRole
+  type TeamRole,
+  initiatives as initiativeCatalog
 } from '../data';
 import type { InitiativeRoleWork } from '../data';
 
@@ -27,6 +28,8 @@ const skillLevelMap: Record<ExpertSkill['level'], SkillLevel> = {
   Ad: 'expert',
   E: 'expert'
 };
+
+const initiativeNameMap = new Map(initiativeCatalog.map((item) => [item.id, item.name]));
 
 const defaultRoleLevel: Partial<Record<TeamRole, SkillLevel>> = {
   Архитектор: 'expert',
@@ -77,11 +80,28 @@ function toSkillEvidence(skill: ExpertSkill): ExpertSkillEvidence {
     ? undefined
     : Math.max(0, Math.round((Date.now() - timestamp) / MS_IN_DAY));
 
+  const initiativeIds = new Set<string>();
+  skill.evidence
+    .filter((entry) => entry.initiativeId)
+    .forEach((entry) => {
+      const trimmed = entry.initiativeId?.trim();
+      if (trimmed) {
+        initiativeIds.add(trimmed);
+      }
+    });
+
+  const initiativeRefs = Array.from(initiativeIds).map((id) => {
+    const name = initiativeNameMap.get(id);
+    return name ? `${name} (${id})` : id;
+  });
+
   return {
     id: skill.id,
     name,
     level: skillLevelMap[skill.level] ?? 'novice',
-    lastUsedDaysAgo: daysAgo ?? 365
+    lastUsedDaysAgo: daysAgo ?? 365,
+    status: skill.proofStatus,
+    sourceInitiatives: initiativeRefs
   };
 }
 

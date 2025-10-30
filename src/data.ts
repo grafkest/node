@@ -51,7 +51,19 @@ export type ExpertAvailability = 'available' | 'partial' | 'busy';
 
 export type SkillLevel = 'A' | 'W' | 'P' | 'Ad' | 'E';
 
-export type SkillEvidenceStatus = 'verified' | 'in-review' | 'self-reported';
+export type SkillEvidenceStatus =
+  | 'claimed'
+  | 'screened'
+  | 'observed'
+  | 'validated'
+  | 'refuted';
+
+export type SkillEvidenceRecord = {
+  status: SkillEvidenceStatus;
+  initiativeId?: string;
+  artifactIds?: string[];
+  comment?: string;
+};
 
 export type SkillInterestLevel = 'high' | 'medium' | 'low';
 
@@ -65,6 +77,7 @@ export type ExpertSkill = {
   id: string;
   level: SkillLevel;
   proofStatus: SkillEvidenceStatus;
+  evidence: SkillEvidenceRecord[];
   usage?: SkillUsage;
   artifacts: string[];
   interest: SkillInterestLevel;
@@ -1557,8 +1570,16 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'data-normalization',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [
+          {
+            status: 'validated',
+            initiativeId: 'initiative-digital-pad',
+            artifactIds: ['artifact-infraplan-source-pack'],
+            comment: 'Пилотирование конвейера нормализации данных для цифровой площадки'
+          }
+        ],
         usage: {
           from: '2023-01-15',
           to: '2024-04-01',
@@ -1570,8 +1591,16 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'streaming-pipelines',
-        level: 'Ad',
-        proofStatus: 'verified',
+        level: 'B',
+        proofStatus: 'validated',
+        evidence: [
+          {
+            status: 'validated',
+            initiativeId: 'initiative-remote-operations',
+            artifactIds: ['artifact-dtwin-telemetry-cube'],
+            comment: 'Потоковые пайплайны телеметрии для ситуационных центров'
+          }
+        ],
         usage: {
           from: '2022-09-01',
           to: '2024-02-20',
@@ -1583,8 +1612,15 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'data-governance',
-        level: 'Ad',
-        proofStatus: 'in-review',
+        level: 'B',
+        proofStatus: 'screened',
+        evidence: [
+          {
+            status: 'screened',
+            initiativeId: 'initiative-digital-pad',
+            comment: 'Структуризация справочников и матрицы владения'
+          }
+        ],
         usage: {
           from: '2023-05-01',
           description: 'Разработка матрицы владения инженерными данными и процессов каталогизации'
@@ -1633,8 +1669,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'layout-optimization',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2022-02-01',
           to: '2024-03-15',
@@ -1646,8 +1683,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'geo-apis',
-        level: 'Ad',
-        proofStatus: 'self-reported',
+        level: 'B',
+        proofStatus: 'claimed',
+        evidence: [],
         usage: {
           from: '2021-07-01',
           to: '2023-12-10',
@@ -1659,8 +1697,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'infrastructure-economics',
-        level: 'P',
-        proofStatus: 'in-review',
+        level: 'C',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2023-06-01',
           description: 'Совместные расчёты экономических эффектов для сценариев размещения'
@@ -1709,8 +1748,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'financial-modeling',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2022-01-01',
           to: '2024-04-20',
@@ -1722,8 +1762,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'scenario-planning',
-        level: 'Ad',
-        proofStatus: 'verified',
+        level: 'B',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2023-03-01',
           to: '2024-01-30',
@@ -1735,8 +1776,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'ma-support',
-        level: 'P',
-        proofStatus: 'in-review',
+        level: 'C',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2022-11-01',
           description: 'Экспертиза сделок по покупке активов в Арктическом регионе'
@@ -1787,8 +1829,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'telemetry-streaming',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2022-04-01',
           to: '2024-03-01',
@@ -1800,8 +1843,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'iot-integration',
-        level: 'Ad',
-        proofStatus: 'in-review',
+        level: 'B',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2023-02-01',
           description: 'Интеграция промышленного IoT с ситуационными центрами и Digital Twin'
@@ -1812,8 +1856,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'sre-monitoring',
-        level: 'Ad',
-        proofStatus: 'self-reported',
+        level: 'B',
+        proofStatus: 'claimed',
+        evidence: [],
         usage: {
           from: '2021-11-01',
           to: '2023-10-01',
@@ -1864,8 +1909,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'production-ml',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2022-08-01',
           to: '2024-02-15',
@@ -1877,8 +1923,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'mlops-production',
-        level: 'Ad',
-        proofStatus: 'verified',
+        level: 'B',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2023-01-10',
           to: '2024-03-10',
@@ -1890,8 +1937,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'value-discovery',
-        level: 'P',
-        proofStatus: 'in-review',
+        level: 'C',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2023-06-01',
           description: 'Фасилитация discovery-сессий с производством по выбору сценариев'
@@ -1940,8 +1988,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'remote-ops-integration',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2021-09-01',
           to: '2024-02-28',
@@ -1953,8 +2002,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'remote-ops-security',
-        level: 'Ad',
-        proofStatus: 'in-review',
+        level: 'B',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2022-05-01',
           description: 'Оценка и настройка кибербезопасности дистанционных операций'
@@ -1965,8 +2015,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'change-management',
-        level: 'P',
-        proofStatus: 'self-reported',
+        level: 'C',
+        proofStatus: 'claimed',
+        evidence: [],
         usage: {
           from: '2023-04-01',
           to: '2024-01-10',
@@ -2017,8 +2068,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'wwo-planning',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2021-03-01',
           to: '2024-02-01',
@@ -2030,8 +2082,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'contractor-management',
-        level: 'Ad',
-        proofStatus: 'verified',
+        level: 'B',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2022-05-01',
           to: '2024-03-20',
@@ -2043,8 +2096,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'process-digitization',
-        level: 'P',
-        proofStatus: 'in-review',
+        level: 'C',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2023-09-01',
           description: 'Перевод регламентов WWO в цифровые шаблоны'
@@ -2093,8 +2147,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'field-dispatching',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2022-06-01',
           to: '2024-04-05',
@@ -2106,8 +2161,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'mobile-solutions',
-        level: 'Ad',
-        proofStatus: 'in-review',
+        level: 'B',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2023-01-01',
           description: 'Внедрение мобильных приложений для полевых сотрудников'
@@ -2118,8 +2174,15 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'hse-compliance',
-        level: 'P',
-        proofStatus: 'self-reported',
+        level: 'C',
+        proofStatus: 'refuted',
+        evidence: [
+          {
+            status: 'refuted',
+            initiativeId: 'initiative-remote-operations',
+            comment: 'Проверка показала отсутствие практического опыта по HSE'
+          }
+        ],
         usage: {
           from: '2022-09-01',
           to: '2023-12-01',
@@ -2169,8 +2232,9 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'wwo-analytics',
-        level: 'E',
-        proofStatus: 'verified',
+        level: 'A',
+        proofStatus: 'validated',
+        evidence: [],
         usage: {
           from: '2022-03-01',
           to: '2024-03-25',
@@ -2182,8 +2246,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'forecasting',
-        level: 'Ad',
-        proofStatus: 'in-review',
+        level: 'B',
+        proofStatus: 'screened',
+        evidence: [],
         usage: {
           from: '2023-02-01',
           to: '2024-01-15',
@@ -2195,8 +2260,9 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'data-storytelling',
-        level: 'Ad',
-        proofStatus: 'self-reported',
+        level: 'B',
+        proofStatus: 'claimed',
+        evidence: [],
         usage: {
           from: '2021-10-01',
           description: 'Обучение аналитиков storytelling и презентации данных'

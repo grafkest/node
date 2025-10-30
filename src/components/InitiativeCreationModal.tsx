@@ -13,6 +13,7 @@ import type {
   InitiativeApprovalStatus,
   InitiativeStatus,
   InitiativeWorkItemStatus,
+  ModuleNode,
   TeamRole
 } from '../data';
 import { getSkillNameById, getSkillsByRole } from '../data/skills';

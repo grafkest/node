@@ -93,8 +93,16 @@ describe('buildRoleMatchReports', () => {
       skills: [
         {
           id: 'data-normalization',
-          level: 'E',
-          proofStatus: 'verified',
+          level: 'A',
+          proofStatus: 'validated',
+          evidence: [
+            {
+              status: 'validated',
+              initiativeId: 'initiative-digital-pad',
+              artifactIds: ['artifact-data-normalization'],
+              comment: 'Подтверждено на проектах инфра-планирования'
+            }
+          ],
           artifacts: [],
           interest: 'high',
           availableFte: 0.5,
