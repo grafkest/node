@@ -20,13 +20,13 @@ import ForceGraph2D, {
   LinkObject,
   NodeObject
 } from 'react-force-graph-2d';
-import type { ExpertProfile, ExpertSkill, ModuleNode, TeamRole } from '../data';
+import type { Initiative, ExpertProfile, ExpertSkill, ModuleNode, TeamRole } from '../data';
 import styles from './ExpertExplorer.module.css';
 import SkillEditorModal from './SkillEditorModal';
 
 type ViewOption = {
   label: string;
-  value: 'list' | 'graph' | 'roles';
+  value: 'list' | 'graph' | 'roles' | 'assignments';
 };
 
 type ViewMode = ViewOption['value'];
@@ -37,6 +37,7 @@ type ExpertExplorerProps = {
   moduleNameMap: Record<string, string>;
   moduleDomainMap: Record<string, string[]>;
   domainNameMap: Record<string, string>;
+  initiatives: Initiative[];
   onUpdateExpertSkills: (expertId: string, skills: ExpertSkill[]) => void | Promise<void>;
 };
 
@@ -47,16 +48,21 @@ type SkillFocus = {
   expertIds: string[];
 };
 
+type AssignmentFocus = {
+  type: 'module' | 'initiative';
+  id: string;
+};
+
 type ForceNode = NodeObject & {
   id: string;
-  type: SkillFocus['type'] | 'expert' | 'role';
+  type: SkillFocus['type'] | 'expert' | 'role' | 'module' | 'initiative';
   originId: string;
   label: string;
 };
 
 type ForceLink = LinkObject & {
   id: string;
-  type: SkillFocus['type'] | 'role';
+  type: SkillFocus['type'] | 'role' | 'module' | 'initiative' | 'plan';
 };
 
 type ExpertPalette = {
@@ -69,9 +75,14 @@ type ExpertPalette = {
   competency: string;
   consulting: string;
   role: string;
+  module: string;
+  initiative: string;
   edge: string;
   edgeHighlight: string;
   roleEdge: string;
+  moduleEdge: string;
+  initiativeEdge: string;
+  planEdge: string;
 };
 
 type RoleAssignmentMap = Map<TeamRole, Map<string, Set<string>>>;
@@ -103,6 +114,7 @@ type RGBColor = { r: number; g: number; b: number };
 const viewOptions: ViewOption[] = [
   { label: 'Список', value: 'list' },
   { label: 'Граф навыков', value: 'graph' },
+  { label: 'Граф назначений', value: 'assignments' },
   { label: 'По ролям', value: 'roles' }
 ];
 
@@ -122,15 +134,26 @@ const DEFAULT_PALETTE: ExpertPalette = {
   competency: '#45C7B0',
   consulting: '#A067FF',
   role: '#FFB347',
+  module: '#2E8BC0',
+  initiative: '#FF6FA7',
   edge: 'rgba(82, 96, 115, 0.35)',
   edgeHighlight: '#3F8CFF',
-  roleEdge: 'rgba(255, 179, 71, 0.45)'
+  roleEdge: 'rgba(255, 179, 71, 0.45)',
+  moduleEdge: 'rgba(46, 139, 192, 0.45)',
+  initiativeEdge: 'rgba(255, 111, 167, 0.45)',
+  planEdge: 'rgba(255, 111, 167, 0.32)'
 };
 
 const skillTypeLabel: Record<SkillFocus['type'], string> = {
   domain: 'Домен',
   competency: 'Компетенция',
   consulting: 'Консалтинговый навык'
+};
+
+const initiativeStatusLabel: Record<Initiative['status'], string> = {
+  initiated: 'Инициирована',
+  'in-progress': 'В работе',
+  converted: 'Внедрена'
 };
 
 const MAX_FOCUSED_EXPERTS = 6;
@@ -141,6 +164,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   moduleNameMap,
   moduleDomainMap,
   domainNameMap,
+  initiatives,
   onUpdateExpertSkills
 }) => {
   const { theme } = useTheme();
@@ -160,6 +184,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [isSkillEditorOpen, setIsSkillEditorOpen] = useState(false);
   const [skillEditorExpert, setSkillEditorExpert] = useState<ExpertProfile | null>(null);
   const [focusedSkill, setFocusedSkill] = useState<SkillFocus | null>(null);
+  const [focusedAssignment, setFocusedAssignment] = useState<AssignmentFocus | null>(null);
   const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
@@ -174,6 +199,12 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     experts.forEach((expert) => map.set(expert.id, expert));
     return map;
   }, [experts]);
+
+  const initiativeById = useMemo(() => {
+    const map = new Map<string, Initiative>();
+    initiatives.forEach((initiative) => map.set(initiative.id, initiative));
+    return map;
+  }, [initiatives]);
 
   const roleAssignments = useMemo<RoleAssignmentMap>(() => {
     const assignments: RoleAssignmentMap = new Map();
@@ -537,7 +568,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       return;
     }
 
-    if (viewMode !== 'graph') {
+    if (viewMode !== 'graph' && viewMode !== 'assignments') {
       return;
     }
 
@@ -608,23 +639,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return () => observer.disconnect();
   }, [viewMode]);
 
-  useEffect(() => {
-    if (viewMode !== 'graph') {
-      return;
-    }
-
-    if (!graphRef.current) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      graphRef.current?.zoomToFit(400, 40, (node) => (node as ForceNode).type === 'expert');
-    }, 250);
-
-    return () => window.clearTimeout(timeout);
-  }, [filteredExperts, graphDimensions.height, graphDimensions.width, viewMode]);
-
-  const graphData = useMemo(() => {
+  const skillGraphData = useMemo(() => {
     const nodes: ForceNode[] = [];
     const links: ForceLink[] = [];
     const seenNodes = new Map<string, ForceNode>();
@@ -702,6 +717,252 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     return { nodes, links };
   }, [domainNameMap, filteredExperts]);
+
+  const {
+    nodes: assignmentGraphNodes,
+    links: assignmentGraphLinks,
+    expertAssignments,
+    moduleExperts,
+    initiativeExperts,
+    initiativeModules,
+    moduleInitiatives
+  } = useMemo(() => {
+    const nodes: ForceNode[] = [];
+    const links: ForceLink[] = [];
+    const seenNodes = new Map<string, ForceNode>();
+    const seenLinks = new Set<string>();
+    const expertAssignments = new Map<string, { modules: Set<string>; initiatives: Set<string> }>();
+    const moduleExperts = new Map<string, Set<string>>();
+    const initiativeExperts = new Map<string, Set<string>>();
+    const initiativeModules = new Map<string, Set<string>>();
+    const moduleInitiatives = new Map<string, Set<string>>();
+    const filteredExpertIds = new Set(filteredExperts.map((expert) => expert.id));
+
+    const ensureNode = (node: ForceNode) => {
+      if (seenNodes.has(node.id)) {
+        return seenNodes.get(node.id)!;
+      }
+      seenNodes.set(node.id, node);
+      nodes.push(node);
+      return node;
+    };
+
+    const appendLink = (link: ForceLink) => {
+      if (seenLinks.has(link.id)) {
+        return;
+      }
+      seenLinks.add(link.id);
+      links.push(link);
+    };
+
+    const ensureAssignmentRecord = (expertId: string) => {
+      let record = expertAssignments.get(expertId);
+      if (!record) {
+        record = { modules: new Set<string>(), initiatives: new Set<string>() };
+        expertAssignments.set(expertId, record);
+      }
+      return record;
+    };
+
+    filteredExperts.forEach((expert) => {
+      const expertNodeId = `expert:${expert.id}`;
+      ensureNode({
+        id: expertNodeId,
+        originId: expert.id,
+        type: 'expert',
+        label: expert.fullName
+      });
+
+      const record = ensureAssignmentRecord(expert.id);
+      const moduleIds = new Set(expert.modules);
+      moduleIds.forEach((moduleId) => {
+        const moduleNodeId = `module:${moduleId}`;
+        ensureNode({
+          id: moduleNodeId,
+          originId: moduleId,
+          type: 'module',
+          label: moduleNameMap[moduleId] ?? moduleId
+        });
+        record.modules.add(moduleId);
+        let expertSet = moduleExperts.get(moduleId);
+        if (!expertSet) {
+          expertSet = new Set();
+          moduleExperts.set(moduleId, expertSet);
+        }
+        expertSet.add(expert.id);
+        appendLink({
+          id: `${expertNodeId}->${moduleNodeId}`,
+          source: expertNodeId,
+          target: moduleNodeId,
+          type: 'module'
+        });
+      });
+    });
+
+    initiatives.forEach((initiative) => {
+      const relatedExperts = new Set<string>();
+
+      initiative.roles.forEach((rolePlan) => {
+        rolePlan.pinnedExpertIds.forEach((expertId) => {
+          if (filteredExpertIds.has(expertId)) {
+            relatedExperts.add(expertId);
+          }
+        });
+
+        rolePlan.workItems?.forEach((item) => {
+          if (item.assignedExpertId && filteredExpertIds.has(item.assignedExpertId)) {
+            relatedExperts.add(item.assignedExpertId);
+          }
+        });
+      });
+
+      if (relatedExperts.size === 0) {
+        return;
+      }
+
+      const initiativeNodeId = `initiative:${initiative.id}`;
+      ensureNode({
+        id: initiativeNodeId,
+        originId: initiative.id,
+        type: 'initiative',
+        label: initiative.name
+      });
+
+      let initiativeExpertSet = initiativeExperts.get(initiative.id);
+      if (!initiativeExpertSet) {
+        initiativeExpertSet = new Set();
+        initiativeExperts.set(initiative.id, initiativeExpertSet);
+      }
+
+      relatedExperts.forEach((expertId) => {
+        initiativeExpertSet!.add(expertId);
+        const record = ensureAssignmentRecord(expertId);
+        record.initiatives.add(initiative.id);
+        const expertNodeId = `expert:${expertId}`;
+        appendLink({
+          id: `${expertNodeId}->${initiativeNodeId}`,
+          source: expertNodeId,
+          target: initiativeNodeId,
+          type: 'initiative'
+        });
+      });
+
+      const moduleIds = new Set<string>([
+        ...initiative.plannedModuleIds,
+        ...(initiative.potentialModules ?? [])
+      ]);
+
+      let initiativeModuleSet = initiativeModules.get(initiative.id);
+      if (!initiativeModuleSet) {
+        initiativeModuleSet = new Set();
+      }
+
+      moduleIds.forEach((moduleId) => {
+        if (!moduleId) {
+          return;
+        }
+        const moduleNodeId = `module:${moduleId}`;
+        ensureNode({
+          id: moduleNodeId,
+          originId: moduleId,
+          type: 'module',
+          label: moduleNameMap[moduleId] ?? moduleId
+        });
+        initiativeModuleSet!.add(moduleId);
+        appendLink({
+          id: `${initiativeNodeId}->${moduleNodeId}`,
+          source: initiativeNodeId,
+          target: moduleNodeId,
+          type: 'plan'
+        });
+        let moduleInitiativeSet = moduleInitiatives.get(moduleId);
+        if (!moduleInitiativeSet) {
+          moduleInitiativeSet = new Set();
+          moduleInitiatives.set(moduleId, moduleInitiativeSet);
+        }
+        moduleInitiativeSet.add(initiative.id);
+      });
+
+      if (initiativeModuleSet.size > 0) {
+        initiativeModules.set(initiative.id, initiativeModuleSet);
+      }
+    });
+
+    return {
+      nodes,
+      links,
+      expertAssignments,
+      moduleExperts,
+      initiativeExperts,
+      initiativeModules,
+      moduleInitiatives
+    };
+  }, [filteredExperts, initiatives, moduleNameMap]);
+
+  const assignmentGraphData = useMemo(
+    () => ({ nodes: assignmentGraphNodes, links: assignmentGraphLinks }),
+    [assignmentGraphLinks, assignmentGraphNodes]
+  );
+
+  const skillGraphNodes = skillGraphData.nodes;
+  const skillGraphLinks = skillGraphData.links;
+
+  useEffect(() => {
+    if (viewMode !== 'graph' && viewMode !== 'assignments') {
+      return;
+    }
+
+    if (!graphRef.current) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (viewMode === 'graph') {
+        graphRef.current?.zoomToFit(400, 40, (node) => (node as ForceNode).type === 'expert');
+      } else {
+        graphRef.current?.zoomToFit(400, 40);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    assignmentGraphLinks,
+    assignmentGraphNodes,
+    filteredExperts,
+    graphDimensions.height,
+    graphDimensions.width,
+    skillGraphLinks,
+    skillGraphNodes,
+    viewMode
+  ]);
+
+  useEffect(() => {
+    if (viewMode !== 'graph') {
+      setFocusedSkill(null);
+    }
+    if (viewMode !== 'assignments') {
+      setFocusedAssignment(null);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!focusedAssignment) {
+      return;
+    }
+
+    if (focusedAssignment.type === 'module') {
+      const hasExperts = moduleExperts.get(focusedAssignment.id)?.size;
+      const hasInitiatives = moduleInitiatives.get(focusedAssignment.id)?.size;
+      if (!hasExperts && !hasInitiatives) {
+        setFocusedAssignment(null);
+      }
+      return;
+    }
+
+    if (!initiativeExperts.get(focusedAssignment.id)?.size) {
+      setFocusedAssignment(null);
+    }
+  }, [focusedAssignment, initiativeExperts, moduleExperts, moduleInitiatives]);
 
   const roleGraphData = useMemo(() => {
     if (!selectedRoleAggregate) {
@@ -792,7 +1053,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [roleGraphData, roleGraphDimensions.height, roleGraphDimensions.width, viewMode]);
 
   useEffect(() => {
-    if (viewMode !== 'graph') {
+    if (viewMode !== 'graph' && viewMode !== 'assignments') {
       return;
     }
 
@@ -803,17 +1064,26 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     const chargeForce = graph.d3Force('charge');
     if (chargeForce && typeof (chargeForce as { strength?: unknown }).strength === 'function') {
-      (chargeForce as { strength: (value: number) => void }).strength(-160);
+      const charge = viewMode === 'assignments' ? -220 : -160;
+      (chargeForce as { strength: (value: number) => void }).strength(charge);
     }
 
     const linkForce = graph.d3Force('link');
     if (linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
-      (linkForce as { distance: (value: number) => void }).distance(90);
+      const distance = viewMode === 'assignments' ? 110 : 90;
+      (linkForce as { distance: (value: number) => void }).distance(distance);
     }
     if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
-      (linkForce as { strength: (value: number) => void }).strength(0.6);
+      const strength = viewMode === 'assignments' ? 0.55 : 0.6;
+      (linkForce as { strength: (value: number) => void }).strength(strength);
     }
-  }, [viewMode, graphData]);
+  }, [
+    assignmentGraphLinks,
+    assignmentGraphNodes,
+    skillGraphLinks,
+    skillGraphNodes,
+    viewMode
+  ]);
 
   useEffect(() => {
     if (viewMode !== 'roles') {
@@ -841,20 +1111,48 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
   const highlightNodeIds = useMemo(() => {
     const set = new Set<string>();
+
     if (selectedExpert) {
       set.add(`expert:${selectedExpert.id}`);
-      selectedExpert.domains.forEach((domainId) => set.add(`domain:${domainId}`));
-      selectedExpert.competencies.forEach((competency) =>
-        set.add(`competency:${competency}`)
-      );
-      selectedExpert.consultingSkills.forEach((skill) =>
-        set.add(`consulting:${skill}`)
-      );
+      if (viewMode === 'graph') {
+        selectedExpert.domains.forEach((domainId) => set.add(`domain:${domainId}`));
+        selectedExpert.competencies.forEach((competency) =>
+          set.add(`competency:${competency}`)
+        );
+        selectedExpert.consultingSkills.forEach((skill) =>
+          set.add(`consulting:${skill}`)
+        );
+      }
+
+      if (viewMode === 'assignments') {
+        const record = expertAssignments.get(selectedExpert.id);
+        record?.modules.forEach((moduleId) => set.add(`module:${moduleId}`));
+        record?.initiatives.forEach((initiativeId) => {
+          set.add(`initiative:${initiativeId}`);
+          const relatedModules = initiativeModules.get(initiativeId);
+          relatedModules?.forEach((moduleId) => set.add(`module:${moduleId}`));
+        });
+      }
     }
 
-    if (focusedSkill) {
+    if (viewMode === 'graph' && focusedSkill) {
       set.add(`${focusedSkill.type}:${focusedSkill.originId}`);
       focusedSkill.expertIds.forEach((expertId) => set.add(`expert:${expertId}`));
+    }
+
+    if (viewMode === 'assignments' && focusedAssignment) {
+      set.add(`${focusedAssignment.type}:${focusedAssignment.id}`);
+      if (focusedAssignment.type === 'module') {
+        const expertsForModule = moduleExperts.get(focusedAssignment.id);
+        expertsForModule?.forEach((expertId) => set.add(`expert:${expertId}`));
+        const initiativesForModule = moduleInitiatives.get(focusedAssignment.id);
+        initiativesForModule?.forEach((initiativeId) => set.add(`initiative:${initiativeId}`));
+      } else {
+        const expertsForInitiative = initiativeExperts.get(focusedAssignment.id);
+        expertsForInitiative?.forEach((expertId) => set.add(`expert:${expertId}`));
+        const modulesForInitiative = initiativeModules.get(focusedAssignment.id);
+        modulesForInitiative?.forEach((moduleId) => set.add(`module:${moduleId}`));
+      }
     }
 
     if (viewMode === 'roles' && selectedRoleAggregate) {
@@ -868,26 +1166,75 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }
 
     return set;
-  }, [focusedSkill, selectedExpert, selectedRoleAggregate, viewMode]);
+  }, [
+    expertAssignments,
+    focusedAssignment,
+    focusedSkill,
+    initiativeExperts,
+    initiativeModules,
+    moduleExperts,
+    moduleInitiatives,
+    selectedExpert,
+    selectedRoleAggregate,
+    viewMode
+  ]);
 
   const highlightLinkIds = useMemo(() => {
     const set = new Set<string>();
     if (selectedExpert) {
-      selectedExpert.domains.forEach((domainId) =>
-        set.add(`expert:${selectedExpert.id}->domain:${domainId}`)
-      );
-      selectedExpert.competencies.forEach((competency) =>
-        set.add(`expert:${selectedExpert.id}->competency:${competency}`)
-      );
-      selectedExpert.consultingSkills.forEach((skill) =>
-        set.add(`expert:${selectedExpert.id}->consulting:${skill}`)
-      );
+      if (viewMode === 'graph') {
+        selectedExpert.domains.forEach((domainId) =>
+          set.add(`expert:${selectedExpert.id}->domain:${domainId}`)
+        );
+        selectedExpert.competencies.forEach((competency) =>
+          set.add(`expert:${selectedExpert.id}->competency:${competency}`)
+        );
+        selectedExpert.consultingSkills.forEach((skill) =>
+          set.add(`expert:${selectedExpert.id}->consulting:${skill}`)
+        );
+      }
+
+      if (viewMode === 'assignments') {
+        const record = expertAssignments.get(selectedExpert.id);
+        record?.modules.forEach((moduleId) =>
+          set.add(`expert:${selectedExpert.id}->module:${moduleId}`)
+        );
+        record?.initiatives.forEach((initiativeId) => {
+          set.add(`expert:${selectedExpert.id}->initiative:${initiativeId}`);
+          const relatedModules = initiativeModules.get(initiativeId);
+          relatedModules?.forEach((moduleId) =>
+            set.add(`initiative:${initiativeId}->module:${moduleId}`)
+          );
+        });
+      }
     }
 
-    if (focusedSkill) {
+    if (viewMode === 'graph' && focusedSkill) {
       focusedSkill.expertIds.forEach((expertId) =>
         set.add(`expert:${expertId}->${focusedSkill.type}:${focusedSkill.originId}`)
       );
+    }
+
+    if (viewMode === 'assignments' && focusedAssignment) {
+      if (focusedAssignment.type === 'module') {
+        const expertsForModule = moduleExperts.get(focusedAssignment.id);
+        expertsForModule?.forEach((expertId) =>
+          set.add(`expert:${expertId}->module:${focusedAssignment.id}`)
+        );
+        const initiativesForModule = moduleInitiatives.get(focusedAssignment.id);
+        initiativesForModule?.forEach((initiativeId) =>
+          set.add(`initiative:${initiativeId}->module:${focusedAssignment.id}`)
+        );
+      } else {
+        const expertsForInitiative = initiativeExperts.get(focusedAssignment.id);
+        expertsForInitiative?.forEach((expertId) =>
+          set.add(`expert:${expertId}->initiative:${focusedAssignment.id}`)
+        );
+        const modulesForInitiative = initiativeModules.get(focusedAssignment.id);
+        modulesForInitiative?.forEach((moduleId) =>
+          set.add(`initiative:${focusedAssignment.id}->module:${moduleId}`)
+        );
+      }
     }
 
     if (viewMode === 'roles' && selectedRoleAggregate) {
@@ -902,11 +1249,85 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }
 
     return set;
-  }, [focusedSkill, selectedExpert, selectedRoleAggregate, viewMode]);
+  }, [
+    expertAssignments,
+    focusedAssignment,
+    focusedSkill,
+    initiativeExperts,
+    initiativeModules,
+    moduleExperts,
+    moduleInitiatives,
+    selectedExpert,
+    selectedRoleAggregate,
+    viewMode
+  ]);
+
+  const selectedExpertAssignments = useMemo(() => {
+    if (!selectedExpert) {
+      return null as { modules: string[]; initiatives: string[] } | null;
+    }
+    const record = expertAssignments.get(selectedExpert.id);
+    if (!record) {
+      return { modules: [], initiatives: [] };
+    }
+    return {
+      modules: Array.from(record.modules),
+      initiatives: Array.from(record.initiatives)
+    };
+  }, [expertAssignments, selectedExpert]);
+
+  const focusedAssignmentDetails = useMemo(() => {
+    if (!focusedAssignment) {
+      return null as
+        | (
+            | {
+                type: 'module';
+                label: string;
+                expertIds: string[];
+                initiativeIds: string[];
+              }
+            | {
+                type: 'initiative';
+                label: string;
+                status: Initiative['status'] | null;
+                expertIds: string[];
+                moduleIds: string[];
+              }
+          )
+        | null;
+    }
+
+    if (focusedAssignment.type === 'module') {
+      return {
+        type: 'module' as const,
+        label: moduleNameMap[focusedAssignment.id] ?? focusedAssignment.id,
+        expertIds: Array.from(moduleExperts.get(focusedAssignment.id) ?? []),
+        initiativeIds: Array.from(moduleInitiatives.get(focusedAssignment.id) ?? [])
+      };
+    }
+
+    const initiative = initiativeById.get(focusedAssignment.id) ?? null;
+    return {
+      type: 'initiative' as const,
+      label: initiative?.name ?? focusedAssignment.id,
+      status: initiative?.status ?? null,
+      expertIds: Array.from(initiativeExperts.get(focusedAssignment.id) ?? []),
+      moduleIds: Array.from(initiativeModules.get(focusedAssignment.id) ?? [])
+    };
+  }, [
+    focusedAssignment,
+    initiativeById,
+    initiativeExperts,
+    initiativeModules,
+    moduleExperts,
+    moduleInitiatives,
+    moduleNameMap
+  ]);
 
   const handleSelectExpert = useCallback((expertId: string) => {
     setSelectedExpertId(expertId);
     setFocusedSkill(null);
+    setFocusedAssignment(null);
   }, []);
 
   const handleNodeClick = useCallback(
@@ -932,6 +1353,36 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         return;
       }
 
+      if (viewMode === 'assignments') {
+        if (typed.type === 'module') {
+          setFocusedSkill(null);
+          setFocusedAssignment({ type: 'module', id: typed.originId });
+          const expertsForModule = moduleExperts.get(typed.originId);
+          const firstExpertId = expertsForModule ? Array.from(expertsForModule)[0] : undefined;
+          if (firstExpertId) {
+            handleSelectExpert(firstExpertId);
+          }
+          return;
+        }
+
+        if (typed.type === 'initiative') {
+          setFocusedSkill(null);
+          setFocusedAssignment({ type: 'initiative', id: typed.originId });
+          const expertsForInitiative = initiativeExperts.get(typed.originId);
+          const firstExpertId = expertsForInitiative
+            ? Array.from(expertsForInitiative)[0]
+            : undefined;
+          if (firstExpertId) {
+            handleSelectExpert(firstExpertId);
+          }
+          return;
+        }
+      }
+
+      if (viewMode !== 'graph') {
+        return;
+      }
+
       const relatedExperts = filteredExperts.filter((expert) => {
         if (typed.type === 'domain') {
           return expert.domains.includes(typed.originId);
@@ -942,6 +1393,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         return expert.consultingSkills.includes(typed.originId);
       });
 
+      setFocusedAssignment(null);
       setFocusedSkill({
         type: typed.type,
         originId: typed.originId,
@@ -953,7 +1405,14 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         handleSelectExpert(relatedExperts[0].id);
       }
     },
-    [filteredExperts, handleSelectExpert, roleAggregationMap]
+    [
+      filteredExperts,
+      handleSelectExpert,
+      initiativeExperts,
+      moduleExperts,
+      roleAggregationMap,
+      viewMode
+    ]
   );
 
   const nodeCanvasObject = useCallback(
@@ -963,24 +1422,33 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const radius =
         typed.type === 'expert'
           ? 14
-          : typed.type === 'role'
-            ? 12
-            : typed.type === 'domain'
-              ? 11
-              : 9;
+          : typed.type === 'initiative'
+            ? 13
+            : typed.type === 'role'
+              ? 12
+              : typed.type === 'module' || typed.type === 'domain'
+                ? 11
+                : typed.type === 'competency'
+                  ? 10
+                  : 9;
 
       const baseColor =
         typed.type === 'expert'
           ? palette.expert
-          : typed.type === 'role'
-            ? palette.role
-            : typed.type === 'domain'
-              ? palette.domain
-              : typed.type === 'competency'
-                ? palette.competency
-                : palette.consulting;
+          : typed.type === 'initiative'
+            ? palette.initiative
+            : typed.type === 'role'
+              ? palette.role
+              : typed.type === 'module'
+                ? palette.module
+                : typed.type === 'domain'
+                  ? palette.domain
+                  : typed.type === 'competency'
+                    ? palette.competency
+                    : palette.consulting;
 
-      const isSolid = typed.type === 'expert' || typed.type === 'role';
+      const isSolid =
+        typed.type === 'expert' || typed.type === 'role' || typed.type === 'initiative';
       const isHighlighted = highlightNodeIds.has(typed.id);
       const fillColor = isHighlighted || isSolid ? baseColor : withAlpha(baseColor, 0.22);
       const accentTextColor = getReadableTextColor(baseColor, palette);
@@ -990,11 +1458,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const fontSizeBase =
         typed.type === 'expert'
           ? 16
-          : typed.type === 'role'
+          : typed.type === 'initiative'
             ? 15
-            : typed.type === 'domain'
-              ? 14
-              : 12;
+            : typed.type === 'role'
+              ? 15
+              : typed.type === 'module' || typed.type === 'domain'
+                ? 14
+                : 12;
       const fontSize = fontSizeBase / Math.sqrt(Math.max(globalScale, 0.6));
       const textY = (node.y ?? 0) + radius + 4;
 
@@ -1044,6 +1514,15 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (typed.type === 'role') {
         return palette.roleEdge;
       }
+      if (typed.type === 'initiative') {
+        return palette.initiativeEdge;
+      }
+      if (typed.type === 'module') {
+        return palette.moduleEdge;
+      }
+      if (typed.type === 'plan') {
+        return palette.planEdge;
+      }
       return palette.edge;
     },
     [highlightLinkIds, palette]
@@ -1064,6 +1543,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     setConsultingFilter([]);
     setRoleFilter([]);
     setFocusedSkill(null);
+    setFocusedAssignment(null);
     setSelectedRole(null);
   }, []);
 
@@ -1358,12 +1838,173 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   )}
                 </div>
               </Card>
-            )}
+              )}
+              <div ref={graphContainerRef} className={styles.graphContainer}>
+                {filteredExperts.length === 0 ? (
+                  <div className={styles.graphPlaceholder}>
+                    <Text size="s" view="secondary">
+                      Нет данных для построения графа с выбранными фильтрами.
+                    </Text>
+                  </div>
+                ) : (
+                  <ForceGraph2D
+                    ref={graphRef}
+                    width={graphDimensions.width}
+                    height={graphDimensions.height}
+                    graphData={skillGraphData}
+                    backgroundColor={palette.background}
+                    nodeRelSize={4}
+                    cooldownTicks={80}
+                    onNodeClick={handleNodeClick}
+                    nodeCanvasObject={nodeCanvasObject}
+                    nodeCanvasObjectMode={() => 'replace'}
+                    linkColor={linkColor}
+                    linkWidth={linkWidth}
+                    enableZoomInteraction
+                    enablePanInteraction
+                  />
+                )}
+              </div>
+            </div>
+        ) : viewMode === 'assignments' ? (
+          <div className={styles.graphPane}>
+            {focusedAssignmentDetails ? (
+              <Card className={styles.focusCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
+                <Text size="xs" view="secondary">
+                  {focusedAssignmentDetails.type === 'module' ? 'Модуль' : 'Инициатива'}
+                </Text>
+                <Text size="s" weight="semibold">
+                  {focusedAssignmentDetails.label}
+                </Text>
+                <Text size="xs" view="ghost">
+                  {focusedAssignmentDetails.expertIds.length > 0
+                    ? `Экспертов: ${focusedAssignmentDetails.expertIds.length}`
+                    : 'Нет связанных экспертов'}
+                </Text>
+                {focusedAssignmentDetails.type === 'module' ? (
+                  focusedAssignmentDetails.initiativeIds.length > 0 ? (
+                    <div className={styles.focusMeta}>
+                      <Text size="xs" view="ghost">
+                        Инициативы
+                      </Text>
+                      <div className={styles.badgeGroup}>
+                        {focusedAssignmentDetails.initiativeIds.map((initiativeId) => (
+                          <Badge
+                            key={initiativeId}
+                            size="xs"
+                            view="ghost"
+                            label={initiativeById.get(initiativeId)?.name ?? initiativeId}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <Text size="xs" view="ghost">Нет связанных инициатив</Text>
+                  )
+                ) : (
+                  <>
+                    {focusedAssignmentDetails.status && (
+                      <Badge
+                        size="xs"
+                        view="ghost"
+                        label={`Статус: ${
+                          initiativeStatusLabel[focusedAssignmentDetails.status] ??
+                          focusedAssignmentDetails.status
+                        }`}
+                      />
+                    )}
+                    {focusedAssignmentDetails.moduleIds.length > 0 ? (
+                      <div className={styles.focusMeta}>
+                        <Text size="xs" view="ghost">
+                          Модули
+                        </Text>
+                        <div className={styles.badgeGroup}>
+                          {focusedAssignmentDetails.moduleIds.map((moduleId) => (
+                            <Badge
+                              key={moduleId}
+                              size="xs"
+                              view="ghost"
+                              label={moduleNameMap[moduleId] ?? moduleId}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <Text size="xs" view="ghost">Нет привязанных модулей</Text>
+                    )}
+                  </>
+                )}
+                {focusedAssignmentDetails.expertIds.length > 0 && (
+                  <div className={styles.focusExpertButtons}>
+                    {focusedAssignmentDetails.expertIds.map((expertId) => {
+                      const expert = expertById.get(expertId);
+                      if (!expert) {
+                        return null;
+                      }
+                      return (
+                        <Button
+                          key={expert.id}
+                          size="xs"
+                          view={expert.id === selectedExpertId ? 'primary' : 'ghost'}
+                          label={expert.fullName}
+                          onClick={() => handleSelectExpert(expert.id)}
+                          className={styles.focusExpertButton}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+            ) : selectedExpert && selectedExpertAssignments ? (
+              <Card className={styles.focusCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
+                <Text size="xs" view="secondary">Назначения эксперта</Text>
+                <Text size="s" weight="semibold">{selectedExpert.fullName}</Text>
+                {selectedExpertAssignments.initiatives.length === 0 &&
+                selectedExpertAssignments.modules.length === 0 ? (
+                  <Text size="xs" view="ghost">
+                    Эксперт пока не привязан к инициативам и модулям.
+                  </Text>
+                ) : (
+                  <>
+                    {selectedExpertAssignments.initiatives.length > 0 && (
+                      <div className={styles.focusMeta}>
+                        <Text size="xs" view="ghost">Инициативы</Text>
+                        <div className={styles.badgeGroup}>
+                          {selectedExpertAssignments.initiatives.map((initiativeId) => (
+                            <Badge
+                              key={initiativeId}
+                              size="xs"
+                              view="ghost"
+                              label={initiativeById.get(initiativeId)?.name ?? initiativeId}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedExpertAssignments.modules.length > 0 && (
+                      <div className={styles.focusMeta}>
+                        <Text size="xs" view="ghost">Модули</Text>
+                        <div className={styles.badgeGroup}>
+                          {selectedExpertAssignments.modules.map((moduleId) => (
+                            <Badge
+                              key={moduleId}
+                              size="xs"
+                              view="ghost"
+                              label={moduleNameMap[moduleId] ?? moduleId}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </Card>
+            ) : null}
             <div ref={graphContainerRef} className={styles.graphContainer}>
-              {filteredExperts.length === 0 ? (
+              {assignmentGraphData.nodes.length === 0 ? (
                 <div className={styles.graphPlaceholder}>
                   <Text size="s" view="secondary">
-                    Нет данных для построения графа с выбранными фильтрами.
+                    Нет данных для визуализации назначений с выбранными фильтрами.
                   </Text>
                 </div>
               ) : (
@@ -1371,7 +2012,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   ref={graphRef}
                   width={graphDimensions.width}
                   height={graphDimensions.height}
-                  graphData={graphData}
+                  graphData={assignmentGraphData}
                   backgroundColor={palette.background}
                   nodeRelSize={4}
                   cooldownTicks={80}
@@ -1776,6 +2417,8 @@ function resolveExpertPalette(themeClassName?: string): ExpertPalette {
     stylesRef.getPropertyValue(token).trim() || fallback;
 
   const edgeBase = getVar('--color-bg-border', DEFAULT_PALETTE.edge);
+  const moduleColor = getVar('--color-bg-normal', DEFAULT_PALETTE.module);
+  const initiativeColor = getVar('--color-bg-brand', DEFAULT_PALETTE.initiative);
 
   return {
     background: getVar('--color-bg-default', DEFAULT_PALETTE.background),
@@ -1787,9 +2430,14 @@ function resolveExpertPalette(themeClassName?: string): ExpertPalette {
     competency: getVar('--color-bg-success', DEFAULT_PALETTE.competency),
     consulting: getVar('--color-bg-info', DEFAULT_PALETTE.consulting),
     role: getVar('--color-bg-alert', DEFAULT_PALETTE.role),
+    module: moduleColor,
+    initiative: initiativeColor,
     edge: edgeBase,
     edgeHighlight: getVar('--color-bg-link', DEFAULT_PALETTE.edgeHighlight),
-    roleEdge: withAlpha(getVar('--color-bg-alert', DEFAULT_PALETTE.role), 0.45)
+    roleEdge: withAlpha(getVar('--color-bg-alert', DEFAULT_PALETTE.role), 0.45),
+    moduleEdge: withAlpha(moduleColor, 0.45),
+    initiativeEdge: withAlpha(initiativeColor, 0.45),
+    planEdge: withAlpha(initiativeColor, 0.32)
   };
 }
 

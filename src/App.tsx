@@ -3362,6 +3362,7 @@ function App() {
           moduleNameMap={moduleNameMap}
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
+          initiatives={initiativeData}
           onUpdateExpertSkills={handleUpdateExpertSkills}
         />
       </main>
