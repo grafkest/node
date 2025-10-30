@@ -365,14 +365,14 @@ const GraphView: React.FC<GraphViewProps> = ({
       return;
     }
 
-    const graph = graphRef.current;
-    graph.zoomToFit?.(400, 80);
+    restoreCamera();
 
+    const graph = graphRef.current;
     const reheat = (graph as ForceGraphMethods & { d3ReheatSimulation?: () => void }).d3ReheatSimulation;
     if (typeof reheat === 'function') {
       reheat();
     }
-  }, [normalizationRequest, nodes.length]);
+  }, [normalizationRequest, nodes.length, restoreCamera]);
 
   useEffect(() => {
     return () => {
