@@ -93,7 +93,7 @@ describe('buildRoleMatchReports', () => {
       skills: [
         {
           id: 'data-normalization',
-          level: 'A',
+          level: 'E',
           proofStatus: 'verified',
           artifacts: [],
           interest: 'high',

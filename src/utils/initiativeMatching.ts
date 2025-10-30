@@ -21,11 +21,11 @@ import type { InitiativeRoleWork } from '../data';
 const MS_IN_DAY = 86_400_000;
 
 const skillLevelMap: Record<ExpertSkill['level'], SkillLevel> = {
-  A: 'expert',
-  B: 'advanced',
-  C: 'intermediate',
-  D: 'novice',
-  E: 'novice'
+  A: 'novice',
+  W: 'intermediate',
+  P: 'advanced',
+  Ad: 'expert',
+  E: 'expert'
 };
 
 const defaultRoleLevel: Partial<Record<TeamRole, SkillLevel>> = {
