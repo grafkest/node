@@ -10,6 +10,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   type ArtifactNode,
   type DomainNode,
+  type ExpertAvailability,
+  type ExpertProfile,
   type LibraryDependency,
   type ModuleInput,
   type ModuleMetrics,
@@ -82,10 +84,13 @@ export type ArtifactDraftPayload = {
   sampleUrl: string;
 };
 
+export type ExpertDraftPayload = Omit<ExpertProfile, 'id'>;
+
 type AdminPanelProps = {
   modules: ModuleNode[];
   domains: DomainNode[];
   artifacts: ArtifactNode[];
+  experts: ExpertProfile[];
   moduleDraftPrefill: ModuleDraftPrefillRequest | null;
   onModuleDraftPrefillApplied?: () => void;
   onCreateModule: (draft: ModuleDraftPayload) => void;
@@ -97,9 +102,12 @@ type AdminPanelProps = {
   onCreateArtifact: (draft: ArtifactDraftPayload) => void;
   onUpdateArtifact: (id: string, draft: ArtifactDraftPayload) => void;
   onDeleteArtifact: (id: string) => void;
+  onCreateExpert: (draft: ExpertDraftPayload) => void;
+  onUpdateExpert: (id: string, draft: ExpertDraftPayload) => void;
+  onDeleteExpert: (id: string) => void;
 };
 
-type AdminTab = 'module' | 'domain' | 'artifact';
+type AdminTab = 'module' | 'domain' | 'artifact' | 'expert';
 
 type SelectItem<Value extends string> = {
   label: string;
@@ -143,7 +151,8 @@ type ArtifactSectionId = 'basic' | 'relations';
 const adminTabs = [
   { label: 'Модули', value: 'module' },
   { label: 'Домены', value: 'domain' },
-  { label: 'Артефакты', value: 'artifact' }
+  { label: 'Артефакты', value: 'artifact' },
+  { label: 'Сотрудники', value: 'expert' }
 ] as const satisfies readonly { label: string; value: AdminTab }[];
 
 const ROOT_DOMAIN_OPTION = '__root__';
@@ -165,10 +174,17 @@ const deploymentToolLabels: Record<ModuleNode['deploymentTool'], string> = {
   kubernetes: 'Kubernetes'
 };
 
+const availabilityLabels: Record<ExpertAvailability, string> = {
+  available: 'Готов к консалтингу',
+  partial: 'Ограниченная доступность',
+  busy: 'Недоступен'
+};
+
 const AdminPanel: React.FC<AdminPanelProps> = ({
   modules,
   domains,
   artifacts,
+  experts,
   moduleDraftPrefill,
   onModuleDraftPrefillApplied,
   onCreateModule,
@@ -179,7 +195,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteDomain,
   onCreateArtifact,
   onUpdateArtifact,
-  onDeleteArtifact
+  onDeleteArtifact,
+  onCreateExpert,
+  onUpdateExpert,
+  onDeleteExpert
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('module');
 
@@ -211,6 +230,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       .map<SelectItem<string>>((artifact) => ({ label: artifact.name, value: artifact.id }));
     return [{ label: 'Создать новый артефакт', value: '__new__' }, ...base];
   }, [artifacts]);
+
+  const expertOptions = useMemo<SelectItem<string>[]>(() => {
+    const base = experts
+      .slice()
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
+      .map<SelectItem<string>>((expert) => ({ label: expert.fullName, value: expert.id }));
+    return [{ label: 'Создать нового сотрудника', value: '__new__' }, ...base];
+  }, [experts]);
 
   const knownCompanyNames = useMemo(() => {
     const names = new Set<string>();
@@ -300,6 +327,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
   const [selectedDomainId, setSelectedDomainId] = useState<string>('__new__');
   const [selectedArtifactId, setSelectedArtifactId] = useState<string>('__new__');
+  const [selectedExpertId, setSelectedExpertId] = useState<string>('__new__');
 
   const forbiddenParentIds = useMemo(() => {
     if (selectedDomainId === '__new__') {
@@ -317,6 +345,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [artifactDraft, setArtifactDraft] = useState<ArtifactDraftPayload>(() => createDefaultArtifactDraft());
   const [artifactStep, setArtifactStep] = useState<number>(0);
+  const [expertDraft, setExpertDraft] = useState<ExpertDraftPayload>(() => createDefaultExpertDraft());
 
   const moduleDraftPrefillKey = moduleDraftPrefill?.id;
 
@@ -432,6 +461,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [artifactOptions, artifacts, selectedArtifactId]);
 
+  useEffect(() => {
+    const nextOption = expertOptions.find((item) => item.value === selectedExpertId);
+    if (!nextOption) {
+      setSelectedExpertId('__new__');
+      setExpertDraft(createDefaultExpertDraft());
+      return;
+    }
+
+    if (nextOption.value === '__new__') {
+      setExpertDraft(createDefaultExpertDraft());
+      return;
+    }
+
+    const target = experts.find((expert) => expert.id === nextOption.value);
+    if (target) {
+      setExpertDraft(expertToDraft(target));
+    }
+  }, [expertOptions, experts, selectedExpertId]);
+
   const handleModuleSubmit = () => {
     if (selectedModuleId === '__new__' && moduleDraft.domainIds.length === 0) {
       setModuleStep(0);
@@ -489,6 +537,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     onDeleteArtifact(selectedArtifactId);
     setSelectedArtifactId('__new__');
+  };
+
+  const handleExpertSubmit = () => {
+    if (selectedExpertId === '__new__') {
+      onCreateExpert(expertDraft);
+      setExpertDraft(createDefaultExpertDraft());
+    } else {
+      onUpdateExpert(selectedExpertId, expertDraft);
+    }
+  };
+
+  const handleExpertDelete = () => {
+    if (selectedExpertId === '__new__') {
+      return;
+    }
+    onDeleteExpert(selectedExpertId);
+    setSelectedExpertId('__new__');
   };
 
   const registerCompanyName = (name: string) => {
@@ -581,6 +646,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const domainSelectValue = domainOptions.find((item) => item.value === selectedDomainId) ?? domainOptions[0];
   const artifactSelectValue =
     artifactOptions.find((item) => item.value === selectedArtifactId) ?? artifactOptions[0];
+  const expertSelectValue = expertOptions.find((item) => item.value === selectedExpertId) ?? expertOptions[0];
 
   return (
     <div className={styles.container}>
@@ -640,6 +706,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               onChange={(value) => {
                 if (value) {
                   setSelectedArtifactId(value.value);
+                }
+              }}
+            />
+          )}
+          {activeTab === 'expert' && (
+            <Select<SelectItem<string>>
+              size="s"
+              items={expertOptions}
+              value={expertSelectValue}
+              getItemLabel={(item) => item.label}
+              getItemKey={(item) => item.value}
+              onChange={(value) => {
+                if (value) {
+                  setSelectedExpertId(value.value);
                 }
               }}
             />
@@ -719,6 +799,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             onStepChange={setArtifactStep}
             onSubmit={handleArtifactSubmit}
             onDelete={selectedArtifactId === '__new__' ? undefined : handleArtifactDelete}
+          />
+        )}
+
+        {activeTab === 'expert' && (
+          <ExpertForm
+            mode={selectedExpertId === '__new__' ? 'create' : 'edit'}
+            draft={expertDraft}
+            domainItems={parentDomainIds}
+            domainLabelMap={domainLabelMap}
+            moduleItems={modules.map((module) => module.id)}
+            moduleLabelMap={moduleLabelMap}
+            onChange={setExpertDraft}
+            onSubmit={handleExpertSubmit}
+            onDelete={selectedExpertId === '__new__' ? undefined : handleExpertDelete}
           />
         )}
 
@@ -2880,6 +2974,325 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
     </div>
   );
 };
+
+type ExpertFormProps = {
+  mode: 'create' | 'edit';
+  draft: ExpertDraftPayload;
+  domainItems: string[];
+  domainLabelMap: Record<string, string>;
+  moduleItems: string[];
+  moduleLabelMap: Record<string, string>;
+  onChange: (draft: ExpertDraftPayload) => void;
+  onSubmit: () => void;
+  onDelete?: () => void;
+};
+
+const ExpertForm: React.FC<ExpertFormProps> = ({
+  mode,
+  draft,
+  domainItems,
+  domainLabelMap,
+  moduleItems,
+  moduleLabelMap,
+  onChange,
+  onSubmit,
+  onDelete
+}) => {
+  const availabilityItems = useMemo<SelectItem<ExpertAvailability>[]>(
+    () =>
+      (['available', 'partial', 'busy'] as ExpertAvailability[]).map((status) => ({
+        label: availabilityLabels[status],
+        value: status
+      })),
+    []
+  );
+
+  const handleDraftChange = <Key extends keyof ExpertDraftPayload>(
+    key: Key,
+    value: ExpertDraftPayload[Key]
+  ) => {
+    onChange({ ...draft, [key]: value });
+  };
+
+  const parseList = (value: string): string[] =>
+    value
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+
+  const formatList = (values: string[]): string => values.join('\n');
+
+  const handleExperienceChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const numeric = Number(event.target.value);
+    const normalized = Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : 0;
+    handleDraftChange('experienceYears', normalized);
+  };
+
+  const availabilityValue = availabilityItems.find((item) => item.value === draft.availability) ?? null;
+
+  return (
+    <div className={styles.formBody}>
+      <div className={styles.formHeader}>
+        <div>
+          <Text size="l" weight="semibold" className={styles.formTitle}>
+            {mode === 'create' ? 'Создание сотрудника' : 'Редактирование сотрудника'}
+          </Text>
+          <Text size="xs" view="secondary" className={styles.formSubtitle}>
+            Заполните профиль эксперта, укажите ключевые навыки и области экспертизы.
+          </Text>
+        </div>
+        {onDelete && <Button size="s" view="clear" label="Удалить профиль" onClick={onDelete} />}
+      </div>
+
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            ФИО
+          </Text>
+          <TextField
+            size="s"
+            value={draft.fullName}
+            onChange={(value) => handleDraftChange('fullName', value ?? '')}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Роль / должность
+          </Text>
+          <TextField
+            size="s"
+            value={draft.title}
+            onChange={(value) => handleDraftChange('title', value ?? '')}
+          />
+        </label>
+      </div>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Краткое описание
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.summary}
+          onChange={(event) => handleDraftChange('summary', event.target.value)}
+        />
+      </label>
+
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Доменные области
+          </Text>
+          <Combobox<string>
+            size="s"
+            items={domainItems}
+            value={draft.domains}
+            multiple
+            getItemKey={(item) => item}
+            getItemLabel={(item) => domainLabelMap[item] ?? item}
+            placeholder="Выберите домены"
+            onChange={(value) => handleDraftChange('domains', value ?? [])}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Связанные модули
+          </Text>
+          <Combobox<string>
+            size="s"
+            items={moduleItems}
+            value={draft.modules}
+            multiple
+            getItemKey={(item) => item}
+            getItemLabel={(item) => moduleLabelMap[item] ?? item}
+            placeholder="Выберите модули"
+            onChange={(value) => handleDraftChange('modules', value ?? [])}
+          />
+        </label>
+      </div>
+
+      <div className={styles.fieldGroup}>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Опыт (лет)
+          </Text>
+          <input
+            type="number"
+            min={0}
+            className={styles.numberInput}
+            value={draft.experienceYears}
+            onChange={handleExperienceChange}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Доступность
+          </Text>
+          <Select<SelectItem<ExpertAvailability>>
+            size="s"
+            items={availabilityItems}
+            value={availabilityValue}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={(item) => item && handleDraftChange('availability', item.value)}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Локация
+          </Text>
+          <TextField
+            size="s"
+            value={draft.location}
+            onChange={(value) => handleDraftChange('location', value ?? '')}
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Контакты
+          </Text>
+          <TextField
+            size="s"
+            value={draft.contact}
+            onChange={(value) => handleDraftChange('contact', value ?? '')}
+          />
+        </label>
+      </div>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Комментарий по доступности
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={draft.availabilityComment}
+          onChange={(event) => handleDraftChange('availabilityComment', event.target.value)}
+        />
+      </label>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Hard skills (компетенции)
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={formatList(draft.competencies)}
+          placeholder="По одному навыку на строку"
+          onChange={(event) => handleDraftChange('competencies', parseList(event.target.value))}
+        />
+      </label>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Soft skills (консалтинг)
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={formatList(draft.consultingSkills)}
+          placeholder="По одному навыку на строку"
+          onChange={(event) => handleDraftChange('consultingSkills', parseList(event.target.value))}
+        />
+      </label>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Фокусы и задачи
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={formatList(draft.focusAreas)}
+          placeholder="По одному направлению на строку"
+          onChange={(event) => handleDraftChange('focusAreas', parseList(event.target.value))}
+        />
+      </label>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Языки
+        </Text>
+        <TextField
+          size="s"
+          value={draft.languages.join(', ')}
+          placeholder="Например: ru, en"
+          onChange={(value) => handleDraftChange('languages', parseList(value ?? ''))}
+        />
+      </label>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Значимые проекты
+        </Text>
+        <textarea
+          className={styles.textarea}
+          value={formatList(draft.notableProjects)}
+          placeholder="По одному проекту на строку"
+          onChange={(event) => handleDraftChange('notableProjects', parseList(event.target.value))}
+        />
+      </label>
+
+      <div className={styles.submitRow}>
+        <Text size="xs" view="secondary" className={styles.hint}>
+          Навыки ({draft.skills.length}) редактируются в разделе «Экспертиза» и сохранятся без изменений.
+        </Text>
+        <div className={styles.submitButtons}>
+          {onDelete && <Button size="s" view="ghost" label="Удалить" onClick={onDelete} />}
+          <Button
+            size="s"
+            view="primary"
+            label={mode === 'create' ? 'Создать профиль' : 'Сохранить профиль'}
+            onClick={onSubmit}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function createDefaultExpertDraft(): ExpertDraftPayload {
+  return {
+    fullName: '',
+    title: '',
+    summary: '',
+    domains: [],
+    modules: [],
+    competencies: [],
+    consultingSkills: [],
+    focusAreas: [],
+    experienceYears: 0,
+    location: '',
+    contact: '',
+    languages: [],
+    notableProjects: [],
+    availability: 'available',
+    availabilityComment: '',
+    skills: []
+  };
+}
+
+function expertToDraft(expert: ExpertProfile): ExpertDraftPayload {
+  return {
+    fullName: expert.fullName,
+    title: expert.title,
+    summary: expert.summary,
+    domains: [...expert.domains],
+    modules: [...expert.modules],
+    competencies: [...expert.competencies],
+    consultingSkills: [...expert.consultingSkills],
+    focusAreas: [...expert.focusAreas],
+    experienceYears: expert.experienceYears,
+    location: expert.location,
+    contact: expert.contact,
+    languages: [...expert.languages],
+    notableProjects: [...expert.notableProjects],
+    availability: expert.availability,
+    availabilityComment: expert.availabilityComment,
+    skills: expert.skills.map((skill) => ({
+      ...skill,
+      artifacts: [...skill.artifacts],
+      usage: skill.usage ? { ...skill.usage } : undefined
+    }))
+  };
+}
 
 function createDefaultModuleDraft(): ModuleDraftPayload {
   return {

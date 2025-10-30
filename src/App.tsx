@@ -24,6 +24,7 @@ import DomainTree from './components/DomainTree';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
+  type ExpertDraftPayload,
   type ModuleDraftPayload,
   type ModuleDraftPrefillRequest
 } from './components/AdminPanel';
@@ -179,11 +180,78 @@ function App() {
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
-  const handleUpdateExpertSkills = useCallback((expertId: string, skills: ExpertSkill[]) => {
-    setExpertProfiles((prev) =>
-      prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
-    );
-  }, []);
+  const handleCreateExpert = useCallback(
+    (draft: ExpertDraftPayload) => {
+      let created: ExpertProfile | null = null;
+      setExpertProfiles((prev) => {
+        const existingIds = new Set(prev.map((expert) => expert.id));
+        const expertId = createEntityId('expert', draft.fullName, existingIds);
+        const fallbackName = draft.fullName.trim() || `Новый сотрудник ${existingIds.size + 1}`;
+        const expert = buildExpertFromDraft(expertId, draft, {
+          domainIdSet,
+          moduleIdSet,
+          fallbackName
+        });
+        created = expert;
+        return [...prev, expert];
+      });
+      if (created) {
+        markGraphDirty();
+        showAdminNotice('success', `Сотрудник «${created.fullName}» создан.`);
+      }
+    },
+    [domainIdSet, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+
+  const handleUpdateExpert = useCallback(
+    (expertId: string, draft: ExpertDraftPayload) => {
+      let updated: ExpertProfile | null = null;
+      setExpertProfiles((prev) => {
+        let changed = false;
+        const next = prev.map((expert) => {
+          if (expert.id !== expertId) {
+            return expert;
+          }
+          const resolved = buildExpertFromDraft(expertId, draft, {
+            domainIdSet,
+            moduleIdSet,
+            fallbackName: expert.fullName,
+            fallbackProfile: expert
+          });
+          updated = resolved;
+          changed = true;
+          return resolved;
+        });
+        return changed ? next : prev;
+      });
+      if (updated) {
+        markGraphDirty();
+        showAdminNotice('success', `Профиль «${updated.fullName}» обновлён.`);
+      }
+    },
+    [domainIdSet, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+
+  const handleDeleteExpert = useCallback(
+    (expertId: string) => {
+      let removed: ExpertProfile | null = null;
+      setExpertProfiles((prev) => {
+        const next = prev.filter((expert) => {
+          if (expert.id === expertId) {
+            removed = expert;
+            return false;
+          }
+          return true;
+        });
+        return removed ? next : prev;
+      });
+      if (removed) {
+        markGraphDirty();
+        showAdminNotice('success', `Сотрудник «${removed.fullName}» удалён.`);
+      }
+    },
+    [markGraphDirty, showAdminNotice]
+  );
   useLayoutEffect(() => {
     const element = sidebarRef.current;
     if (!element) {
@@ -1048,6 +1116,8 @@ function App() {
     });
     return map;
   }, [moduleData]);
+
+  const moduleIdSet = useMemo(() => new Set(moduleData.map((module) => module.id)), [moduleData]);
 
   const graphSelectOptions = useMemo(
     () =>
@@ -3365,7 +3435,7 @@ function App() {
           moduleDomainMap={moduleDomainMap}
           domainNameMap={domainNameMap}
           initiatives={initiativeData}
-          onUpdateExpertSkills={handleUpdateExpertSkills}
+          onUpdateExpert={handleUpdateExpert}
         />
       </main>
       <main
@@ -3412,6 +3482,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          experts={expertProfiles}
           moduleDraftPrefill={moduleDraftPrefill}
           onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
@@ -3423,6 +3494,9 @@ function App() {
           onCreateArtifact={handleCreateArtifact}
           onUpdateArtifact={handleUpdateArtifact}
           onDeleteArtifact={handleDeleteArtifact}
+          onCreateExpert={handleCreateExpert}
+          onUpdateExpert={handleUpdateExpert}
+          onDeleteExpert={handleDeleteExpert}
         />
       </main>
     </Layout>
@@ -3433,6 +3507,62 @@ type ModuleBuildResult = {
   module: ModuleNode;
   consumedArtifactIds: string[];
 };
+
+function buildExpertFromDraft(
+  expertId: string,
+  draft: ExpertDraftPayload,
+  options: {
+    domainIdSet: Set<string>;
+    moduleIdSet: Set<string>;
+    fallbackName: string;
+    fallbackProfile?: ExpertProfile;
+  }
+): ExpertProfile {
+  const fallback = options.fallbackProfile;
+  const fullName = draft.fullName.trim() || fallback?.fullName || options.fallbackName;
+  const title = draft.title.trim() || fallback?.title || 'Роль не указана';
+  const summary = draft.summary.trim() || fallback?.summary || 'Описание не заполнено';
+
+  const domains = deduplicateNonEmpty(draft.domains).filter((id) => options.domainIdSet.has(id));
+  const modules = deduplicateNonEmpty(draft.modules).filter((id) => options.moduleIdSet.has(id));
+  const competencies = deduplicateNonEmpty(draft.competencies);
+  const consultingSkills = deduplicateNonEmpty(draft.consultingSkills);
+  const focusAreas = deduplicateNonEmpty(draft.focusAreas);
+  const languages = deduplicateNonEmpty(draft.languages);
+  const notableProjects = deduplicateNonEmpty(draft.notableProjects);
+
+  const experienceYears = Math.max(0, Math.round(draft.experienceYears ?? 0));
+  const location = draft.location.trim() || fallback?.location || 'Локация не указана';
+  const contact = draft.contact.trim() || fallback?.contact || 'Контакт не указан';
+  const availabilityComment =
+    draft.availabilityComment.trim() || fallback?.availabilityComment || 'Комментариев по доступности нет';
+
+  const skills = draft.skills.map((skill) => ({
+    ...skill,
+    artifacts: [...skill.artifacts],
+    usage: skill.usage ? { ...skill.usage } : undefined
+  }));
+
+  return {
+    id: expertId,
+    fullName,
+    title,
+    summary,
+    domains,
+    modules,
+    competencies,
+    consultingSkills,
+    focusAreas,
+    experienceYears,
+    location,
+    contact,
+    languages,
+    notableProjects,
+    availability: draft.availability,
+    availabilityComment,
+    skills
+  };
+}
 
 function buildModuleFromDraft(
   moduleId: string,
