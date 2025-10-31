@@ -130,7 +130,7 @@ const cloneSkill = (skill: ExpertSkill): ExpertSkill => ({
 
 const createEmptySkill = (): ExpertSkill => ({
   id: '',
-  level: 'C',
+  level: 'A',
   proofStatus: 'claimed',
   evidence: [],
   artifacts: [],

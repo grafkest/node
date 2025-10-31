@@ -57,6 +57,7 @@ import {
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
+  type ExpertProfile,
   type ExpertSkill,
   type GraphLink,
   type Initiative,
@@ -1138,6 +1139,106 @@ function App() {
           .map((domain) => domain.id)
       ),
     [domainData]
+  );
+
+  const handleCreateExpert = useCallback(
+    (draft: ExpertDraftPayload) => {
+      const existingIds = new Set(expertProfiles.map((expert) => expert.id));
+      const expertId = createEntityId('expert', draft.fullName, existingIds);
+      const fallbackName = draft.fullName.trim() || `Новый сотрудник ${existingIds.size + 1}`;
+      const profile = buildExpertFromDraft(expertId, draft, {
+        domainIdSet,
+        moduleIdSet,
+        fallbackName
+      });
+      setExpertProfiles((prev) => [...prev, profile]);
+      markGraphDirty();
+      showAdminNotice('success', `Сотрудник «${profile.fullName}» создан.`);
+    },
+    [domainIdSet, expertProfiles, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+  const handleUpdateExpert = useCallback(
+    (expertId: string, draft: ExpertDraftPayload) => {
+      const existing = expertProfiles.find((expert) => expert.id === expertId);
+      if (!existing) {
+        showAdminNotice('error', 'Не удалось обновить сотрудника: профиль не найден.');
+        return;
+      }
+
+      const updated = buildExpertFromDraft(expertId, draft, {
+        domainIdSet,
+        moduleIdSet,
+        fallbackName: existing.fullName,
+        fallbackProfile: existing
+      });
+      setExpertProfiles((prev) =>
+        prev.map((expert) => (expert.id === expertId ? updated : expert))
+      );
+      markGraphDirty();
+      showAdminNotice('success', `Сотрудник «${updated.fullName}» обновлён.`);
+    },
+    [domainIdSet, expertProfiles, markGraphDirty, moduleIdSet, showAdminNotice]
+  );
+  const handleDeleteExpert = useCallback(
+    (expertId: string) => {
+      const existing = expertProfiles.find((expert) => expert.id === expertId);
+      if (!existing) {
+        showAdminNotice('error', 'Не удалось удалить сотрудника: профиль не найден.');
+        return;
+      }
+
+      setExpertProfiles((prev) => prev.filter((expert) => expert.id !== expertId));
+      setInitiativeData((prev) =>
+        prev.map((initiative) => {
+          let rolesChanged = false;
+          const roles = initiative.roles.map((role) => {
+            let changed = false;
+            const pinnedExpertIds = role.pinnedExpertIds.filter((id) => id !== expertId);
+            if (pinnedExpertIds.length !== role.pinnedExpertIds.length) {
+              changed = true;
+            }
+            let workItems = role.workItems;
+            if (workItems && workItems.some((item) => item.assignedExpertId === expertId)) {
+              workItems = workItems.map((item) =>
+                item.assignedExpertId === expertId
+                  ? { ...item, assignedExpertId: undefined }
+                  : item
+              );
+              changed = true;
+            }
+            const candidates = role.candidates.filter(
+              (candidate) => candidate.expertId !== expertId
+            );
+            if (candidates.length !== role.candidates.length) {
+              changed = true;
+            }
+            if (!changed) {
+              return role;
+            }
+            rolesChanged = true;
+            return {
+              ...role,
+              pinnedExpertIds,
+              candidates,
+              ...(workItems ? { workItems } : {})
+            };
+          });
+
+          if (!rolesChanged) {
+            return initiative;
+          }
+
+          return {
+            ...initiative,
+            roles,
+            lastUpdated: new Date().toISOString()
+          };
+        })
+      );
+      markGraphDirty();
+      showAdminNotice('success', `Сотрудник «${existing.fullName}» удалён.`);
+    },
+    [expertProfiles, markGraphDirty, showAdminNotice]
   );
 
   const contextModuleIds = useMemo(() => {
@@ -3470,6 +3571,7 @@ function buildExpertFromDraft(
   const modules = deduplicateNonEmpty(draft.modules).filter((id) => options.moduleIdSet.has(id));
   const competencies = deduplicateNonEmpty(draft.competencies);
   const consultingSkills = deduplicateNonEmpty(draft.consultingSkills);
+  const softSkills = deduplicateNonEmpty(draft.softSkills ?? []);
   const focusAreas = deduplicateNonEmpty(draft.focusAreas);
   const languages = deduplicateNonEmpty(draft.languages);
   const notableProjects = deduplicateNonEmpty(draft.notableProjects);
@@ -3495,6 +3597,7 @@ function buildExpertFromDraft(
     modules,
     competencies,
     consultingSkills,
+    softSkills,
     focusAreas,
     experienceYears,
     location,

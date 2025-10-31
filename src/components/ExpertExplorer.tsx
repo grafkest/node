@@ -25,8 +25,6 @@ import styles from './ExpertExplorer.module.css';
 import SkillEditorModal from './SkillEditorModal';
 import SoftSkillEditorModal from './SoftSkillEditorModal';
 
-type ExpertUpdatePayload = Omit<ExpertProfile, 'id'>;
-
 type ViewOption = {
   label: string;
   value: 'list' | 'graph' | 'roles' | 'assignments';
@@ -92,6 +90,9 @@ type ExpertPalette = {
   initiativeEdge: string;
   planEdge: string;
 };
+
+const resolveSoftSkills = (expert: ExpertProfile): string[] =>
+  Array.isArray(expert.softSkills) ? expert.softSkills : [];
 
 type RoleAssignmentMap = Map<TeamRole, Map<string, Set<string>>>;
 
@@ -304,7 +305,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const softSkillOptions = useMemo(() => {
     const set = new Set<string>();
     experts.forEach((expert) => {
-      expert.softSkills.forEach((skill) => set.add(skill));
+      resolveSoftSkills(expert).forEach((skill) => set.add(skill));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [experts]);
@@ -355,7 +356,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
         if (
           selectedSoftSkillSet.size > 0 &&
-          !Array.from(selectedSoftSkillSet).every((skill) => expert.softSkills.includes(skill))
+          !Array.from(selectedSoftSkillSet).every((skill) =>
+            resolveSoftSkills(expert).includes(skill)
+          )
         ) {
           return false;
         }
@@ -395,7 +398,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           ...domainNames,
           ...expert.competencies,
           ...expert.consultingSkills,
-          ...expert.softSkills,
+          ...resolveSoftSkills(expert),
           ...expert.focusAreas,
           ...expert.notableProjects,
           ...expert.languages,
@@ -585,16 +588,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (!targetExpert) {
         return;
       }
-      const { id: _ignore, ...rest } = targetExpert;
-      const draft: ExpertUpdatePayload = {
-        ...rest,
-        skills
-      };
-      await Promise.resolve(onUpdateExpert(targetExpert.id, draft));
+      await Promise.resolve(onUpdateExpertSkills(targetExpert.id, skills));
       setIsSkillEditorOpen(false);
       setSkillEditorExpert(null);
     },
-    [onUpdateExpert, selectedExpert, skillEditorExpert]
+    [onUpdateExpertSkills, selectedExpert, skillEditorExpert]
   );
 
   const handleOpenSoftSkillEditor = useCallback((expert: ExpertProfile) => {
@@ -784,7 +782,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         });
       });
 
-      expert.softSkills.forEach((skill) => {
+      resolveSoftSkills(expert).forEach((skill) => {
         const nodeId = `soft:${skill}`;
         ensureNode({
           id: nodeId,
@@ -1208,7 +1206,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         selectedExpert.consultingSkills.forEach((skill) =>
           set.add(`consulting:${skill}`)
         );
-        selectedExpert.softSkills.forEach((skill) => set.add(`soft:${skill}`));
+        resolveSoftSkills(selectedExpert).forEach((skill) => set.add(`soft:${skill}`));
       }
 
       if (viewMode === 'assignments') {
@@ -1279,7 +1277,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         selectedExpert.consultingSkills.forEach((skill) =>
           set.add(`expert:${selectedExpert.id}->consulting:${skill}`)
         );
-        selectedExpert.softSkills.forEach((skill) =>
+        resolveSoftSkills(selectedExpert).forEach((skill) =>
           set.add(`expert:${selectedExpert.id}->soft:${skill}`)
         );
       }
@@ -1484,7 +1482,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           return expert.consultingSkills.includes(typed.originId);
         }
         if (typed.type === 'soft') {
-          return expert.softSkills.includes(typed.originId);
+          return resolveSoftSkills(expert).includes(typed.originId);
         }
         return false;
       });
@@ -1661,7 +1659,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       expert.domains.forEach((domainId) => domainSet.add(domainId));
       expert.competencies.forEach((competency) => competencySet.add(competency));
       expert.consultingSkills.forEach((skill) => consultingSet.add(skill));
-      expert.softSkills.forEach((skill) => softSet.add(skill));
+      resolveSoftSkills(expert).forEach((skill) => softSet.add(skill));
       expert.modules.forEach((moduleId) => moduleSet.add(moduleId));
       const roles = expertRolesMap.get(expert.id);
       roles?.forEach((_, role) => roleSet.add(role));
@@ -1924,11 +1922,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                           <Badge key={competency} size="xs" view="stroked" label={competency} />
                         ))}
                       </div>
-                      {expert.softSkills.length > 0 && (
+                      {resolveSoftSkills(expert).length > 0 && (
                         <div className={styles.softSkillBadges}>
-                          {expert.softSkills.slice(0, 3).map((skill) => (
-                            <Badge key={skill} size="xs" view="ghost" label={skill} />
-                          ))}
+                          {resolveSoftSkills(expert)
+                            .slice(0, 3)
+                            .map((skill) => (
+                              <Badge key={skill} size="xs" view="ghost" label={skill} />
+                            ))}
                         </div>
                       )}
                     </Card>
@@ -2490,7 +2490,7 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
           Soft skills
         </Text>
         <div className={styles.badgeGroup}>
-          {expert.softSkills.map((skill) => (
+          {resolveSoftSkills(expert).map((skill) => (
             <Badge key={skill} size="xs" view="stroked" label={skill} />
           ))}
         </div>
