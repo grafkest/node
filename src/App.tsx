@@ -1149,7 +1149,8 @@ function App() {
       const profile = buildExpertFromDraft(expertId, draft, {
         domainIdSet,
         moduleIdSet,
-        fallbackName
+        fallbackName,
+        moduleNameMap
       });
       setExpertProfiles((prev) => [...prev, profile]);
       markGraphDirty();
@@ -1169,7 +1170,8 @@ function App() {
         domainIdSet,
         moduleIdSet,
         fallbackName: existing.fullName,
-        fallbackProfile: existing
+        fallbackProfile: existing,
+        moduleNameMap
       });
       setExpertProfiles((prev) =>
         prev.map((expert) => (expert.id === expertId ? updated : expert))
@@ -3560,6 +3562,7 @@ function buildExpertFromDraft(
     moduleIdSet: Set<string>;
     fallbackName: string;
     fallbackProfile?: ExpertProfile;
+    moduleNameMap: Record<string, string>;
   }
 ): ExpertProfile {
   const fallback = options.fallbackProfile;
@@ -3574,7 +3577,10 @@ function buildExpertFromDraft(
   const softSkills = deduplicateNonEmpty(draft.softSkills ?? []);
   const focusAreas = deduplicateNonEmpty(draft.focusAreas);
   const languages = deduplicateNonEmpty(draft.languages);
-  const notableProjects = deduplicateNonEmpty(draft.notableProjects);
+  const moduleNames = modules
+    .map((id) => options.moduleNameMap[id] ?? id)
+    .filter((name): name is string => Boolean(name && name.trim()));
+  const notableProjects = deduplicateNonEmpty(moduleNames);
 
   const experienceYears = Math.max(0, Math.round(draft.experienceYears ?? 0));
   const location = draft.location.trim() || fallback?.location || 'Локация не указана';
