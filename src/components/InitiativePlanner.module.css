@@ -6,6 +6,9 @@
   height: 100%;
   box-sizing: border-box;
   overflow: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
 }
 
 .header {
@@ -57,9 +60,10 @@
 
 .contentGrid {
   display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(360px, 540px) minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
+  width: 100%;
 }
 
 .emptyState {
@@ -106,6 +110,7 @@
 .rolesSection {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .sideColumn {
@@ -113,6 +118,7 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+  min-width: 0;
 }
 
 .timelineCard {
@@ -139,7 +145,7 @@
 
 @media (max-width: 1200px) {
   .contentGrid {
-    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
     gap: 20px;
   }
 }

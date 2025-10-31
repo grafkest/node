@@ -178,8 +178,8 @@
 
 .assignmentGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
 }
 
 .assignmentCard {
@@ -190,6 +190,7 @@
   border-radius: 12px;
   padding: 12px;
   background: var(--color-bg-secondary);
+  min-width: 0;
 }
 
 .assignmentRow {
