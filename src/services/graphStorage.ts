@@ -85,6 +85,7 @@ export async function fetchGraphSnapshot(
     modules: snapshot.modules,
     domains: snapshot.domains,
     artifacts: snapshot.artifacts,
+    experts: snapshot.experts ?? [],
     initiatives: snapshot.initiatives ?? [],
     layout: normalizeLayoutSnapshot(snapshot.layout)
   };
@@ -162,6 +163,7 @@ export async function importGraphFromSource(
     domains: request.includeDomains ? snapshot.domains : [],
     modules: request.includeModules ? snapshot.modules : [],
     artifacts: request.includeArtifacts ? snapshot.artifacts : [],
+    experts: snapshot.experts ?? [],
     initiatives: request.includeInitiatives ? snapshot.initiatives ?? [] : [],
     layout:
       request.includeModules && snapshot.layout
