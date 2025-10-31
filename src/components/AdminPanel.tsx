@@ -3279,7 +3279,7 @@ function expertToDraft(expert: ExpertProfile): ExpertDraftPayload {
     modules: [...expert.modules],
     competencies: [...expert.competencies],
     consultingSkills: [...expert.consultingSkills],
-    softSkills: Array.isArray(expert.softSkills) ? [...expert.softSkills] : [],
+    softSkills: [...expert.softSkills],
     focusAreas: [...expert.focusAreas],
     experienceYears: expert.experienceYears,
     location: expert.location,
