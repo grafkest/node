@@ -10,8 +10,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   type ArtifactNode,
   type DomainNode,
-  type ExpertAvailability,
   type ExpertProfile,
+  type ExpertSkill,
   type LibraryDependency,
   type ModuleInput,
   type ModuleMetrics,
@@ -20,9 +20,14 @@ import {
   type ModuleStatus,
   type NonFunctionalRequirements,
   type RidOwner,
+  type SkillEvidenceStatus,
+  type SkillLevel,
   type TeamMember,
   type TeamRole,
-  type UserStats
+  type UserStats,
+  evidenceStatuses,
+  getSkillsByRole,
+  skillLevels
 } from '../data';
 import styles from './AdminPanel.module.css';
 
@@ -126,6 +131,11 @@ type InlineStringCreation = {
   previous: string;
 };
 
+type MultiStringCreation = {
+  value: string;
+  previous: string[];
+};
+
 type IndexedStringCreation = {
   index: number;
   value: string;
@@ -174,11 +184,17 @@ const deploymentToolLabels: Record<ModuleNode['deploymentTool'], string> = {
   kubernetes: 'Kubernetes'
 };
 
-const availabilityLabels: Record<ExpertAvailability, string> = {
-  available: 'Готов к консалтингу',
-  partial: 'Ограниченная доступность',
-  busy: 'Недоступен'
-};
+const TEAM_ROLES: TeamRole[] = [
+  'Владелец продукта',
+  'Эксперт R&D',
+  'Аналитик',
+  'Backend',
+  'Frontend',
+  'Архитектор',
+  'Тестировщик',
+  'Руководитель проекта',
+  'UX'
+];
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
   modules,
@@ -266,6 +282,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   );
   const knownLibraryRegistry = useMemo(() => buildLibraryRegistry(modules), [modules]);
   const knownArtifactDataTypes = useMemo(() => buildArtifactDataTypes(artifacts), [artifacts]);
+  const knownLocations = useMemo(() => buildLocationList(experts), [experts]);
+  const knownLanguages = useMemo(() => buildLanguageList(experts), [experts]);
 
   const [companyNames, setCompanyNames] = useState<string[]>(knownCompanyNames);
   const [productNames, setProductNames] = useState<string[]>(knownProductNames);
@@ -279,6 +297,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     knownLibraryRegistry
   );
   const [artifactDataTypes, setArtifactDataTypes] = useState<string[]>(knownArtifactDataTypes);
+  const [locations, setLocations] = useState<string[]>(knownLocations);
+  const [languageOptions, setLanguageOptions] = useState<string[]>(knownLanguages);
 
   useEffect(() => {
     setCompanyNames((prev) => mergeStringCollections(prev, knownCompanyNames));
@@ -311,6 +331,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   useEffect(() => {
     setArtifactDataTypes((prev) => mergeStringCollections(prev, knownArtifactDataTypes));
   }, [knownArtifactDataTypes]);
+
+  useEffect(() => {
+    setLocations((prev) => mergeStringCollections(prev, knownLocations));
+  }, [knownLocations]);
+
+  useEffect(() => {
+    setLanguageOptions((prev) => mergeStringCollections(prev, knownLanguages));
+  }, [knownLanguages]);
 
   const leafDomainIds = useMemo(() => collectLeafDomainIds(domains), [domains]);
   const catalogDomainIds = useMemo(() => collectCatalogDomainIds(domains), [domains]);
@@ -642,6 +670,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setArtifactDataTypes((prev) => mergeStringCollections(prev, [trimmed]));
   };
 
+  const registerLocation = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    setLocations((prev) => mergeStringCollections(prev, [trimmed]));
+  };
+
+  const registerLanguage = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    setLanguageOptions((prev) => mergeStringCollections(prev, [trimmed]));
+  };
+
   const moduleSelectValue = moduleOptions.find((item) => item.value === selectedModuleId) ?? moduleOptions[0];
   const domainSelectValue = domainOptions.find((item) => item.value === selectedDomainId) ?? domainOptions[0];
   const artifactSelectValue =
@@ -808,8 +852,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             draft={expertDraft}
             domainItems={parentDomainIds}
             domainLabelMap={domainLabelMap}
-            moduleItems={modules.map((module) => module.id)}
             moduleLabelMap={moduleLabelMap}
+            locations={locations}
+            onRegisterLocation={registerLocation}
+            languages={languageOptions}
+            onRegisterLanguage={registerLanguage}
             onChange={setExpertDraft}
             onSubmit={handleExpertSubmit}
             onDelete={selectedExpertId === '__new__' ? undefined : handleExpertDelete}
@@ -919,18 +966,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   );
 
   const teamRoleItems = useMemo<SelectItem<TeamRole>[]>(
-    () =>
-      ([
-        'Владелец продукта',
-        'Эксперт R&D',
-        'Аналитик',
-        'Backend',
-        'Frontend',
-        'Архитектор',
-        'Тестировщик',
-        'Руководитель проекта',
-        'UX'
-      ] satisfies TeamRole[]).map((role) => ({ label: role, value: role })),
+    () => TEAM_ROLES.map((role) => ({ label: role, value: role })),
     []
   );
 
@@ -2980,8 +3016,11 @@ type ExpertFormProps = {
   draft: ExpertDraftPayload;
   domainItems: string[];
   domainLabelMap: Record<string, string>;
-  moduleItems: string[];
   moduleLabelMap: Record<string, string>;
+  locations: string[];
+  onRegisterLocation: (value: string) => void;
+  languages: string[];
+  onRegisterLanguage: (value: string) => void;
   onChange: (draft: ExpertDraftPayload) => void;
   onSubmit: () => void;
   onDelete?: () => void;
@@ -2992,21 +3031,15 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   draft,
   domainItems,
   domainLabelMap,
-  moduleItems,
   moduleLabelMap,
+  locations,
+  onRegisterLocation,
+  languages,
+  onRegisterLanguage,
   onChange,
   onSubmit,
   onDelete
 }) => {
-  const availabilityItems = useMemo<SelectItem<ExpertAvailability>[]>(
-    () =>
-      (['available', 'partial', 'busy'] as ExpertAvailability[]).map((status) => ({
-        label: availabilityLabels[status],
-        value: status
-      })),
-    []
-  );
-
   const handleDraftChange = <Key extends keyof ExpertDraftPayload>(
     key: Key,
     value: ExpertDraftPayload[Key]
@@ -3028,7 +3061,177 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     handleDraftChange('experienceYears', normalized);
   };
 
-  const availabilityValue = availabilityItems.find((item) => item.value === draft.availability) ?? null;
+  const nameParts = useMemo(() => parseFullName(draft.fullName), [draft.fullName]);
+  const { lastName, firstName, middleName } = nameParts;
+
+  const roleItems = useMemo<SelectItem<string>[]>(() => {
+    const base = TEAM_ROLES.map<SelectItem<string>>((role) => ({ label: role, value: role }));
+    if (draft.title && !base.some((item) => item.value === draft.title)) {
+      return [{ label: draft.title, value: draft.title }, ...base];
+    }
+    return base;
+  }, [draft.title]);
+
+  const selectedRole = useMemo(
+    () => (TEAM_ROLES.includes(draft.title as TeamRole) ? (draft.title as TeamRole) : null),
+    [draft.title]
+  );
+
+  const hardSkillDefinitions = useMemo(() => {
+    if (!selectedRole) {
+      return [] as ReturnType<typeof getSkillsByRole>;
+    }
+    return getSkillsByRole(selectedRole).filter((definition) => definition.category === 'hard');
+  }, [selectedRole]);
+
+  const softSkillDefinitions = useMemo(() => {
+    if (!selectedRole) {
+      return [] as ReturnType<typeof getSkillsByRole>;
+    }
+    return getSkillsByRole(selectedRole).filter((definition) => definition.category === 'soft');
+  }, [selectedRole]);
+
+  const hardSkillMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getSkillsByRole>[number]>();
+    hardSkillDefinitions.forEach((definition) => {
+      map.set(definition.id, definition);
+    });
+    return map;
+  }, [hardSkillDefinitions]);
+
+  const hardSkillNameSet = useMemo(
+    () => new Set(hardSkillDefinitions.map((definition) => definition.name)),
+    [hardSkillDefinitions]
+  );
+
+  const hardSkillLevelItems = useMemo<SelectItem<SkillLevel>[]>(
+    () =>
+      skillLevels.map((descriptor) => ({
+        label: `${descriptor.label} (${descriptor.id})`,
+        value: descriptor.id
+      })),
+    []
+  );
+
+  const hardSkillEvidenceItems = useMemo<SelectItem<SkillEvidenceStatus>[]>(
+    () =>
+      evidenceStatuses.map((descriptor) => ({
+        label: descriptor.label,
+        value: descriptor.id as SkillEvidenceStatus
+      })),
+    []
+  );
+
+  const CREATE_LOCATION_OPTION = '__create_location__';
+  const CREATE_LANGUAGE_OPTION = '__create_language__';
+
+  const [locationCreation, setLocationCreation] = useState<InlineStringCreation | null>(null);
+  const [languageCreation, setLanguageCreation] = useState<MultiStringCreation | null>(null);
+
+  const locationItems = useMemo(() => {
+    const base = mergeStringCollections(locations, draft.location ? [draft.location] : []);
+    return [...base, CREATE_LOCATION_OPTION];
+  }, [draft.location, locations]);
+
+  const languageItems = useMemo(() => {
+    const base = mergeStringCollections(languages, draft.languages);
+    return [...base, CREATE_LANGUAGE_OPTION];
+  }, [draft.languages, languages]);
+
+  const updateCompetenciesFromSkills = (
+    skills: ExpertSkill[],
+    currentCompetencies: string[]
+  ): string[] => {
+    if (!hardSkillDefinitions.length) {
+      return currentCompetencies;
+    }
+    const activeNames = new Set<string>();
+    skills.forEach((skill) => {
+      const definition = hardSkillMap.get(skill.id);
+      if (definition) {
+        activeNames.add(definition.name);
+      }
+    });
+    const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
+    return mergeStringCollections(preserved, Array.from(activeNames));
+  };
+
+  const areArraysEqual = (first: string[], second: string[]): boolean => {
+    if (first.length !== second.length) {
+      return false;
+    }
+    return first.every((value, index) => value === second[index]);
+  };
+
+  const handleHardSkillToggle = (definition: ReturnType<typeof getSkillsByRole>[number], enabled: boolean) => {
+    if (enabled) {
+      const existing = draft.skills.find((entry) => entry.id === definition.id);
+      const nextSkills = existing
+        ? draft.skills
+        : [
+            ...draft.skills,
+            {
+              id: definition.id,
+              level: definition.recommendedLevel as SkillLevel,
+              proofStatus: 'claimed' as SkillEvidenceStatus,
+              evidence: [],
+              artifacts: [],
+              interest: 'medium',
+              availableFte: 0
+            }
+          ];
+      const nextCompetencies = updateCompetenciesFromSkills(nextSkills, draft.competencies);
+      onChange({ ...draft, skills: nextSkills, competencies: nextCompetencies });
+      return;
+    }
+    const nextSkills = draft.skills.filter((entry) => entry.id !== definition.id);
+    const nextCompetencies = updateCompetenciesFromSkills(nextSkills, draft.competencies);
+    onChange({ ...draft, skills: nextSkills, competencies: nextCompetencies });
+  };
+
+  const handleHardSkillLevelChange = (skillId: string, level: SkillLevel) => {
+    const nextSkills = draft.skills.map((skill) =>
+      skill.id === skillId
+        ? {
+            ...skill,
+            level
+          }
+        : skill
+    );
+    onChange({ ...draft, skills: nextSkills });
+  };
+
+  const handleHardSkillEvidenceChange = (skillId: string, status: SkillEvidenceStatus) => {
+    const nextSkills = draft.skills.map((skill) =>
+      skill.id === skillId
+        ? {
+            ...skill,
+            proofStatus: status
+          }
+        : skill
+    );
+    onChange({ ...draft, skills: nextSkills });
+  };
+
+  const handleSoftSkillToggle = (skillName: string, enabled: boolean) => {
+    const current = new Set(draft.softSkills ?? []);
+    if (enabled) {
+      current.add(skillName);
+    } else {
+      current.delete(skillName);
+    }
+    onChange({ ...draft, softSkills: mergeStringCollections([], Array.from(current)) });
+  };
+
+  useEffect(() => {
+    if (!hardSkillDefinitions.length) {
+      return;
+    }
+    const recalculated = updateCompetenciesFromSkills(draft.skills, draft.competencies);
+    if (!areArraysEqual(recalculated, draft.competencies)) {
+      onChange({ ...draft, competencies: recalculated });
+    }
+  }, [draft.skills, draft.competencies, hardSkillDefinitions, onChange]);
 
   return (
     <div className={styles.formBody}>
@@ -3047,25 +3250,67 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       <div className={styles.fieldGroup}>
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
-            ФИО
+            Фамилия
           </Text>
           <TextField
             size="s"
-            value={draft.fullName}
-            onChange={(value) => handleDraftChange('fullName', value ?? '')}
+            value={lastName}
+            onChange={(value) =>
+              handleDraftChange('fullName', composeFullName({
+                lastName: value ?? '',
+                firstName,
+                middleName
+              }))
+            }
           />
         </label>
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
-            Роль / должность
+            Имя
           </Text>
           <TextField
             size="s"
-            value={draft.title}
-            onChange={(value) => handleDraftChange('title', value ?? '')}
+            value={firstName}
+            onChange={(value) =>
+              handleDraftChange('fullName', composeFullName({
+                lastName,
+                firstName: value ?? '',
+                middleName
+              }))
+            }
+          />
+        </label>
+        <label className={styles.field}>
+          <Text size="xs" weight="semibold" className={styles.label}>
+            Отчество (при наличии)
+          </Text>
+          <TextField
+            size="s"
+            value={middleName}
+            onChange={(value) =>
+              handleDraftChange('fullName', composeFullName({
+                lastName,
+                firstName,
+                middleName: value ?? ''
+              }))
+            }
           />
         </label>
       </div>
+
+      <label className={styles.field}>
+        <Text size="xs" weight="semibold" className={styles.label}>
+          Роль / должность
+        </Text>
+        <Select<SelectItem<string>>
+          size="s"
+          items={roleItems}
+          value={roleItems.find((item) => item.value === draft.title) ?? null}
+          getItemLabel={(item) => item.label}
+          getItemKey={(item) => item.value}
+          onChange={(item) => item && handleDraftChange('title', item.value)}
+        />
+      </label>
 
       <label className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
@@ -3094,21 +3339,6 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
             onChange={(value) => handleDraftChange('domains', value ?? [])}
           />
         </label>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
-            Связанные модули
-          </Text>
-          <Combobox<string>
-            size="s"
-            items={moduleItems}
-            value={draft.modules}
-            multiple
-            getItemKey={(item) => item}
-            getItemLabel={(item) => moduleLabelMap[item] ?? item}
-            placeholder="Выберите модули"
-            onChange={(value) => handleDraftChange('modules', value ?? [])}
-          />
-        </label>
       </div>
 
       <div className={styles.fieldGroup}>
@@ -3126,26 +3356,90 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         </label>
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
-            Доступность
-          </Text>
-          <Select<SelectItem<ExpertAvailability>>
-            size="s"
-            items={availabilityItems}
-            value={availabilityValue}
-            getItemLabel={(item) => item.label}
-            getItemKey={(item) => item.value}
-            onChange={(item) => item && handleDraftChange('availability', item.value)}
-          />
-        </label>
-        <label className={styles.field}>
-          <Text size="xs" weight="semibold" className={styles.label}>
             Локация
           </Text>
-          <TextField
+          <Combobox<string>
             size="s"
-            value={draft.location}
-            onChange={(value) => handleDraftChange('location', value ?? '')}
+            items={locationItems}
+            value={
+              locationCreation
+                ? CREATE_LOCATION_OPTION
+                : draft.location.trim() || null
+            }
+            getItemKey={(item) => item}
+            getItemLabel={(item) =>
+              item === CREATE_LOCATION_OPTION ? 'Добавить локацию…' : item || '—'
+            }
+            placeholder="Выберите локацию"
+            onChange={(value) => {
+              if (!value) {
+                setLocationCreation(null);
+                handleDraftChange('location', '');
+                return;
+              }
+              if (value === CREATE_LOCATION_OPTION) {
+                setLocationCreation({ value: '', previous: draft.location });
+                return;
+              }
+              setLocationCreation(null);
+              onRegisterLocation(value);
+              handleDraftChange('location', value);
+            }}
           />
+          {locationCreation && (
+            <div className={styles.inlineForm}>
+              <input
+                className={styles.input}
+                value={locationCreation.value}
+                onChange={(event) =>
+                  setLocationCreation({ ...locationCreation, value: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    const next = locationCreation.value.trim();
+                    if (!next) {
+                      return;
+                    }
+                    onRegisterLocation(next);
+                    handleDraftChange('location', next);
+                    setLocationCreation(null);
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    handleDraftChange('location', locationCreation.previous);
+                    setLocationCreation(null);
+                  }
+                }}
+                placeholder="Введите новую локацию"
+              />
+              <div className={styles.inlineButtons}>
+                <Button
+                  size="xs"
+                  label="Сохранить"
+                  view="primary"
+                  onClick={() => {
+                    const next = locationCreation.value.trim();
+                    if (!next) {
+                      return;
+                    }
+                    onRegisterLocation(next);
+                    handleDraftChange('location', next);
+                    setLocationCreation(null);
+                  }}
+                />
+                <Button
+                  size="xs"
+                  label="Отмена"
+                  view="ghost"
+                  onClick={() => {
+                    handleDraftChange('location', locationCreation.previous);
+                    setLocationCreation(null);
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </label>
         <label className={styles.field}>
           <Text size="xs" weight="semibold" className={styles.label}>
@@ -3159,40 +3453,132 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         </label>
       </div>
 
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Комментарий по доступности
-        </Text>
-        <textarea
-          className={styles.textarea}
-          value={draft.availabilityComment}
-          onChange={(event) => handleDraftChange('availabilityComment', event.target.value)}
-        />
-      </label>
+      <div className={styles.skillMatrix}>
+        <div className={`${styles.skillMatrixHeader} ${styles.skillMatrixHeaderWide}`}>
+          <Text size="xs" weight="semibold" className={styles.skillMatrixTitle}>
+            Hard skills
+          </Text>
+          <Text size="xs" view="secondary" className={styles.skillMatrixHint}>
+            Уровень владения
+          </Text>
+          <Text size="xs" view="secondary" className={styles.skillMatrixHint}>
+            Подтверждение
+          </Text>
+        </div>
+        {selectedRole ? (
+          hardSkillDefinitions.length > 0 ? (
+            hardSkillDefinitions.map((definition) => {
+              const skill = draft.skills.find((entry) => entry.id === definition.id);
+              const isActive = Boolean(skill);
+              return (
+                <div
+                  key={definition.id}
+                  className={`${styles.skillMatrixRow} ${styles.skillMatrixRowWide}`}
+                >
+                  <div className={styles.skillMatrixInfo}>
+                    <Switch
+                      size="s"
+                      checked={isActive}
+                      label={definition.name}
+                      onChange={({ target }) =>
+                        handleHardSkillToggle(definition, target.checked)
+                      }
+                    />
+                    <Text size="xs" view="secondary" className={styles.skillMatrixDescription}>
+                      {definition.description}
+                    </Text>
+                  </div>
+                  <div className={styles.skillMatrixControl}>
+                    <Select<SelectItem<SkillLevel>>
+                      size="s"
+                      disabled={!isActive}
+                      items={hardSkillLevelItems}
+                      value={
+                        isActive && skill
+                          ? hardSkillLevelItems.find((item) => item.value === skill.level) ?? null
+                          : null
+                      }
+                      getItemLabel={(item) => item.label}
+                      getItemKey={(item) => item.value}
+                      onChange={(item) =>
+                        item && handleHardSkillLevelChange(definition.id, item.value)
+                      }
+                    />
+                  </div>
+                  <div className={styles.skillMatrixControl}>
+                    <Select<SelectItem<SkillEvidenceStatus>>
+                      size="s"
+                      disabled={!isActive}
+                      items={hardSkillEvidenceItems}
+                      value={
+                        isActive && skill
+                          ?
+                              hardSkillEvidenceItems.find(
+                                (item) => item.value === skill.proofStatus
+                              ) ?? null
+                          : null
+                      }
+                      getItemLabel={(item) => item.label}
+                      getItemKey={(item) => item.value}
+                      onChange={(item) =>
+                        item && handleHardSkillEvidenceChange(definition.id, item.value)
+                      }
+                    />
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <Text size="xs" view="secondary" className={styles.skillMatrixEmpty}>
+              Для выбранной роли нет преднастроенных hard skills.
+            </Text>
+          )
+        ) : (
+          <Text size="xs" view="secondary" className={styles.skillMatrixEmpty}>
+            Выберите роль, чтобы настроить hard skills.
+          </Text>
+        )}
+      </div>
 
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Hard skills (компетенции)
-        </Text>
-        <textarea
-          className={styles.textarea}
-          value={formatList(draft.competencies)}
-          placeholder="По одному навыку на строку"
-          onChange={(event) => handleDraftChange('competencies', parseList(event.target.value))}
-        />
-      </label>
-
-      <label className={styles.field}>
-        <Text size="xs" weight="semibold" className={styles.label}>
-          Soft skills (консалтинг)
-        </Text>
-        <textarea
-          className={styles.textarea}
-          value={formatList(draft.consultingSkills)}
-          placeholder="По одному навыку на строку"
-          onChange={(event) => handleDraftChange('consultingSkills', parseList(event.target.value))}
-        />
-      </label>
+      <div className={styles.skillMatrix}>
+        <div className={styles.skillMatrixHeader}>
+          <Text size="xs" weight="semibold" className={styles.skillMatrixTitle}>
+            Soft skills
+          </Text>
+        </div>
+        {selectedRole ? (
+          softSkillDefinitions.length > 0 ? (
+            softSkillDefinitions.map((definition) => {
+              const isActive = draft.softSkills?.includes(definition.name) ?? false;
+              return (
+                <div key={definition.id} className={styles.skillMatrixRow}>
+                  <div className={styles.skillMatrixInfo}>
+                    <Switch
+                      size="s"
+                      checked={isActive}
+                      label={definition.name}
+                      onChange={({ target }) =>
+                        handleSoftSkillToggle(definition.name, target.checked)
+                      }
+                    />
+                    <Text size="xs" view="secondary" className={styles.skillMatrixDescription}>
+                      {definition.description}
+                    </Text>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <Text size="xs" view="secondary" className={styles.skillMatrixEmpty}>
+              Для выбранной роли нет преднастроенных soft skills.
+            </Text>
+          )
+        ) : (
+          <Text size="xs" view="secondary" className={styles.skillMatrixEmpty}>
+            Выберите роль, чтобы настроить soft skills.
+          </Text>
+        )}
+      </div>
 
       <label className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
@@ -3210,29 +3596,101 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         <Text size="xs" weight="semibold" className={styles.label}>
           Языки
         </Text>
-        <TextField
+        <Combobox<string>
           size="s"
-          value={draft.languages.join(', ')}
-          placeholder="Например: ru, en"
-          onChange={(value) => handleDraftChange('languages', parseList(value ?? ''))}
+          items={languageItems}
+          value={draft.languages}
+          multiple
+          getItemKey={(item) => item}
+          getItemLabel={(item) =>
+            item === CREATE_LANGUAGE_OPTION ? 'Добавить язык…' : item
+          }
+          placeholder="Выберите языки"
+          onChange={(value) => {
+            const next = value ?? [];
+            if (next.includes(CREATE_LANGUAGE_OPTION)) {
+              setLanguageCreation({ value: '', previous: draft.languages });
+              return;
+            }
+            handleDraftChange('languages', next);
+          }}
         />
+        {languageCreation && (
+          <div className={styles.inlineForm}>
+            <input
+              className={styles.input}
+              value={languageCreation.value}
+              onChange={(event) =>
+                setLanguageCreation({ ...languageCreation, value: event.target.value })
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  const next = languageCreation.value.trim();
+                  if (!next) {
+                    return;
+                  }
+                  onRegisterLanguage(next);
+                  handleDraftChange('languages', mergeStringCollections(draft.languages, [next]));
+                  setLanguageCreation(null);
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  handleDraftChange('languages', languageCreation.previous);
+                  setLanguageCreation(null);
+                }
+              }}
+              placeholder="Введите новый язык"
+            />
+            <div className={styles.inlineButtons}>
+              <Button
+                size="xs"
+                label="Сохранить"
+                view="primary"
+                onClick={() => {
+                  const next = languageCreation.value.trim();
+                  if (!next) {
+                    return;
+                  }
+                  onRegisterLanguage(next);
+                  handleDraftChange('languages', mergeStringCollections(draft.languages, [next]));
+                  setLanguageCreation(null);
+                }}
+              />
+              <Button
+                size="xs"
+                label="Отмена"
+                view="ghost"
+                onClick={() => {
+                  handleDraftChange('languages', languageCreation.previous);
+                  setLanguageCreation(null);
+                }}
+              />
+            </div>
+          </div>
+        )}
       </label>
 
-      <label className={styles.field}>
+      <div className={styles.field}>
         <Text size="xs" weight="semibold" className={styles.label}>
           Значимые проекты
         </Text>
-        <textarea
-          className={styles.textarea}
-          value={formatList(draft.notableProjects)}
-          placeholder="По одному проекту на строку"
-          onChange={(event) => handleDraftChange('notableProjects', parseList(event.target.value))}
-        />
-      </label>
+        {draft.modules.length > 0 ? (
+          <ul className={styles.projectList}>
+            {draft.modules.map((moduleId) => (
+              <li key={moduleId}>{moduleLabelMap[moduleId] ?? moduleId}</li>
+            ))}
+          </ul>
+        ) : (
+          <Text size="xs" view="secondary">
+            Проекты появятся после назначения на модули.
+          </Text>
+        )}
+      </div>
 
       <div className={styles.submitRow}>
         <Text size="xs" view="secondary" className={styles.hint}>
-          Навыки ({draft.skills.length}) редактируются в разделе «Экспертиза» и сохранятся без изменений.
+          Всего навыков: {draft.skills.length}. Детальное управление подтверждениями доступно в разделе «Экспертиза».
         </Text>
         <div className={styles.submitButtons}>
           {onDelete && <Button size="s" view="ghost" label="Удалить" onClick={onDelete} />}
@@ -3240,6 +3698,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
             size="s"
             view="primary"
             label={mode === 'create' ? 'Создать профиль' : 'Сохранить профиль'}
+            disabled={!lastName.trim() || !firstName.trim()}
             onClick={onSubmit}
           />
         </div>
@@ -3564,6 +4023,32 @@ function findDomainParentId(domains: DomainNode[], id: string, parentId: string 
 
 export default AdminPanel;
 
+type FullNameParts = {
+  lastName: string;
+  firstName: string;
+  middleName: string;
+};
+
+function parseFullName(fullName: string): FullNameParts {
+  const parts = fullName
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  const [lastName = '', firstName = '', ...rest] = parts;
+  return {
+    lastName,
+    firstName,
+    middleName: rest.join(' ')
+  };
+}
+
+function composeFullName(parts: FullNameParts): string {
+  return [parts.lastName, parts.firstName, parts.middleName]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .join(' ');
+}
+
 function mergeStringCollections(current: string[], incoming: string[]): string[] {
   const values = new Set<string>();
 
@@ -3615,6 +4100,30 @@ function mergeRegistry(
       acc[company] = Array.from(divisions).sort((a, b) => a.localeCompare(b, 'ru'));
       return acc;
     }, {});
+}
+
+function buildLocationList(experts: ExpertProfile[]): string[] {
+  const values = new Set<string>();
+  experts.forEach((expert) => {
+    const location = expert.location.trim();
+    if (location) {
+      values.add(location);
+    }
+  });
+  return Array.from(values).sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+function buildLanguageList(experts: ExpertProfile[]): string[] {
+  const values = new Set<string>();
+  experts.forEach((expert) => {
+    (expert.languages ?? []).forEach((language) => {
+      const normalized = language.trim();
+      if (normalized) {
+        values.add(normalized);
+      }
+    });
+  });
+  return Array.from(values).sort((a, b) => a.localeCompare(b, 'ru'));
 }
 
 function buildProductNames(modules: ModuleNode[]): string[] {
