@@ -1,4 +1,4 @@
-import { type ExpertProfile } from '../data';
+import { type ExpertProfile, type SkillEvidenceStatus } from '../data';
 
 const LEVEL_WEIGHTS = {
   novice: 0.4,
@@ -8,6 +8,14 @@ const LEVEL_WEIGHTS = {
 } as const;
 
 const DEFAULT_FRESHNESS_HALF_LIFE_DAYS = 180;
+
+const STATUS_CONFIDENCE: Record<SkillEvidenceStatus, number> = {
+  claimed: 0.35,
+  screened: 0.55,
+  observed: 0.75,
+  validated: 1,
+  refuted: 0
+};
 
 export type SkillLevel = keyof typeof LEVEL_WEIGHTS;
 
@@ -31,6 +39,8 @@ export type ExpertSkillEvidence = {
   name: string;
   level: SkillLevel;
   lastUsedDaysAgo: number;
+  status: SkillEvidenceStatus;
+  sourceInitiatives: string[];
 };
 
 export type MatchableExpertProfile = ExpertProfile & {
@@ -87,6 +97,36 @@ export type InitiativeMatchReport = {
 
 const LOG_2 = Math.log(2);
 
+function formatInitiativeSuffix(ids: string[]): string {
+  if (ids.length === 0) {
+    return '';
+  }
+  if (ids.length === 1) {
+    return ` (инициатива ${ids[0]})`;
+  }
+  return ` (инициативы: ${ids.join(', ')})`;
+}
+
+function buildStatusGap(
+  skillName: string,
+  status: SkillEvidenceStatus,
+  initiatives: string[]
+): string | null {
+  const suffix = formatInitiativeSuffix(initiatives);
+  switch (status) {
+    case 'claimed':
+      return `Навык «${skillName}» пока только заявлен без подтверждений${suffix}.`;
+    case 'screened':
+      return `Навык «${skillName}» на этапе скрининга${suffix}; требуется наблюдение или проверка.`;
+    case 'observed':
+      return `Навык «${skillName}» подтверждён наблюдениями${suffix}, рекомендуется собрать артефакты.`;
+    case 'refuted':
+      return `Навык «${skillName}» был опровергнут${suffix}.`;
+    default:
+      return null;
+  }
+}
+
 function collectRequirementTargets(requirement: SkillRequirement): string[] {
   const targets = new Set<string>();
   if (requirement.id) {
@@ -125,6 +165,7 @@ function hasSkillInProfile(
   const normalizedCompetencies = [
     ...expert.competencies,
     ...expert.consultingSkills,
+    ...(expert.softSkills ?? []),
     ...expert.focusAreas
   ].map((skill) => skill.toLowerCase());
 
@@ -150,7 +191,6 @@ function calculateSkillCoverage(
 ): SkillCoverageReport {
   const evidence = findEvidence(expert, requirement);
   const hasProfileSkill = hasSkillInProfile(expert, requirement);
-  const hasSkill = Boolean(evidence) || hasProfileSkill;
 
   const requiredLevelWeight = requirement.requiredLevel
     ? LEVEL_WEIGHTS[requirement.requiredLevel]
@@ -160,34 +200,57 @@ function calculateSkillCoverage(
   let freshnessFactor = 0;
   const gaps: string[] = [];
 
-  if (!hasSkill) {
-    gaps.push(`Нет подтвержденного навыка «${requirement.name}»`);
-  }
+  let statusConfidence = 0;
+  let effectiveEvidence = evidence ?? undefined;
 
   if (evidence) {
-    const levelWeight = LEVEL_WEIGHTS[evidence.level];
-    levelFactor = Math.min(levelWeight / requiredLevelWeight, 1);
+    statusConfidence = STATUS_CONFIDENCE[evidence.status] ?? 0;
+    const statusGap = buildStatusGap(requirement.name, evidence.status, evidence.sourceInitiatives);
+    if (statusGap) {
+      gaps.push(statusGap);
+    }
+    if (evidence.status === 'refuted') {
+      effectiveEvidence = undefined;
+    }
+  }
+
+  if (!evidence && hasProfileSkill) {
+    statusConfidence = Math.max(statusConfidence, STATUS_CONFIDENCE.claimed);
+    gaps.push(`Навык «${requirement.name}» есть в профиле, но без подтверждения уровня/свежести`);
+  }
+
+  if (!effectiveEvidence && statusConfidence === 0 && !hasProfileSkill) {
+    gaps.push(`Нет подтвержденного навыка «${requirement.name}».`);
+  }
+
+  if (effectiveEvidence) {
+    const levelWeight = LEVEL_WEIGHTS[effectiveEvidence.level];
+    const levelRatio = Math.min(levelWeight / requiredLevelWeight, 1);
     const halfLife = requirement.freshnessHalfLifeDays ?? DEFAULT_FRESHNESS_HALF_LIFE_DAYS;
-    freshnessFactor = calculateFreshnessFactor(evidence.lastUsedDaysAgo, halfLife);
-    if (levelFactor < 1) {
+    const baseFreshness = calculateFreshnessFactor(effectiveEvidence.lastUsedDaysAgo, halfLife);
+
+    levelFactor = levelRatio * statusConfidence;
+    freshnessFactor = baseFreshness * statusConfidence;
+
+    if (levelRatio < 1) {
       gaps.push(
-        `Уровень владения «${requirement.name}» ниже требуемого (${evidence.level} < ${
+        `Уровень владения «${requirement.name}» ниже требуемого (${effectiveEvidence.level} < ${
           requirement.requiredLevel ?? 'expert'
         })`
       );
     }
-    if (freshnessFactor < 0.6) {
+    if (baseFreshness < 0.6) {
       gaps.push(
-        `Навык «${requirement.name}» может быть устаревшим (использовался ${evidence.lastUsedDaysAgo} дней назад)`
+        `Навык «${requirement.name}» может быть устаревшим (использовался ${effectiveEvidence.lastUsedDaysAgo} дней назад)`
       );
     }
-  } else if (hasProfileSkill) {
-    levelFactor = 0.65;
-    freshnessFactor = 0.6;
-    gaps.push(`Навык «${requirement.name}» есть в профиле, но без подтверждения уровня/свежести`);
+  } else if (!effectiveEvidence && statusConfidence > 0) {
+    levelFactor = 0.65 * statusConfidence;
+    freshnessFactor = 0.6 * statusConfidence;
   }
 
-  const coverageScore = requirement.weight * (hasSkill ? 1 : 0);
+  const coverageScore = requirement.weight * Math.min(statusConfidence, 1);
+  const hasSkill = coverageScore > 0;
 
   return {
     skill: requirement,
@@ -195,7 +258,7 @@ function calculateSkillCoverage(
     coverageScore,
     levelFactor,
     freshnessFactor,
-    gaps
+    gaps: Array.from(new Set(gaps))
   };
 }
 

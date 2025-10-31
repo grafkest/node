@@ -16,6 +16,7 @@ const baseExpert: ExpertProfile = {
   modules: [],
   competencies: [],
   consultingSkills: [],
+  softSkills: [],
   focusAreas: [],
   experienceYears: 5,
   location: 'Москва',
@@ -94,7 +95,15 @@ describe('buildRoleMatchReports', () => {
         {
           id: 'data-normalization',
           level: 'A',
-          proofStatus: 'verified',
+          proofStatus: 'validated',
+          evidence: [
+            {
+              status: 'validated',
+              initiativeId: 'initiative-digital-pad',
+              artifactIds: ['artifact-data-normalization'],
+              comment: 'Подтверждено на проектах инфра-планирования'
+            }
+          ],
           artifacts: [],
           interest: 'high',
           availableFte: 0.5,

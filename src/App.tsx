@@ -24,6 +24,7 @@ import DomainTree from './components/DomainTree';
 import AdminPanel, {
   type ArtifactDraftPayload,
   type DomainDraftPayload,
+  type ExpertDraftPayload,
   type ModuleDraftPayload,
   type ModuleDraftPrefillRequest
 } from './components/AdminPanel';
@@ -184,6 +185,14 @@ function App() {
       prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
     );
   }, []);
+  const handleUpdateExpertSoftSkills = useCallback(
+    (expertId: string, softSkills: string[]) => {
+      setExpertProfiles((prev) =>
+        prev.map((expert) => (expert.id === expertId ? { ...expert, softSkills } : expert))
+      );
+    },
+    []
+  );
   useLayoutEffect(() => {
     const element = sidebarRef.current;
     if (!element) {
@@ -1048,6 +1057,8 @@ function App() {
     });
     return map;
   }, [moduleData]);
+
+  const moduleIdSet = useMemo(() => new Set(moduleData.map((module) => module.id)), [moduleData]);
 
   const graphSelectOptions = useMemo(
     () =>
@@ -3332,6 +3343,7 @@ function App() {
               moduleNameMap={moduleNameMap}
               artifactNameMap={artifactNameMap}
               domainNameMap={domainNameMap}
+              expertProfiles={expertProfiles}
             />
           </aside>
       </main>
@@ -3366,6 +3378,7 @@ function App() {
           domainNameMap={domainNameMap}
           initiatives={initiativeData}
           onUpdateExpertSkills={handleUpdateExpertSkills}
+          onUpdateExpertSoftSkills={handleUpdateExpertSoftSkills}
         />
       </main>
       <main
@@ -3377,6 +3390,8 @@ function App() {
         <InitiativePlanner
           initiatives={initiativeData}
           experts={expertProfiles}
+          domains={domainData}
+          modules={moduleData}
           domainNameMap={domainNameMap}
           onTogglePin={handleToggleInitiativePin}
           onAddRisk={handleAddInitiativeRisk}
@@ -3410,6 +3425,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          experts={expertProfiles}
           moduleDraftPrefill={moduleDraftPrefill}
           onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
@@ -3421,6 +3437,9 @@ function App() {
           onCreateArtifact={handleCreateArtifact}
           onUpdateArtifact={handleUpdateArtifact}
           onDeleteArtifact={handleDeleteArtifact}
+          onCreateExpert={handleCreateExpert}
+          onUpdateExpert={handleUpdateExpert}
+          onDeleteExpert={handleDeleteExpert}
         />
       </main>
     </Layout>
@@ -3431,6 +3450,64 @@ type ModuleBuildResult = {
   module: ModuleNode;
   consumedArtifactIds: string[];
 };
+
+function buildExpertFromDraft(
+  expertId: string,
+  draft: ExpertDraftPayload,
+  options: {
+    domainIdSet: Set<string>;
+    moduleIdSet: Set<string>;
+    fallbackName: string;
+    fallbackProfile?: ExpertProfile;
+  }
+): ExpertProfile {
+  const fallback = options.fallbackProfile;
+  const fullName = draft.fullName.trim() || fallback?.fullName || options.fallbackName;
+  const title = draft.title.trim() || fallback?.title || 'Роль не указана';
+  const summary = draft.summary.trim() || fallback?.summary || 'Описание не заполнено';
+
+  const domains = deduplicateNonEmpty(draft.domains).filter((id) => options.domainIdSet.has(id));
+  const modules = deduplicateNonEmpty(draft.modules).filter((id) => options.moduleIdSet.has(id));
+  const competencies = deduplicateNonEmpty(draft.competencies);
+  const consultingSkills = deduplicateNonEmpty(draft.consultingSkills);
+  const softSkills = deduplicateNonEmpty(draft.softSkills ?? []);
+  const focusAreas = deduplicateNonEmpty(draft.focusAreas);
+  const languages = deduplicateNonEmpty(draft.languages);
+  const notableProjects = deduplicateNonEmpty(draft.notableProjects);
+
+  const experienceYears = Math.max(0, Math.round(draft.experienceYears ?? 0));
+  const location = draft.location.trim() || fallback?.location || 'Локация не указана';
+  const contact = draft.contact.trim() || fallback?.contact || 'Контакт не указан';
+  const availabilityComment =
+    draft.availabilityComment.trim() || fallback?.availabilityComment || 'Комментариев по доступности нет';
+
+  const skills = draft.skills.map((skill) => ({
+    ...skill,
+    artifacts: [...skill.artifacts],
+    usage: skill.usage ? { ...skill.usage } : undefined
+  }));
+
+  return {
+    id: expertId,
+    fullName,
+    title,
+    summary,
+    domains,
+    modules,
+    competencies,
+    consultingSkills,
+    softSkills,
+    focusAreas,
+    experienceYears,
+    location,
+    contact,
+    languages,
+    notableProjects,
+    availability: draft.availability,
+    availabilityComment,
+    skills
+  };
+}
 
 function buildModuleFromDraft(
   moduleId: string,

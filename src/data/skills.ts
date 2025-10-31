@@ -7,10 +7,11 @@ export type SkillSource = 'SFIA' | 'IIBA' | 'INCOSE';
 export type SkillLevelId = 'A' | 'W' | 'P' | 'Ad' | 'E';
 
 export type EvidenceStatusId =
-  | 'declared'
+  | 'claimed'
+  | 'screened'
   | 'observed'
-  | 'documented'
-  | 'verified';
+  | 'validated'
+  | 'refuted';
 
 export type SkillLevelDescriptor = {
   id: SkillLevelId;
@@ -86,28 +87,33 @@ export const skillLevels: SkillLevelDescriptor[] = [
 
 export const evidenceStatuses: EvidenceStatusDescriptor[] = [
   {
-    id: 'declared',
-    label: 'Декларировано',
+    id: 'claimed',
+    label: 'Заявлено',
     description:
-      'Навык заявлен специалистом и подтверждён планом развития, но отсутствуют артефакты применения.'
+      'Навык декларирован специалистом, подтверждения применения и артефактов пока отсутствуют.'
+  },
+  {
+    id: 'screened',
+    label: 'Скрининг',
+    description:
+      'Навык прошёл предварительную проверку, требуется наблюдение в инициативе или сбор артефактов.'
   },
   {
     id: 'observed',
     label: 'Наблюдалось',
     description:
-      'Навык проявлялся в работе, наличие подтверждения от руководителя или наставника.'
+      'Навык проявлялся в работе и подтверждён отзывами руководителя, наставника или команды.'
   },
   {
-    id: 'documented',
-    label: 'Задокументировано',
+    id: 'validated',
+    label: 'Подтверждено',
     description:
-      'Существуют артефакты применения навыка: артефакты проектов, инструкции, записи выступлений.'
+      'Навык проверен экспертами и подкреплён артефактами, сертификацией или аудиторским заключением.'
   },
   {
-    id: 'verified',
-    label: 'Верифицировано',
-    description:
-      'Навык проверен внешними или внутренними экспертами, подкреплён сертификацией или аудитом.'
+    id: 'refuted',
+    label: 'Опровергнуто',
+    description: 'Навык был проверен и признан неприменяемым или некорректно заявленным.'
   }
 ];
 
@@ -120,7 +126,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['IIBA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Владелец продукта', 'Руководитель проекта']
   },
   'systems-thinking': {
@@ -142,7 +148,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'Ad',
-    evidenceStatus: 'verified',
+    evidenceStatus: 'validated',
     roles: ['Архитектор', 'Backend']
   },
   'data-visualization': {
@@ -153,7 +159,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'W',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Frontend']
   },
   'user-research': {
@@ -185,7 +191,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Тестировщик', 'Backend']
   },
   'frontend-engineering': {
@@ -196,7 +202,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Frontend']
   },
   'knowledge-management': {
@@ -207,7 +213,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'soft',
     sources: ['INCOSE'],
     recommendedLevel: 'W',
-    evidenceStatus: 'declared',
+    evidenceStatus: 'claimed',
     roles: ['Руководитель проекта', 'Эксперт R&D']
   },
   'domain-geology': {
@@ -229,7 +235,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Эксперт R&D']
   },
   'streaming-pipelines': {
@@ -240,7 +246,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'Ad',
-    evidenceStatus: 'verified',
+    evidenceStatus: 'validated',
     roles: ['Архитектор', 'Backend']
   },
   'data-governance': {
@@ -251,7 +257,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Руководитель проекта']
   },
   'layout-optimization': {
@@ -273,7 +279,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Backend', 'Архитектор']
   },
   'infrastructure-economics': {
@@ -295,7 +301,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['IIBA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Владелец продукта']
   },
   'scenario-planning': {
@@ -317,7 +323,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'domain',
     sources: ['IIBA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Владелец продукта']
   },
   'telemetry-streaming': {
@@ -328,7 +334,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'Ad',
-    evidenceStatus: 'verified',
+    evidenceStatus: 'validated',
     roles: ['Архитектор', 'Backend']
   },
   'iot-integration': {
@@ -350,7 +356,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Архитектор', 'Backend']
   },
   'production-ml': {
@@ -361,7 +367,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'Ad',
-    evidenceStatus: 'verified',
+    evidenceStatus: 'validated',
     roles: ['Эксперт R&D', 'Аналитик']
   },
   'mlops-production': {
@@ -372,7 +378,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'Ad',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Эксперт R&D', 'Backend']
   },
   'value-discovery': {
@@ -449,7 +455,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['INCOSE'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Руководитель проекта', 'Эксперт R&D']
   },
   'data-storytelling': {
@@ -482,7 +488,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Эксперт R&D']
   },
   'mobile-solutions': {
@@ -493,7 +499,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['SFIA'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Frontend', 'Владелец продукта']
   },
   'wwo-analytics': {
@@ -504,7 +510,7 @@ export const skills: Record<string, SkillDefinition> = {
     category: 'hard',
     sources: ['INCOSE'],
     recommendedLevel: 'P',
-    evidenceStatus: 'documented',
+    evidenceStatus: 'screened',
     roles: ['Аналитик', 'Эксперт R&D']
   },
   'hse-compliance': {

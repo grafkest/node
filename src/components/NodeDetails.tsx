@@ -3,8 +3,9 @@ import { Button } from '@consta/uikit/Button';
 import { Collapse } from '@consta/uikit/Collapse';
 import { Tag } from '@consta/uikit/Tag';
 import { Text } from '@consta/uikit/Text';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  type ExpertProfile,
   type InitiativeApprovalStatus,
   type InitiativeWorkItemStatus,
   type ModuleInput,
@@ -21,6 +22,7 @@ type NodeDetailsProps = {
   moduleNameMap: Record<string, string>;
   artifactNameMap: Record<string, string>;
   domainNameMap: Record<string, string>;
+  expertProfiles: ExpertProfile[];
 };
 
 const statusBadgeView: Record<string, 'success' | 'warning' | 'alert' | 'normal'> = {
@@ -73,12 +75,21 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
   onNavigate,
   moduleNameMap,
   artifactNameMap,
-  domainNameMap
+  domainNameMap,
+  expertProfiles
 }) => {
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>(
     () => ({ ...defaultSectionState })
   );
   const [isTeamExpanded, setIsTeamExpanded] = useState(false);
+
+  const expertByName = useMemo(() => {
+    const map = new Map<string, ExpertProfile>();
+    expertProfiles.forEach((expert) => {
+      map.set(expert.fullName.toLowerCase(), expert);
+    });
+    return map;
+  }, [expertProfiles]);
 
   const resolveEntityName = (id: string) =>
     moduleNameMap[id] ?? artifactNameMap[id] ?? domainNameMap[id] ?? id;
@@ -129,11 +140,27 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
           </Text>
           {experts.length > 0 ? (
             <ul className={styles.list}>
-              {experts.map((expert) => (
-                <li key={expert} className={styles.listItem}>
-                  <Text size="s">{expert}</Text>
-                </li>
-              ))}
+              {experts.map((expert) => {
+                const trimmed = expert.trim();
+                const profile = expertByName.get(trimmed.toLowerCase());
+                return (
+                  <li key={expert} className={styles.listItem}>
+                    <Text size="s">{trimmed}</Text>
+                    {(profile?.softSkills ?? []).length ? (
+                      <div className={styles.tagList}>
+                        {(profile?.softSkills ?? []).map((skill) => (
+                          <Badge
+                            key={`${trimmed}-${skill}`}
+                            size="xs"
+                            view="ghost"
+                            label={skill}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <Text size="xs" view="secondary">
@@ -516,6 +543,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({
               members={node.projectTeam}
               expanded={isTeamExpanded}
               onToggle={() => setIsTeamExpanded((prev) => !prev)}
+              expertByName={expertByName}
             />
           </InfoRow>
         </>
@@ -907,9 +935,10 @@ type TeamRosterProps = {
   members: TeamMember[];
   expanded: boolean;
   onToggle: () => void;
+  expertByName: Map<string, ExpertProfile>;
 };
 
-const TeamRoster: React.FC<TeamRosterProps> = ({ members, expanded, onToggle }) => {
+const TeamRoster: React.FC<TeamRosterProps> = ({ members, expanded, onToggle, expertByName }) => {
   const uniqueRoles = Array.from(new Set(members.map((member) => member.role)));
 
   return (
@@ -930,16 +959,26 @@ const TeamRoster: React.FC<TeamRosterProps> = ({ members, expanded, onToggle }) 
       </div>
       {expanded && (
         <ul className={styles.list}>
-          {members.map((member) => (
-            <li key={member.id} className={styles.listItem}>
-              <Text size="s" weight="semibold">
-                {member.fullName}
-              </Text>
-              <Text size="xs" view="secondary">
-                {member.role}
-              </Text>
-            </li>
-          ))}
+          {members.map((member) => {
+            const profile = expertByName.get(member.fullName.toLowerCase());
+            return (
+              <li key={member.id} className={styles.listItem}>
+                <Text size="s" weight="semibold">
+                  {member.fullName}
+                </Text>
+                <Text size="xs" view="secondary">
+                  {member.role}
+                </Text>
+                {(profile?.softSkills ?? []).length ? (
+                  <div className={styles.tagList}>
+                    {(profile?.softSkills ?? []).map((skill) => (
+                      <Badge key={`${member.id}-${skill}`} label={skill} size="xs" view="ghost" />
+                    ))}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
