@@ -3470,6 +3470,7 @@ function buildExpertFromDraft(
   const modules = deduplicateNonEmpty(draft.modules).filter((id) => options.moduleIdSet.has(id));
   const competencies = deduplicateNonEmpty(draft.competencies);
   const consultingSkills = deduplicateNonEmpty(draft.consultingSkills);
+  const softSkills = deduplicateNonEmpty(draft.softSkills ?? []);
   const focusAreas = deduplicateNonEmpty(draft.focusAreas);
   const languages = deduplicateNonEmpty(draft.languages);
   const notableProjects = deduplicateNonEmpty(draft.notableProjects);
@@ -3495,6 +3496,7 @@ function buildExpertFromDraft(
     modules,
     competencies,
     consultingSkills,
+    softSkills,
     focusAreas,
     experienceYears,
     location,
