@@ -1577,7 +1577,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'data-normalization',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [
           {
@@ -1598,7 +1598,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'streaming-pipelines',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'validated',
         evidence: [
           {
@@ -1619,7 +1619,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'data-governance',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'screened',
         evidence: [
           {
@@ -1682,7 +1682,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'layout-optimization',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -1696,7 +1696,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'geo-apis',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'claimed',
         evidence: [],
         usage: {
@@ -1710,7 +1710,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'infrastructure-economics',
-        level: 'C',
+        level: 'P',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -1767,7 +1767,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'financial-modeling',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -1781,7 +1781,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'scenario-planning',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -1795,7 +1795,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'ma-support',
-        level: 'C',
+        level: 'P',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -1854,7 +1854,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'telemetry-streaming',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -1868,7 +1868,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'iot-integration',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -1881,7 +1881,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'sre-monitoring',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'claimed',
         evidence: [],
         usage: {
@@ -1940,7 +1940,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'production-ml',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -1954,7 +1954,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'mlops-production',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -1968,7 +1968,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'value-discovery',
-        level: 'C',
+        level: 'P',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -2025,7 +2025,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'remote-ops-integration',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -2039,7 +2039,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'remote-ops-security',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -2052,7 +2052,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'change-management',
-        level: 'C',
+        level: 'P',
         proofStatus: 'claimed',
         evidence: [],
         usage: {
@@ -2111,7 +2111,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'wwo-planning',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -2125,7 +2125,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'contractor-management',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -2139,7 +2139,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'process-digitization',
-        level: 'C',
+        level: 'P',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -2196,7 +2196,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'field-dispatching',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -2210,7 +2210,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'mobile-solutions',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -2223,7 +2223,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'hse-compliance',
-        level: 'C',
+        level: 'P',
         proofStatus: 'refuted',
         evidence: [
           {
@@ -2287,7 +2287,7 @@ export const initiativeNodes: InitiativeNode[] = [
     skills: [
       {
         id: 'wwo-analytics',
-        level: 'A',
+        level: 'E',
         proofStatus: 'validated',
         evidence: [],
         usage: {
@@ -2301,7 +2301,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'forecasting',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'screened',
         evidence: [],
         usage: {
@@ -2315,7 +2315,7 @@ export const initiativeNodes: InitiativeNode[] = [
       },
       {
         id: 'data-storytelling',
-        level: 'B',
+        level: 'Ad',
         proofStatus: 'claimed',
         evidence: [],
         usage: {
