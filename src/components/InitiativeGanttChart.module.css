@@ -9,13 +9,13 @@
 .gridLayout {
   display: grid;
   grid-template-columns:
-    minmax(160px, 2fr)
-    minmax(72px, 0.7fr)
-    minmax(72px, 0.7fr)
-    minmax(64px, 0.6fr)
-    minmax(110px, 1fr)
-    minmax(130px, 1.2fr)
-    minmax(420px, 3.5fr);
+    minmax(180px, 2.2fr)
+    minmax(52px, 0.5fr)
+    minmax(56px, 0.5fr)
+    minmax(52px, 0.45fr)
+    minmax(92px, 0.8fr)
+    minmax(120px, 1fr)
+    minmax(480px, 4.5fr);
   gap: 12px;
   align-items: stretch;
 }
@@ -223,24 +223,24 @@
 @media (max-width: 1280px) {
   .row {
     grid-template-columns:
-      minmax(150px, 2fr)
-      minmax(64px, 0.7fr)
-      minmax(64px, 0.7fr)
-      minmax(56px, 0.6fr)
-      minmax(96px, 0.9fr)
-      minmax(110px, 1fr)
-      minmax(320px, 3fr);
+      minmax(160px, 2.1fr)
+      minmax(48px, 0.5fr)
+      minmax(52px, 0.5fr)
+      minmax(48px, 0.45fr)
+      minmax(84px, 0.8fr)
+      minmax(104px, 0.9fr)
+      minmax(360px, 3.5fr);
   }
 
   .headerRow {
     grid-template-columns:
-      minmax(150px, 2fr)
-      minmax(64px, 0.7fr)
-      minmax(64px, 0.7fr)
-      minmax(56px, 0.6fr)
-      minmax(96px, 0.9fr)
-      minmax(110px, 1fr)
-      minmax(320px, 3fr);
+      minmax(160px, 2.1fr)
+      minmax(48px, 0.5fr)
+      minmax(52px, 0.5fr)
+      minmax(48px, 0.45fr)
+      minmax(84px, 0.8fr)
+      minmax(104px, 0.9fr)
+      minmax(360px, 3.5fr);
   }
 }
 
