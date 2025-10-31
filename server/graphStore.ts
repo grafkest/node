@@ -4,10 +4,17 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ArtifactNode, DomainNode, InitiativeNode, ModuleNode } from '../src/data';
+import type {
+  ArtifactNode,
+  DomainNode,
+  ExpertProfile,
+  InitiativeNode,
+  ModuleNode
+} from '../src/data';
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
+  experts as initialExperts,
   initiatives as initialInitiatives,
   modules as initialModules
 } from '../src/data';
@@ -63,6 +70,13 @@ type ArtifactRow = {
 };
 
 type InitiativeRow = {
+  graph_id: string;
+  id: string;
+  data: string;
+  position: number;
+};
+
+type ExpertRow = {
   graph_id: string;
   id: string;
   data: string;
@@ -150,6 +164,7 @@ export function createGraph(options: {
         domains: options.includeDomains ? sourceSnapshot.domains : [],
         modules: options.includeModules ? sourceSnapshot.modules : [],
         artifacts: options.includeArtifacts ? sourceSnapshot.artifacts : [],
+        experts: sourceSnapshot.experts ?? [],
         initiatives: options.includeInitiatives ? sourceSnapshot.initiatives : [],
         layout:
           options.includeModules && sourceSnapshot.layout
@@ -290,17 +305,45 @@ export function loadSnapshot(graphId: string): GraphSnapshotPayload {
     initiativeStatement.free();
   }
 
+  const expertStatement = database.prepare(
+    'SELECT graph_id, id, data, position FROM experts WHERE graph_id = ? ORDER BY position'
+  );
+  const expertRows: ExpertRow[] = [];
+
+  try {
+    expertStatement.bind([graphId]);
+    while (expertStatement.step()) {
+      const row = expertStatement.getAsObject() as ExpertRow;
+      expertRows.push({
+        graph_id: String(row.graph_id),
+        id: String(row.id),
+        data: String(row.data),
+        position: Number(row.position)
+      });
+    }
+  } finally {
+    expertStatement.free();
+  }
+
   const version = readMetadata(graphId, 'snapshotVersion');
   const exportedAt = readMetadata(graphId, 'updatedAt');
   const layoutRaw = readMetadata(graphId, 'layout');
   const layout = layoutRaw ? safeParseLayout(layoutRaw) : undefined;
+  const resolvedVersion = version ? Number.parseInt(version, 10) : GRAPH_SNAPSHOT_VERSION;
+  const shouldSeedExperts = resolvedVersion < 3 && expertRows.length === 0;
+  const experts = shouldSeedExperts
+    ? initialExperts
+    : expertRows
+        .sort((a, b) => a.position - b.position)
+        .map((row) => JSON.parse(row.data) as ExpertProfile);
 
   return {
-    version: version ? Number.parseInt(version, 10) : GRAPH_SNAPSHOT_VERSION,
+    version: resolvedVersion,
     exportedAt: exportedAt ?? undefined,
     domains: buildDomainTree(domainRows),
     modules: moduleRows.map((row) => JSON.parse(row.data) as ModuleNode),
     artifacts: artifactRows.map((row) => JSON.parse(row.data) as ArtifactNode),
+    experts,
     initiatives: initiativeRows.map((row) => JSON.parse(row.data) as InitiativeNode),
     layout
   };
@@ -338,7 +381,8 @@ export function isGraphSnapshotPayload(value: unknown): value is GraphSnapshotPa
     !Array.isArray(candidate.domains) ||
     !Array.isArray(candidate.modules) ||
     !Array.isArray(candidate.artifacts) ||
-    (candidate.initiatives !== undefined && !Array.isArray(candidate.initiatives))
+    (candidate.initiatives !== undefined && !Array.isArray(candidate.initiatives)) ||
+    (candidate.experts !== undefined && !Array.isArray(candidate.experts))
   ) {
     return false;
   }
@@ -420,6 +464,14 @@ function initializeSchema(): void {
     );
 
     CREATE TABLE IF NOT EXISTS initiative_rows (
+      graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+      id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (graph_id, id)
+    );
+
+    CREATE TABLE IF NOT EXISTS experts (
       graph_id TEXT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
       id TEXT NOT NULL,
       position INTEGER NOT NULL,
@@ -535,8 +587,15 @@ function seedInitialData(): boolean {
   const moduleCount = countRows(DEFAULT_GRAPH_ID, 'modules');
   const artifactCount = countRows(DEFAULT_GRAPH_ID, 'artifacts');
   const initiativeCount = countRows(DEFAULT_GRAPH_ID, 'initiative_rows');
+  const expertCount = countRows(DEFAULT_GRAPH_ID, 'experts');
 
-  if (domainCount > 0 || moduleCount > 0 || artifactCount > 0 || initiativeCount > 0) {
+  if (
+    domainCount > 0 ||
+    moduleCount > 0 ||
+    artifactCount > 0 ||
+    initiativeCount > 0 ||
+    expertCount > 0
+  ) {
     return false;
   }
 
@@ -546,6 +605,7 @@ function seedInitialData(): boolean {
     domains: initialDomainTree,
     modules: initialModules,
     artifacts: initialArtifacts,
+    experts: initialExperts,
     initiatives: initialInitiatives
   };
 
@@ -555,7 +615,7 @@ function seedInitialData(): boolean {
 
 function countRows(
   graphId: string,
-  table: 'domains' | 'modules' | 'artifacts' | 'initiative_rows'
+  table: 'domains' | 'modules' | 'artifacts' | 'initiative_rows' | 'experts'
 ): number {
   const database = assertDatabase();
   const statement = database.prepare(`SELECT COUNT(*) as count FROM ${table} WHERE graph_id = ?`);
@@ -739,6 +799,7 @@ function writeSnapshot(database: SqlJsDatabase, graphId: string, snapshot: Graph
   database.run('DELETE FROM modules WHERE graph_id = ?', [graphId]);
   database.run('DELETE FROM artifacts WHERE graph_id = ?', [graphId]);
   database.run('DELETE FROM initiative_rows WHERE graph_id = ?', [graphId]);
+  database.run('DELETE FROM experts WHERE graph_id = ?', [graphId]);
 
   const domainRows = flattenDomains(snapshot.domains);
   const insertDomain = database.prepare(
@@ -794,6 +855,18 @@ function writeSnapshot(database: SqlJsDatabase, graphId: string, snapshot: Graph
     });
   } finally {
     insertInitiative.free();
+  }
+
+  const insertExpert = database.prepare(
+    'INSERT INTO experts (graph_id, id, position, data) VALUES (?, ?, ?, ?)'
+  );
+
+  try {
+    (snapshot.experts ?? []).forEach((expert, index) => {
+      insertExpert.run([graphId, expert.id, index, JSON.stringify(expert)]);
+    });
+  } finally {
+    insertExpert.free();
   }
 
   upsertMetadata(graphId, 'snapshotVersion', String(snapshot.version ?? GRAPH_SNAPSHOT_VERSION), database);

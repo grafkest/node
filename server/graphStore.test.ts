@@ -20,10 +20,12 @@ import {
 import {
   artifacts as initialArtifacts,
   domainTree as initialDomainTree,
+  experts as initialExperts,
   initiatives as initialInitiatives,
   modules as initialModules,
   type ArtifactNode,
   type DomainNode,
+  type ExpertProfile,
   type ModuleNode
 } from '../src/data';
 
@@ -56,11 +58,44 @@ test('seeds initial data when database is empty by default', { concurrency: fals
   assert.equal(snapshot.modules.length, initialModules.length);
   assert.equal(snapshot.domains.length, initialDomainTree.length);
   assert.equal(snapshot.artifacts.length, initialArtifacts.length);
+  assert.equal(snapshot.experts?.length, initialExperts.length);
   assert.equal(snapshot.initiatives.length, initialInitiatives.length);
 });
 
 test('persists snapshots and reloads them from disk', { concurrency: false }, async () => {
   await initializeGraphStore({ databasePath, seedWithInitialData: false });
+
+  const customExpert: ExpertProfile = {
+    id: 'expert-test',
+    fullName: 'Тестовый Эксперт',
+    title: 'Ведущий архитектор',
+    summary: 'Эксперт по интеграции тестовых решений.',
+    domains: ['root-domain'],
+    modules: ['module-alpha'],
+    competencies: ['Интеграция платформ'],
+    consultingSkills: ['Аудит архитектуры'],
+    softSkills: ['Коммуникация'],
+    focusAreas: ['Архитектура интеграции'],
+    experienceYears: 7,
+    location: 'Москва',
+    contact: 'expert.test@nedra.digital',
+    languages: ['ru', 'en'],
+    notableProjects: ['Внедрение тестовой платформы'],
+    availability: 'available',
+    availabilityComment: 'Готов к новым проектам',
+    skills: [
+      {
+        id: 'integration-design',
+        level: 'E',
+        proofStatus: 'validated',
+        evidence: [],
+        usage: { from: '2023-01-01', description: 'Разработка эталонной интеграционной архитектуры' },
+        artifacts: [],
+        interest: 'high',
+        availableFte: 0.8
+      }
+    ]
+  };
 
   const customSnapshot: GraphSnapshotPayload = {
     version: GRAPH_SNAPSHOT_VERSION,
@@ -175,6 +210,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
         sampleUrl: 'https://example.com/sample.json'
       }
     ],
+    experts: [customExpert],
     initiatives: [
       {
         id: 'initiative-alpha',
@@ -216,6 +252,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
   assert.deepEqual(loaded.modules, storedSnapshot.modules);
   assert.deepEqual(loaded.domains, storedSnapshot.domains);
   assert.deepEqual(loaded.artifacts, storedSnapshot.artifacts);
+  assert.deepEqual(loaded.experts, storedSnapshot.experts);
   assert.deepEqual(loaded.initiatives, storedSnapshot.initiatives);
   assert.deepEqual(loaded.layout, storedSnapshot.layout);
 
@@ -227,6 +264,7 @@ test('persists snapshots and reloads them from disk', { concurrency: false }, as
   assert.deepEqual(reloaded.modules, storedSnapshot.modules);
   assert.deepEqual(reloaded.domains, storedSnapshot.domains);
   assert.deepEqual(reloaded.artifacts, storedSnapshot.artifacts);
+  assert.deepEqual(reloaded.experts, storedSnapshot.experts);
   assert.deepEqual(reloaded.initiatives, storedSnapshot.initiatives);
   assert.deepEqual(reloaded.layout, storedSnapshot.layout);
 });

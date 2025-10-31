@@ -281,6 +281,7 @@ function App() {
       setModuleDataState(recalculateReuseScores(snapshot.modules));
       setArtifactData(snapshot.artifacts);
       setInitiativeData(snapshot.initiatives ?? []);
+      setExpertProfiles(snapshot.experts ?? initialExperts);
       setSelectedNode(null);
       setSearch('');
       setStatusFilters(new Set(allStatuses));
@@ -959,6 +960,7 @@ function App() {
         modules: moduleData,
         domains: domainData,
         artifacts: artifactData,
+        experts: expertProfiles,
         initiatives: initiativeData,
         layout: { nodes: constrainedLayout }
       },
@@ -998,6 +1000,7 @@ function App() {
   }, [
     artifactData,
     initiativeData,
+    expertProfiles,
     domainData,
     moduleData,
     isSyncAvailable,
