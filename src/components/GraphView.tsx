@@ -384,6 +384,33 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, [graphData]);
 
   useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    const renderer = graph.renderer?.();
+    const scene = graph.scene?.();
+    const camera = graph.camera?.();
+    const controls = graph.controls?.();
+
+    if (!renderer || !scene || !camera) {
+      return;
+    }
+
+    const renderFrame = () => {
+      controls?.update?.();
+      renderer.render(scene, camera);
+    };
+
+    renderer.setAnimationLoop(renderFrame);
+
+    return () => {
+      renderer.setAnimationLoop(null);
+    };
+  }, [graphData, dimensions.width, dimensions.height]);
+
+  useEffect(() => {
     if (!graphRef.current) {
       return;
     }
@@ -1047,6 +1074,7 @@ const GraphView: React.FC<GraphViewProps> = ({
           ref={graphRef}
           width={dimensions.width || 600}
           height={dimensions.height || 400}
+          backgroundColor="rgba(0, 0, 0, 0)"
           graphData={graphData}
           nodeLabel={(node: ForceNode) => node.name ?? node.id}
           linkColor={(link: ForceLink) =>
