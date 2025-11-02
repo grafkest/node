@@ -125,7 +125,7 @@ export function normalizeLayoutSnapshot(
       return acc;
     }
 
-    const { x, y, fx, fy } = position as GraphLayoutSnapshot['nodes'][string];
+    const { x, y, z, fx, fy, fz } = position as GraphLayoutSnapshot['nodes'][string];
 
     if (typeof x !== 'number' || Number.isNaN(x) || typeof y !== 'number' || Number.isNaN(y)) {
       return acc;
@@ -133,12 +133,20 @@ export function normalizeLayoutSnapshot(
 
     const next: GraphLayoutSnapshot['nodes'][string] = { x, y };
 
+    if (typeof z === 'number' && !Number.isNaN(z)) {
+      next.z = z;
+    }
+
     if (typeof fx === 'number' && !Number.isNaN(fx)) {
       next.fx = fx;
     }
 
     if (typeof fy === 'number' && !Number.isNaN(fy)) {
       next.fy = fy;
+    }
+
+    if (typeof fz === 'number' && !Number.isNaN(fz)) {
+      next.fz = fz;
     }
 
     acc.push([id, next]);
