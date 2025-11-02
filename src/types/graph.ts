@@ -11,8 +11,10 @@ export const GRAPH_SNAPSHOT_VERSION = 3;
 export type GraphLayoutNodePosition = {
   x: number;
   y: number;
+  z?: number;
   fx?: number;
   fy?: number;
+  fz?: number;
 };
 
 export type GraphLayoutSnapshot = {

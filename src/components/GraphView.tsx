@@ -3,11 +3,12 @@ import { Loader } from '@consta/uikit/Loader';
 import { useTheme } from '@consta/uikit/Theme';
 import { forceCollide } from 'd3-force-3d';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ForceGraph2D, {
+import ForceGraph3D, {
   ForceGraphMethods,
   LinkObject,
   NodeObject
-} from 'react-force-graph-2d';
+} from 'react-force-graph-3d';
+import { CanvasTexture, LinearFilter, Sprite, SpriteMaterial, Vector3 } from 'three';
 import type {
   ArtifactNode,
   DomainNode,
@@ -20,6 +21,15 @@ import type { GraphLayoutNodePosition } from '../types/graph';
 import styles from './GraphView.module.css';
 
 const CAMERA_STORAGE_KEY = 'graph-view:camera-main';
+
+type NodeSpriteData = {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  texture: CanvasTexture;
+  sprite: Sprite;
+  pixelRatio: number;
+  size: number;
+};
 
 type GraphNode =
   | ({ type: 'module' } & ModuleNode)
@@ -47,12 +57,32 @@ type GraphViewProps = {
   ) => void;
 };
 
-type ForceNode = NodeObject & GraphNode;
+type ForceNode = (NodeObject & GraphNode) & { __spriteData?: NodeSpriteData };
 type ForceLink = LinkObject & GraphLink;
 
 type CameraState = {
-  center: { x: number; y: number };
-  zoom: number;
+  position: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+};
+
+type ForceGraph3DMethods = ForceGraphMethods & {
+  cameraPosition?: (
+    position?: Partial<{ x: number; y: number; z: number }>,
+    lookAt?: { x: number; y: number; z: number },
+    transitionMs?: number
+  ) => unknown;
+  camera?: () => { position: Vector3 };
+  controls?: () => {
+    target: Vector3;
+    addEventListener?: (type: string, listener: () => void) => void;
+    removeEventListener?: (type: string, listener: () => void) => void;
+  };
+  graph2ScreenCoords?: (x: number, y: number, z?: number) => { x: number; y: number };
+  screen2GraphCoords?: (
+    x: number,
+    y: number,
+    distance?: number
+  ) => { x: number; y: number; z: number } | undefined;
 };
 
 function readStoredCameraState(): CameraState | null {
@@ -70,22 +100,33 @@ function readStoredCameraState(): CameraState | null {
     if (
       parsed &&
       typeof parsed === 'object' &&
-      'zoom' in parsed &&
-      'center' in parsed &&
-      parsed.center &&
-      typeof (parsed as { zoom: unknown }).zoom === 'number' &&
-      Number.isFinite((parsed as { zoom: number }).zoom) &&
-      (parsed as { zoom: number }).zoom > 0 &&
-      typeof (parsed as { center: { x: unknown } }).center.x === 'number' &&
-      Number.isFinite((parsed as { center: { x: number } }).center.x) &&
-      typeof (parsed as { center: { y: unknown } }).center.y === 'number' &&
-      Number.isFinite((parsed as { center: { y: number } }).center.y)
+      'position' in parsed &&
+      'target' in parsed &&
+      parsed.position &&
+      parsed.target &&
+      typeof (parsed as { position: { x: unknown } }).position.x === 'number' &&
+      Number.isFinite((parsed as { position: { x: number } }).position.x) &&
+      typeof (parsed as { position: { y: unknown } }).position.y === 'number' &&
+      Number.isFinite((parsed as { position: { y: number } }).position.y) &&
+      typeof (parsed as { position: { z: unknown } }).position.z === 'number' &&
+      Number.isFinite((parsed as { position: { z: number } }).position.z) &&
+      typeof (parsed as { target: { x: unknown } }).target.x === 'number' &&
+      Number.isFinite((parsed as { target: { x: number } }).target.x) &&
+      typeof (parsed as { target: { y: unknown } }).target.y === 'number' &&
+      Number.isFinite((parsed as { target: { y: number } }).target.y) &&
+      typeof (parsed as { target: { z: unknown } }).target.z === 'number' &&
+      Number.isFinite((parsed as { target: { z: number } }).target.z)
     ) {
       return {
-        zoom: (parsed as { zoom: number }).zoom,
-        center: {
-          x: (parsed as { center: { x: number } }).center.x,
-          y: (parsed as { center: { y: number } }).center.y
+        position: {
+          x: (parsed as { position: { x: number } }).position.x,
+          y: (parsed as { position: { y: number } }).position.y,
+          z: (parsed as { position: { z: number } }).position.z
+        },
+        target: {
+          x: (parsed as { target: { x: number } }).target.x,
+          y: (parsed as { target: { y: number } }).target.y,
+          z: (parsed as { target: { z: number } }).target.z
         }
       };
     }
@@ -132,7 +173,7 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
   const initialCameraState = useMemo(() => readStoredCameraState(), []);
-  const graphRef = useRef<ForceGraphMethods | null>(null);
+  const graphRef = useRef<ForceGraph3DMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeCacheRef = useRef<Map<string, ForceNode>>(new Map());
   const lastReportedLayoutRef = useRef<string>('');
@@ -337,7 +378,7 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   useEffect(() => {
     if (import.meta.env.DEV && typeof window !== 'undefined' && graphRef.current) {
-      (window as typeof window & { __forceGraphRef?: ForceGraphMethods }).__forceGraphRef =
+      (window as typeof window & { __forceGraphRef?: ForceGraph3DMethods }).__forceGraphRef =
         graphRef.current;
     }
   }, [graphData]);
@@ -347,7 +388,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       return;
     }
 
-    const reheat = (graphRef.current as ForceGraphMethods & {
+    const reheat = (graphRef.current as ForceGraph3DMethods & {
       d3ReheatSimulation?: () => void;
     }).d3ReheatSimulation;
 
@@ -365,34 +406,28 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, []);
 
   const captureCameraState = useCallback(() => {
-    const { width, height } = getViewportSize();
-    if (!graphRef.current || width <= 0 || height <= 0) {
+    if (!graphRef.current) {
       return;
     }
 
     const graph = graphRef.current;
-    const zoomValue = typeof graph.zoom === 'function' ? (graph.zoom() as number) : undefined;
+    const camera = graph.camera?.();
+    const controls = graph.controls?.();
 
-    if (!Number.isFinite(zoomValue) || !zoomValue || zoomValue <= 0) {
+    if (!camera || !controls) {
       return;
     }
 
-    const center = graph.screen2GraphCoords?.(width / 2, height / 2);
-    if (
-      center &&
-      typeof center.x === 'number' &&
-      Number.isFinite(center.x) &&
-      typeof center.y === 'number' &&
-      Number.isFinite(center.y)
-    ) {
-      const nextState: CameraState = {
-        center: { x: center.x, y: center.y },
-        zoom: zoomValue
-      };
-      cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
-    }
-  }, [getViewportSize]);
+    const position = camera.position;
+    const target = controls.target;
+
+    const nextState: CameraState = {
+      position: { x: position.x, y: position.y, z: position.z },
+      target: { x: target.x, y: target.y, z: target.z }
+    };
+    cameraStateRef.current = nextState;
+    writeStoredCameraState(nextState);
+  }, []);
 
   const scheduleCameraCapture = useCallback(
     (delay = 0) => {
@@ -420,30 +455,48 @@ const GraphView: React.FC<GraphViewProps> = ({
   );
 
   const restoreCamera = useCallback(() => {
-    const { width, height } = getViewportSize();
-    if (!graphRef.current || width <= 0 || height <= 0) {
+    if (!graphRef.current) {
       return;
     }
 
     const graph = graphRef.current;
     const saved = cameraStateRef.current;
 
-    if (saved) {
-      if (typeof graph.zoom === 'function') {
-        graph.zoom(saved.zoom, 220);
-      }
-      graph.centerAt(saved.center.x, saved.center.y, 220);
+    if (saved && typeof graph.cameraPosition === 'function') {
+      graph.cameraPosition(saved.position, saved.target, 220);
       scheduleCameraCapture(260);
       return;
     }
 
-    graph.zoomToFit?.(240, 60);
+    graph.zoomToFit?.(260, 80);
     scheduleCameraCapture(320);
-  }, [getViewportSize, scheduleCameraCapture]);
+  }, [scheduleCameraCapture]);
 
   useEffect(() => {
     restoreCamera();
   }, [graphData, restoreCamera]);
+
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    const controls = graph.controls?.();
+    if (!controls || typeof controls.addEventListener !== 'function') {
+      return;
+    }
+
+    const handleChange = () => {
+      scheduleCameraCapture(160);
+    };
+
+    controls.addEventListener('change', handleChange);
+
+    return () => {
+      controls.removeEventListener?.('change', handleChange);
+    };
+  }, [graphData, scheduleCameraCapture]);
 
   useEffect(() => {
     if (!normalizationRequest || nodes.length === 0) {
@@ -457,7 +510,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       return;
     }
 
-    const reheat = (graph as ForceGraphMethods & { d3ReheatSimulation?: () => void }).d3ReheatSimulation;
+    const reheat = (graph as ForceGraph3DMethods & { d3ReheatSimulation?: () => void }).d3ReheatSimulation;
     if (typeof reheat === 'function') {
       reheat();
     }
@@ -569,6 +622,52 @@ const GraphView: React.FC<GraphViewProps> = ({
     configureSimulation();
   }, [configureSimulation]);
 
+  const nodeThreeObject = useCallback(
+    (node: ForceNode) => {
+      const existing = node.__spriteData;
+      if (!existing) {
+        const data = createNodeSpriteData(
+          node,
+          highlightedNode,
+          palette,
+          visibleDomainIds,
+          visibleModuleStatuses
+        );
+        node.__spriteData = data;
+        return data.sprite;
+      }
+
+      refreshNodeSpriteData(
+        node,
+        existing,
+        highlightedNode,
+        palette,
+        visibleDomainIds,
+        visibleModuleStatuses
+      );
+      return existing.sprite;
+    },
+    [highlightedNode, palette, visibleDomainIds, visibleModuleStatuses]
+  );
+
+  useEffect(() => {
+    nodeCacheRef.current.forEach((node) => {
+      const data = node.__spriteData;
+      if (!data) {
+        return;
+      }
+      refreshNodeSpriteData(
+        node,
+        data,
+        highlightedNode,
+        palette,
+        visibleDomainIds,
+        visibleModuleStatuses
+      );
+    });
+    graphRef.current?.refresh?.();
+  }, [highlightedNode, palette, visibleDomainIds, visibleModuleStatuses]);
+
   useEffect(() => {
     if (!highlightedNode) {
       setIsFocusedView(false);
@@ -591,7 +690,18 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
 
     const graph = graphRef.current;
-    const screenCoords = graph.graph2ScreenCoords?.(target.x, target.y);
+    const camera = graph.camera?.();
+    const controls = graph.controls?.();
+
+    if (!camera || !controls) {
+      return;
+    }
+
+    const screenCoords = graph.graph2ScreenCoords?.(
+      target.x,
+      target.y,
+      typeof target.z === 'number' ? target.z : 0
+    );
     if (!screenCoords) {
       return;
     }
@@ -603,17 +713,36 @@ const GraphView: React.FC<GraphViewProps> = ({
       screenCoords.y < margin ||
       screenCoords.y > height - margin;
 
-    if (needsPan) {
-      graph.centerAt(target.x, target.y, 400);
-      const zoomValue =
-        typeof graph.zoom === 'function' ? (graph.zoom() as number) : cameraStateRef.current?.zoom ?? 1;
+    if (needsPan && typeof graph.cameraPosition === 'function') {
+      const currentTarget = controls.target;
+      const currentPosition = camera.position;
+      const directionVector = new Vector3(
+        currentPosition.x - currentTarget.x,
+        currentPosition.y - currentTarget.y,
+        currentPosition.z - currentTarget.z
+      );
+      const distance = directionVector.length() || 320;
+      const direction = directionVector.length() > 0 ? directionVector.normalize() : new Vector3(0, 0, 1);
+      const targetVector = new Vector3(
+        target.x,
+        target.y,
+        typeof target.z === 'number' ? target.z : 0
+      );
+      const nextPosition = targetVector.clone().add(direction.multiplyScalar(distance));
+
+      graph.cameraPosition(
+        { x: nextPosition.x, y: nextPosition.y, z: nextPosition.z },
+        { x: targetVector.x, y: targetVector.y, z: targetVector.z },
+        420
+      );
+
       const nextState: CameraState = {
-        center: { x: target.x, y: target.y },
-        zoom: zoomValue
+        position: { x: nextPosition.x, y: nextPosition.y, z: nextPosition.z },
+        target: { x: targetVector.x, y: targetVector.y, z: targetVector.z }
       };
       cameraStateRef.current = nextState;
       writeStoredCameraState(nextState);
-      scheduleCameraCapture(420);
+      scheduleCameraCapture(480);
     }
   }, [getViewportSize, highlightedNode, scheduleCameraCapture]);
 
@@ -624,23 +753,52 @@ const GraphView: React.FC<GraphViewProps> = ({
       }
 
       const graph = graphRef.current;
-      const label = node.name ?? node.id;
-      const viewport = getViewportSize();
-      const targetZoom = computeFocusZoom(viewport, label);
-
-      if (typeof graph.zoom === 'function') {
-        graph.zoom(targetZoom, 400);
+      if (typeof graph.cameraPosition !== 'function') {
+        return false;
       }
-      graph.centerAt(node.x, node.y, 400);
+
+      const camera = graph.camera?.();
+      const controls = graph.controls?.();
+
+      if (!camera || !controls) {
+        return false;
+      }
+
+      const currentTarget = controls.target;
+      const currentPosition = camera.position;
+      const directionVector = new Vector3(
+        currentPosition.x - currentTarget.x,
+        currentPosition.y - currentTarget.y,
+        currentPosition.z - currentTarget.z
+      );
+      const currentDistance = directionVector.length() || 320;
+      const direction = directionVector.length() > 0 ? directionVector.normalize() : new Vector3(0, 0, 1);
+
+      const viewport = getViewportSize();
+      const label = node.name ?? node.id;
+      const desiredDistance = computeFocusDistance(viewport, label, currentDistance);
+
+      const targetVector = new Vector3(
+        node.x,
+        node.y,
+        typeof node.z === 'number' ? node.z : 0
+      );
+      const nextPosition = targetVector.clone().add(direction.multiplyScalar(desiredDistance));
+
+      graph.cameraPosition(
+        { x: nextPosition.x, y: nextPosition.y, z: nextPosition.z },
+        { x: targetVector.x, y: targetVector.y, z: targetVector.z },
+        420
+      );
 
       const nextState: CameraState = {
-        center: { x: node.x, y: node.y },
-        zoom: targetZoom
+        position: { x: nextPosition.x, y: nextPosition.y, z: nextPosition.z },
+        target: { x: targetVector.x, y: targetVector.y, z: targetVector.z }
       };
       cameraStateRef.current = nextState;
       writeStoredCameraState(nextState);
       lastFocusedNodeRef.current = node.id;
-      scheduleCameraCapture(420);
+      scheduleCameraCapture(480);
       return true;
     },
     [getViewportSize, scheduleCameraCapture]
@@ -725,35 +883,6 @@ const GraphView: React.FC<GraphViewProps> = ({
     showEntireGraph();
   }, [showEntireGraph]);
 
-  const handleZoomTransform = useCallback(
-    (transform?: { k: number; x: number; y: number }) => {
-      const { width, height } = getViewportSize();
-      if (!transform || width <= 0 || height <= 0) {
-        return;
-      }
-
-      const { k, x, y } = transform;
-      if (!Number.isFinite(k) || k <= 0) {
-        return;
-      }
-
-      const nextState: CameraState = {
-        center: {
-          x: (width / 2 - x) / k,
-          y: (height / 2 - y) / k
-        },
-        zoom: k
-      };
-      cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
-    },
-    [getViewportSize]
-  );
-
-  const handleZoomEnd = useCallback(() => {
-    scheduleCameraCapture(0);
-  }, [scheduleCameraCapture]);
-
   const emitLayoutUpdate = useCallback(
     (reason: LayoutChangeReason) => {
       if (!onLayoutChange) {
@@ -776,12 +905,20 @@ const GraphView: React.FC<GraphViewProps> = ({
         y: roundCoordinate(node.y)
       };
 
+      if (typeof node.z === 'number' && !Number.isNaN(node.z)) {
+        payload.z = roundCoordinate(node.z);
+      }
+
       if (typeof node.fx === 'number' && !Number.isNaN(node.fx)) {
         payload.fx = roundCoordinate(node.fx);
       }
 
       if (typeof node.fy === 'number' && !Number.isNaN(node.fy)) {
         payload.fy = roundCoordinate(node.fy);
+      }
+
+      if (typeof node.fz === 'number' && !Number.isNaN(node.fz)) {
+        payload.fz = roundCoordinate(node.fz);
       }
 
       entries.push([id, payload]);
@@ -802,6 +939,7 @@ const GraphView: React.FC<GraphViewProps> = ({
         const layout = layoutPositions[node.id];
         const hasFixedX = typeof layout?.fx === 'number' && Number.isFinite(layout.fx);
         const hasFixedY = typeof layout?.fy === 'number' && Number.isFinite(layout.fy);
+        const hasFixedZ = typeof layout?.fz === 'number' && Number.isFinite(layout.fz);
 
         const resolvedX = resolveCoordinate(
           node.x,
@@ -814,6 +952,12 @@ const GraphView: React.FC<GraphViewProps> = ({
           node.fy,
           layout?.y ?? null,
           layout?.fy ?? null
+        );
+        const resolvedZ = resolveCoordinate(
+          node.z,
+          node.fz,
+          layout?.z ?? null,
+          layout?.fz ?? null
         );
 
         if (resolvedX !== null) {
@@ -836,11 +980,24 @@ const GraphView: React.FC<GraphViewProps> = ({
           }
         }
 
+        if (resolvedZ !== null) {
+          node.z = resolvedZ;
+          node.fz = hasFixedZ ? resolvedZ : undefined;
+        } else {
+          node.fz = undefined;
+          if (layout?.z !== undefined) {
+            node.z = layout.z;
+          }
+        }
+
         if (typeof node.vx === 'number') {
           node.vx = 0;
         }
         if (typeof node.vy === 'number') {
           node.vy = 0;
+        }
+        if (typeof node.vz === 'number') {
+          node.vz = 0;
         }
 
         nodeCacheRef.current.set(node.id, node);
@@ -886,7 +1043,7 @@ const GraphView: React.FC<GraphViewProps> = ({
         </div>
       ) : null}
       <React.Suspense fallback={<Loader size="m" />}>
-        <ForceGraph2D
+        <ForceGraph3D
           ref={graphRef}
           width={dimensions.width || 600}
           height={dimensions.height || 400}
@@ -895,18 +1052,8 @@ const GraphView: React.FC<GraphViewProps> = ({
           linkColor={(link: ForceLink) =>
             resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
           }
-          nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
-            drawNode(
-              node,
-              ctx,
-              globalScale,
-              highlightedNode,
-              palette,
-              visibleDomainIds,
-              visibleModuleStatuses
-            );
-          }}
-          nodeCanvasObjectMode={() => 'replace'}
+          nodeThreeObject={(node) => nodeThreeObject(node as ForceNode)}
+          nodeThreeObjectExtend
           onNodeClick={(node) => {
             onSelect(node as ForceNode);
           }}
@@ -915,8 +1062,8 @@ const GraphView: React.FC<GraphViewProps> = ({
           }}
           onNodeDragEnd={handleNodeDragEnd}
           onEngineStop={handleEngineStop}
-          onZoom={handleZoomTransform}
-          onZoomEnd={handleZoomEnd}
+          enableNodeDrag
+          enableNavigationControls
         />
       </React.Suspense>
     </div>
@@ -935,6 +1082,10 @@ function applyLayoutPosition(
   node.x = layout.x;
   node.y = layout.y;
 
+  if (typeof layout.z === 'number') {
+    node.z = layout.z;
+  }
+
   if (typeof layout.fx === 'number') {
     node.fx = layout.fx;
   } else if (node.fx !== undefined) {
@@ -945,6 +1096,12 @@ function applyLayoutPosition(
     node.fy = layout.fy;
   } else if (node.fy !== undefined) {
     node.fy = undefined;
+  }
+
+  if (typeof layout.fz === 'number') {
+    node.fz = layout.fz;
+  } else if (node.fz !== undefined) {
+    node.fz = undefined;
   }
 }
 
@@ -1013,6 +1170,81 @@ type GraphPalette = {
   linkConsumes: string;
   linkInitiative: string;
 };
+
+function createNodeSpriteData(
+  node: ForceNode,
+  highlighted: string | null,
+  palette: GraphPalette,
+  visibleDomainIds: Set<string>,
+  visibleModuleStatuses: Set<ModuleStatus>
+): NodeSpriteData {
+  const size = 192;
+  const pixelRatio = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(size * pixelRatio);
+  canvas.height = Math.round(size * pixelRatio);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Failed to create canvas context for node sprite');
+  }
+
+  const texture = new CanvasTexture(canvas);
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.needsUpdate = true;
+
+  const material = new SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false
+  });
+
+  const sprite = new Sprite(material);
+  sprite.center.set(0.5, 0.5);
+
+  const data: NodeSpriteData = { canvas, ctx, texture, sprite, pixelRatio, size };
+  refreshNodeSpriteData(node, data, highlighted, palette, visibleDomainIds, visibleModuleStatuses);
+  return data;
+}
+
+function refreshNodeSpriteData(
+  node: ForceNode,
+  data: NodeSpriteData,
+  highlighted: string | null,
+  palette: GraphPalette,
+  visibleDomainIds: Set<string>,
+  visibleModuleStatuses: Set<ModuleStatus>
+): void {
+  const { ctx, pixelRatio, size, texture, sprite } = data;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, size * pixelRatio, size * pixelRatio);
+  ctx.scale(pixelRatio, pixelRatio);
+  ctx.translate(size / 2, size / 2);
+
+  const stubNode = { ...node, x: 0, y: 0 } as ForceNode;
+  drawNode(stubNode, ctx, 1, highlighted, palette, visibleDomainIds, visibleModuleStatuses);
+
+  ctx.restore();
+  texture.needsUpdate = true;
+
+  const isHighlighted = highlighted === node.id;
+  const scale = resolveSpriteScale(node, isHighlighted);
+  sprite.scale.set(scale, scale, scale);
+  sprite.renderOrder = isHighlighted ? 10 : 1;
+}
+
+function resolveSpriteScale(node: ForceNode, isHighlighted: boolean): number {
+  const base =
+    node.type === 'initiative'
+      ? 34
+      : node.type === 'module'
+        ? 28
+        : node.type === 'domain'
+          ? 26
+          : 24;
+  return isHighlighted ? base * 1.1 : base;
+}
 
 function drawNode(
   node: ForceNode,
@@ -1339,6 +1571,18 @@ function computeFocusZoom(
   const baseZoom = 2.4 + viewportRatio * 1.2; // 2.4 .. 3.6
   const labelAdjustment = clamp(label.length / 24, 0, 0.6);
   return clamp(baseZoom + labelAdjustment, 2.6, 4.2);
+}
+
+function computeFocusDistance(
+  dimensions: { width: number; height: number },
+  label: string,
+  currentDistance: number
+): number {
+  const zoom = computeFocusZoom(dimensions, label);
+  const normalizedZoom = clamp(zoom, 2.6, 4.2);
+  const baseline = clamp(currentDistance || 320, 220, 760);
+  const distance = baseline / (normalizedZoom / 2.6);
+  return clamp(distance, 160, 540);
 }
 
 const DEFAULT_PALETTE: GraphPalette = {

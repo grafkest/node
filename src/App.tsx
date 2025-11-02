@@ -3910,7 +3910,7 @@ function normalizeLayoutPositions(
       return;
     }
 
-    const { x, y, fx, fy } = position;
+    const { x, y, z, fx, fy, fz } = position;
     if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
       normalized[id] = position;
       return;
@@ -3919,6 +3919,10 @@ function normalizeLayoutPositions(
     const normalizedX = roundCoordinate(centerX + (x - centerX) * scale);
     const normalizedY = roundCoordinate(centerY + (y - centerY) * scale);
     const next: GraphLayoutNodePosition = { x: normalizedX, y: normalizedY };
+
+    if (typeof z === 'number' && Number.isFinite(z)) {
+      next.z = roundCoordinate(z);
+    }
 
     if (typeof fx === 'number' && Number.isFinite(fx)) {
       const normalizedFx = roundCoordinate(centerX + (fx - centerX) * scale);
@@ -3932,6 +3936,14 @@ function normalizeLayoutPositions(
       const normalizedFy = roundCoordinate(centerY + (fy - centerY) * scale);
       next.fy = normalizedFy;
       if (normalizedFy !== fy) {
+        changed = true;
+      }
+    }
+
+    if (typeof fz === 'number' && Number.isFinite(fz)) {
+      const normalizedFz = roundCoordinate(fz);
+      next.fz = normalizedFz;
+      if (normalizedFz !== fz) {
         changed = true;
       }
     }
@@ -4034,6 +4046,12 @@ function layoutPositionsEqual(
     return false;
   }
 
+  const prevZ = prev.z ?? null;
+  const nextZ = next.z ?? null;
+  if (prevZ !== nextZ) {
+    return false;
+  }
+
   const prevFx = prev.fx ?? null;
   const nextFx = next.fx ?? null;
   if (prevFx !== nextFx) {
@@ -4042,7 +4060,13 @@ function layoutPositionsEqual(
 
   const prevFy = prev.fy ?? null;
   const nextFy = next.fy ?? null;
-  return prevFy === nextFy;
+  if (prevFy !== nextFy) {
+    return false;
+  }
+
+  const prevFz = prev.fz ?? null;
+  const nextFz = next.fz ?? null;
+  return prevFz === nextFz;
 }
 
 function resolveInitialModulePosition(
