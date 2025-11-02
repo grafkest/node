@@ -964,9 +964,6 @@ const GraphView: React.FC<GraphViewProps> = ({
     (node: ForceNode) => {
       if (node && typeof node.id === 'string') {
         const layout = layoutPositions[node.id];
-        const hasFixedX = typeof layout?.fx === 'number' && Number.isFinite(layout.fx);
-        const hasFixedY = typeof layout?.fy === 'number' && Number.isFinite(layout.fy);
-        const hasFixedZ = typeof layout?.fz === 'number' && Number.isFinite(layout.fz);
 
         const resolvedX = resolveCoordinate(
           node.x,
@@ -989,7 +986,7 @@ const GraphView: React.FC<GraphViewProps> = ({
 
         if (resolvedX !== null) {
           node.x = resolvedX;
-          node.fx = hasFixedX ? resolvedX : undefined;
+          node.fx = resolvedX;
         } else {
           node.fx = undefined;
           if (layout?.x !== undefined) {
@@ -999,7 +996,7 @@ const GraphView: React.FC<GraphViewProps> = ({
 
         if (resolvedY !== null) {
           node.y = resolvedY;
-          node.fy = hasFixedY ? resolvedY : undefined;
+          node.fy = resolvedY;
         } else {
           node.fy = undefined;
           if (layout?.y !== undefined) {
@@ -1009,11 +1006,13 @@ const GraphView: React.FC<GraphViewProps> = ({
 
         if (resolvedZ !== null) {
           node.z = resolvedZ;
-          node.fz = hasFixedZ ? resolvedZ : undefined;
+          node.fz = resolvedZ;
         } else {
           node.fz = undefined;
           if (layout?.z !== undefined) {
             node.z = layout.z;
+          } else {
+            ensureDefaultDepth(node);
           }
         }
 
@@ -1103,15 +1102,19 @@ function applyLayoutPosition(
   layoutPositions: Record<string, GraphLayoutNodePosition>
 ) {
   const layout = layoutPositions[node.id];
+
   if (!layout) {
+    ensureDefaultDepth(node);
     return;
   }
 
   node.x = layout.x;
   node.y = layout.y;
 
-  if (typeof layout.z === 'number') {
+  if (typeof layout.z === 'number' && Number.isFinite(layout.z)) {
     node.z = layout.z;
+  } else {
+    ensureDefaultDepth(node);
   }
 
   if (typeof layout.fx === 'number') {
@@ -1131,6 +1134,53 @@ function applyLayoutPosition(
   } else if (node.fz !== undefined) {
     node.fz = undefined;
   }
+}
+
+function ensureDefaultDepth(node: ForceNode): void {
+  if (typeof node.z === 'number' && Number.isFinite(node.z)) {
+    return;
+  }
+
+  node.z = resolveDefaultDepth(node);
+}
+
+function resolveDefaultDepth(node: ForceNode): number {
+  const baseSpacing = 180;
+  let layerIndex: number;
+
+  switch (node.type) {
+    case 'initiative':
+      layerIndex = 2;
+      break;
+    case 'domain':
+      layerIndex = 1;
+      break;
+    case 'module':
+      layerIndex = 0;
+      break;
+    case 'artifact':
+    default:
+      layerIndex = -1;
+      break;
+  }
+
+  const jitter = computeStableJitter(node.id, 14) * 6;
+  return layerIndex * baseSpacing + jitter;
+}
+
+function computeStableJitter(id: string, span: number): number {
+  let hash = 0;
+
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) % 2147483647;
+  }
+
+  if (!Number.isFinite(hash)) {
+    return 0;
+  }
+
+  const normalized = hash % span;
+  return normalized - span / 2;
 }
 
 function roundCoordinate(value: number): number {
