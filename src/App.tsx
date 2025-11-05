@@ -76,6 +76,7 @@ import {
 import styles from './App.module.css';
 import ExpertExplorer from './components/ExpertExplorer';
 import InitiativePlanner from './components/InitiativePlanner';
+import EmployeeWorkloadTrack from './components/EmployeeWorkloadTrack';
 import type { InitiativeCreationRequest } from './types/initiativeCreation';
 import { getSkillNameById } from './data/skills';
 import {
@@ -100,6 +101,7 @@ const viewTabs = [
   { label: 'Статистика', value: 'stats' },
   { label: 'Экспертиза', value: 'experts' },
   { label: 'Инициативы', value: 'initiatives' },
+  { label: 'Задачи моих сотрудников', value: 'employee-tasks' },
   { label: 'Администрирование', value: 'admin' }
 ] as const;
 
@@ -3078,6 +3080,7 @@ function App() {
   const isStatsActive = viewMode === 'stats';
   const isExpertsActive = viewMode === 'experts';
   const isInitiativesActive = viewMode === 'initiatives';
+  const isEmployeeTasksActive = viewMode === 'employee-tasks';
   const isAdminActive = viewMode === 'admin';
 
   const headerTitle = (() => {
@@ -3092,6 +3095,9 @@ function App() {
     }
     if (isInitiativesActive) {
       return 'Планирование проектных инициатив';
+    }
+    if (isEmployeeTasksActive) {
+      return 'Задачи моей команды вне проектов';
     }
     return 'Панель администрирования экосистемы';
   })();
@@ -3108,6 +3114,9 @@ function App() {
     }
     if (isInitiativesActive) {
       return 'Сформируйте команды под инициативы, зафиксируйте риски и экспортируйте состав в черновик модуля.';
+    }
+    if (isEmployeeTasksActive) {
+      return 'Следите за загрузкой сотрудников вне проектных задач и подбирайте подходящих исполнителей.';
     }
     return 'Управляйте данными графа: обновляйте карточки модулей, доменов и артефактов, а также удаляйте устаревшие связи.';
   })();
@@ -3507,6 +3516,14 @@ function App() {
           onCreateInitiative={handlePlannerCreateInitiative}
           onUpdateInitiative={handlePlannerUpdateInitiative}
         />
+      </main>
+      <main
+        className={styles.employeeTasksMain}
+        hidden={!isEmployeeTasksActive}
+        aria-hidden={!isEmployeeTasksActive}
+        style={{ display: isEmployeeTasksActive ? undefined : 'none' }}
+      >
+        <EmployeeWorkloadTrack />
       </main>
       <main
         className={styles.creationMain}
