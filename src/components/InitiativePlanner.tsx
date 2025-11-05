@@ -21,6 +21,7 @@ import InitiativeGanttChart, {
   type InitiativeGanttResource,
   type InitiativeGanttTask
 } from './InitiativeGanttChart';
+import EmployeeWorkloadTrack from './EmployeeWorkloadTrack';
 import type { InitiativeCreationRequest } from '../types/initiativeCreation';
 import { buildCreationRequestFromInitiative } from '../utils/initiativePlanner';
 import styles from './InitiativePlanner.module.css';
@@ -672,6 +673,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
               <InitiativeGanttChart tasks={timelineTasks} />
             </div>
           </Card>
+          <EmployeeWorkloadTrack />
           <aside className={styles.riskSection} aria-label="Риски инициативы">
             <Card verticalSpace="xl" horizontalSpace="xl" className={styles.riskCard}>
               <Text size="s" weight="semibold">
