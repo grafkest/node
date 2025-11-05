@@ -1,6 +1,15 @@
+import { Badge } from '@consta/uikit/Badge';
+import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { TeamRole } from '../data';
+import GanttTimeline, {
+  type GanttTimelineRow,
+  type GanttTimelineTask,
+  timelineScaleTabs,
+  type TimelineScaleTab
+} from './GanttTimeline';
+import cardStyles from './EmployeeWorkloadTrack.module.css';
 import styles from './InitiativeGanttChart.module.css';
 
 export type InitiativeGanttDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
@@ -66,220 +75,186 @@ type InitiativeGanttChartProps = {
   tasks: InitiativeGanttTask[];
 };
 
-type TimelineRow = {
+type InitiativeTimelineGroup = {
   id: string;
-  type: 'project' | 'work' | 'task' | 'subtask';
-  name: string;
-  level: number;
-  effortDays?: number;
-  startDay: number;
-  durationDays: number;
-  role?: TeamRole;
-  minUnits?: number;
-  maxUnits?: number;
-  canSplit?: boolean;
-  parallelAllowed?: boolean;
-  durationMode?: 'fixed-effort' | 'fixed-duration';
-  constraints?: string[];
-  priority?: number;
-  wipLimitTag?: string;
-  scenarioBranch?: string;
-  typeTag?: 'task' | 'buffer';
-  assignedExpert?: string;
-  resources?: InitiativeGanttResource[];
-  dependencies?: InitiativeGanttDependency[];
-  blockers?: InitiativeGanttBlocker[];
-  childIds?: string[];
-  parentId?: string;
+  displayName: string;
+  isUnassigned: boolean;
+  roles: Set<string>;
+  workNames: Set<string>;
+  projectNames: Set<string>;
+  tasks: GanttTimelineTask[];
+  totalEffort: number;
+  blockers: string[];
 };
 
-const MIN_COLUMN_COUNT = 8;
+const addDays = (date: Date, amount: number): Date => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
+};
 
 const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) => {
-  const { rows, totalDays } = useMemo(() => {
+  const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
+
+  const groups = useMemo(() => {
     if (tasks.length === 0) {
-      return { rows: [] as TimelineRow[], totalDays: MIN_COLUMN_COUNT };
+      return [] as InitiativeTimelineGroup[];
     }
 
-    const projects = new Map<string, { id: string; name: string; workIds: Set<string> }>();
-    const works = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        projectId: string;
-        role?: TeamRole;
-        tasks: InitiativeGanttTask[];
-      }
-    >();
-    const taskIndex = new Map<string, InitiativeGanttTask>();
+    const referenceStart = new Date(Date.UTC(2024, 0, 1));
+    const map = new Map<string, InitiativeTimelineGroup>();
 
     tasks.forEach((task) => {
-      const projectId = task.projectId ?? 'default-project';
-      const projectName = task.projectName ?? 'Проект';
-      if (!projects.has(projectId)) {
-        projects.set(projectId, { id: projectId, name: projectName, workIds: new Set() });
-      }
-      const workId = task.workId ?? `${projectId}-work-${task.role}`;
-      const workName = task.workName ?? task.role;
-      projects.get(projectId)?.workIds.add(workId);
-      if (!works.has(workId)) {
-        works.set(workId, {
-          id: workId,
-          name: workName,
-          projectId,
-          role: task.role,
-          tasks: []
-        });
-      }
-      works.get(workId)?.tasks.push(task);
-      taskIndex.set(task.id, task);
-    });
-
-    const rows: TimelineRow[] = [];
-
-    projects.forEach((project) => {
-      const projectTasks = Array.from(project.workIds).flatMap((workId) => works.get(workId)?.tasks ?? []);
-      const projectStart = projectTasks.reduce((min, item) => Math.min(min, item.startDay), Infinity);
-      const projectEnd = projectTasks.reduce(
-        (max, item) => Math.max(max, item.startDay + item.durationDays),
-        -Infinity
-      );
-      rows.push({
-        id: project.id,
-        type: 'project',
-        name: project.name,
-        level: 0,
-        startDay: projectStart === Infinity ? 0 : projectStart,
-        durationDays: projectEnd === -Infinity ? 1 : Math.max(1, projectEnd - projectStart),
-        constraints: projectTasks.flatMap((item) => item.constraints ?? []),
-        blockers: projectTasks.flatMap((item) => item.blockers ?? []),
-        childIds: Array.from(project.workIds),
-        parentId: undefined
-      });
-
-      project.workIds.forEach((workId) => {
-        const work = works.get(workId);
-        if (!work) {
-          return;
-        }
-        const workStart = work.tasks.reduce((min, item) => Math.min(min, item.startDay), Infinity);
-        const workEnd = work.tasks.reduce(
-          (max, item) => Math.max(max, item.startDay + item.durationDays),
-          -Infinity
-        );
-        rows.push({
-          id: work.id,
-          type: 'work',
-          name: work.name,
-          level: 1,
-          startDay: workStart === Infinity ? 0 : workStart,
-          durationDays: workEnd === -Infinity ? 1 : Math.max(1, workEnd - workStart),
-          role: work.role,
-          childIds: work.tasks.map((task) => task.id),
-          blockers: work.tasks.flatMap((task) => task.blockers ?? []),
-          constraints: work.tasks.flatMap((task) => task.constraints ?? []),
-          parentId: project.id
-        });
-
-        const parentChildMap = new Map<string, InitiativeGanttTask[]>();
-        work.tasks.forEach((task) => {
-          const parentId = task.parentTaskId ?? null;
-          const list = parentChildMap.get(parentId ?? '__root__') ?? [];
-          list.push(task);
-          parentChildMap.set(parentId ?? '__root__', list);
-        });
-
-        const rootTasks = parentChildMap.get('__root__') ?? [];
-        const addTaskRows = (taskList: InitiativeGanttTask[], level: number, parentId: string) => {
-          taskList
-            .slice()
-            .sort((a, b) => a.startDay - b.startDay || a.name.localeCompare(b.name))
-            .forEach((task) => {
-              const children = parentChildMap.get(task.id) ?? [];
-              rows.push({
-                id: task.id,
-                type: level === 2 ? 'task' : 'subtask',
-                name: task.name,
-                level,
-                effortDays: task.effortDays,
-                startDay: task.startDay,
-                durationDays: task.durationDays,
-                role: task.role,
-                minUnits: task.minUnits,
-                maxUnits: task.maxUnits,
-                canSplit: task.canSplit,
-                parallelAllowed: task.parallelAllowed,
-                durationMode: task.durationMode,
-                constraints: task.constraints,
-                priority: task.priority,
-                wipLimitTag: task.wipLimitTag,
-                scenarioBranch: task.scenarioBranch,
-                typeTag: task.type,
-                assignedExpert: task.assignedExpert,
-                resources: task.resources,
-                dependencies: task.dependencies,
-                blockers: task.blockers,
-                childIds: children.map((child) => child.id),
-                parentId
-              });
-              if (children.length > 0) {
-                addTaskRows(children, level + 1, task.id);
-              }
-            });
+      const roleKey = task.role ?? 'other';
+      const key = task.assignedExpert ? `expert:${task.assignedExpert}` : `role:${roleKey}`;
+      const displayName = task.assignedExpert ?? (task.role ? `Роль ${task.role}` : 'Исполнитель не назначен');
+      const existing = map.get(key);
+      const group: InitiativeTimelineGroup =
+        existing ?? {
+          id: key,
+          displayName,
+          isUnassigned: !task.assignedExpert,
+          roles: new Set(),
+          workNames: new Set(),
+          projectNames: new Set(),
+          tasks: [],
+          totalEffort: 0,
+          blockers: []
         };
 
-        addTaskRows(rootTasks, 2, work.id);
-      });
+      group.roles.add(task.role);
+      if (task.workName) {
+        group.workNames.add(task.workName);
+      }
+      if (task.projectName) {
+        group.projectNames.add(task.projectName);
+      }
+      if (task.blockers) {
+        task.blockers
+          .filter((blocker) => blocker.active)
+          .forEach((blocker) => {
+            group.blockers.push(`Блокер: ${blocker.reason}`);
+          });
+      }
+
+      const normalizedDuration = Math.max(1, Math.round(task.durationDays));
+      const startDate = addDays(referenceStart, Math.max(0, Math.round(task.startDay)));
+      const endDate = addDays(startDate, normalizedDuration - 1);
+      const details: string[] = [];
+      if (task.role) {
+        details.push(`Роль: ${task.role}`);
+      }
+      if (task.workName) {
+        details.push(`Работа: ${task.workName}`);
+      }
+      if (typeof task.effortDays === 'number') {
+        details.push(`Трудозатраты: ${task.effortDays} дн.`);
+      }
+      if (!task.assignedExpert) {
+        details.push('Нужен исполнитель');
+      }
+
+      const timelineTask: GanttTimelineTask = {
+        id: task.id,
+        name: task.name,
+        start: startDate,
+        end: endDate,
+        kind: 'project',
+        badge: task.projectName ?? 'Проект',
+        description: details.join(' · ') || undefined
+      };
+
+      group.tasks.push(timelineTask);
+      group.totalEffort += task.effortDays ?? 0;
+
+      if (!existing) {
+        map.set(key, group);
+      }
     });
 
-    const totalDays = rows.reduce((max, row) => Math.max(max, row.startDay + row.durationDays), MIN_COLUMN_COUNT);
+    const result = Array.from(map.values());
 
-    return { rows, totalDays };
+    result.forEach((group) => {
+      group.tasks.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    });
+
+    return result.sort((a, b) => {
+      if (a.isUnassigned !== b.isUnassigned) {
+        return a.isUnassigned ? 1 : -1;
+      }
+      return a.displayName.localeCompare(b.displayName, 'ru');
+    });
   }, [tasks]);
 
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  const timelineRows = useMemo<GanttTimelineRow[]>(() => {
+    return groups.map((group) => {
+      const roles = Array.from(group.roles)
+        .filter(Boolean)
+        .join(', ');
+      const works = Array.from(group.workNames)
+        .filter(Boolean)
+        .join(', ');
 
-  const rowLookup = useMemo(() => {
-    const map = new Map<string, TimelineRow>();
-    rows.forEach((row) => {
-      map.set(row.id, row);
+      const sidebar = (
+        <div className={cardStyles.employeeCell}>
+          <div className={cardStyles.employeeMeta}>
+            <Badge
+              size="xs"
+              status={group.isUnassigned ? 'warning' : 'system'}
+              label={group.isUnassigned ? 'Не назначено' : 'Назначено'}
+            />
+            <Text size="s" weight="semibold">
+              {group.displayName}
+            </Text>
+          </div>
+          {roles && (
+            <Text size="xs" view="secondary">
+              {roles}
+            </Text>
+          )}
+          <div className={cardStyles.employeeStats}>
+            <div className={cardStyles.employeeStatItem}>
+              <Text size="2xs" view="secondary">
+                Задачи
+              </Text>
+              <Text size="xs" weight="semibold">
+                {group.tasks.length}
+              </Text>
+            </div>
+            {group.totalEffort > 0 && (
+              <div className={cardStyles.employeeStatItem}>
+                <Text size="2xs" view="secondary">
+                  Трудозатраты
+                </Text>
+                <Text size="xs" weight="semibold">
+                  {group.totalEffort} дн.
+                </Text>
+              </div>
+            )}
+          </div>
+          {works && (
+            <Text size="2xs" view="secondary">
+              Работы: {works}
+            </Text>
+          )}
+          {group.projectNames.size > 0 && (
+            <Text size="2xs" view="secondary">
+              Проекты: {Array.from(group.projectNames).join(', ')}
+            </Text>
+          )}
+          {group.blockers.slice(0, 2).map((blocker) => (
+            <Text key={blocker} size="2xs" view="alert">
+              {blocker}
+            </Text>
+          ))}
+        </div>
+      );
+
+      return { id: group.id, sidebar, tasks: group.tasks };
     });
-    return map;
-  }, [rows]);
+  }, [groups]);
 
-  const visibleRows = useMemo(() => {
-    if (collapsedIds.size === 0) {
-      return rows;
-    }
-
-    const isHiddenByAncestor = (row: TimelineRow) => {
-      let currentParent = row.parentId;
-      while (currentParent) {
-        if (collapsedIds.has(currentParent)) {
-          return true;
-        }
-        currentParent = rowLookup.get(currentParent)?.parentId;
-      }
-      return false;
-    };
-
-    return rows.filter((row) => !isHiddenByAncestor(row));
-  }, [collapsedIds, rowLookup, rows]);
-
-  const handleToggleRow = useCallback((rowId: string) => {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(rowId)) {
-        next.delete(rowId);
-      } else {
-        next.add(rowId);
-      }
-      return next;
-    });
-  }, []);
-
-  if (rows.length === 0) {
+  if (tasks.length === 0) {
     return (
       <div className={styles.emptyState}>
         <Text size="s" view="secondary">
@@ -289,150 +264,52 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
     );
   }
 
-  const dayWidth = 100 / totalDays;
-
   return (
     <div className={styles.container}>
-      <div className={styles.axisRow}>
-        <div className={styles.axisHeaderCell}>
-          <Text size="xs" view="secondary">
-            Проекты, работы и задачи
+      <header className={styles.header}>
+        <div className={styles.headerInfo}>
+          <Text size="s" weight="semibold">
+            План загрузки по инициативе
+          </Text>
+          <div className={styles.summary}>
+            <Text size="xs" view="secondary">
+              Исполнители: {groups.length}
+            </Text>
+            <Text size="xs" view="secondary">
+              Задачи: {tasks.length}
+            </Text>
+          </div>
+        </div>
+        <Tabs<TimelineScaleTab>
+          size="s"
+          items={timelineScaleTabs}
+          value={scale}
+          getItemLabel={(item) => item.label}
+          getItemKey={(item) => item.value}
+          onChange={setScale}
+        />
+      </header>
+      <div className={styles.legend} aria-hidden={true}>
+        <div className={styles.legendItem}>
+          <span className={styles.legendMarker} data-kind="project" />
+          <Text size="2xs" view="secondary">
+            Проектные задачи
           </Text>
         </div>
-        <div className={styles.axis}>
-          {Array.from({ length: totalDays }, (_, index) => (
-            <div key={index} className={styles.axisCell}>
-              <Text size="2xs" view="secondary">
-                Д{index + 1}
-              </Text>
-            </div>
-          ))}
+        <div className={styles.legendItem}>
+          <span className={styles.legendMarker} data-kind="out-of-project" />
+          <Text size="2xs" view="secondary">
+            Вне проекта
+          </Text>
+        </div>
+        <div className={styles.legendItem}>
+          <span className={styles.legendMarker} data-kind="training" />
+          <Text size="2xs" view="secondary">
+            Развитие и обучение
+          </Text>
         </div>
       </div>
-      <div className={styles.rows}>
-        {visibleRows.map((row) => {
-          const left = row.startDay * dayWidth;
-          const width = Math.max(row.durationDays * dayWidth, dayWidth * 0.75);
-          const hasActiveBlocker = (row.blockers ?? []).some((blocker) => blocker.active);
-          const canToggle = (row.childIds?.length ?? 0) > 0;
-          const isCollapsed = collapsedIds.has(row.id);
-          const metaItems: string[] = [];
-          if (typeof row.effortDays === 'number') {
-            metaItems.push(`Трудозатраты · ${row.effortDays} дн.`);
-          }
-          if (row.role) {
-            metaItems.push(`Роль · ${row.role}`);
-          }
-          if (row.minUnits !== undefined || row.maxUnits !== undefined) {
-            metaItems.push(`Units · ${row.minUnits ?? 0}/${row.maxUnits ?? '∞'}`);
-          }
-          if (row.parallelAllowed || row.canSplit) {
-            metaItems.push('Можно параллельно');
-          }
-          if (row.priority !== undefined && row.priority !== null) {
-            metaItems.push(`Приоритет · ${row.priority}`);
-          }
-          if (row.wipLimitTag) {
-            metaItems.push(`WIP · ${row.wipLimitTag}`);
-          }
-          if (row.scenarioBranch) {
-            metaItems.push(`Сценарий · ${row.scenarioBranch}`);
-          }
-          if (row.typeTag === 'buffer') {
-            metaItems.push('Буфер');
-          }
-
-          const resources = row.resources ?? [];
-          const hasAssignedExpert = Boolean(row.assignedExpert);
-          const extraExpertNeeded =
-            hasAssignedExpert && !resources.some((resource) => resource.name === row.assignedExpert);
-
-          return (
-            <div key={row.id} className={styles.row}>
-              <div className={styles.treeCell} data-level={row.level} data-type={row.type}>
-                <div className={styles.treeHeader}>
-                  {canToggle ? (
-                    <button
-                      type="button"
-                      className={styles.toggleButton}
-                      onClick={() => handleToggleRow(row.id)}
-                      aria-label={isCollapsed ? 'Развернуть' : 'Свернуть'}
-                      aria-expanded={!isCollapsed}
-                    >
-                      <span className={styles.toggleIcon} data-collapsed={isCollapsed} />
-                    </button>
-                  ) : (
-                    <span className={styles.toggleSpacer} />
-                  )}
-                  <div className={styles.treeText}>
-                    <Text size="s" weight={row.type === 'project' ? 'bold' : 'semibold'} truncate>
-                      {row.name}
-                    </Text>
-                    {hasActiveBlocker && (
-                      <div className={styles.blockerList}>
-                        {(row.blockers ?? [])
-                          .filter((blocker) => blocker.active)
-                          .slice(0, 2)
-                          .map((blocker) => (
-                            <Text key={blocker.id} size="2xs" view="alert" truncate>
-                              Блокер: {blocker.reason}
-                            </Text>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {metaItems.length > 0 && (
-                  <div className={styles.metaChips}>
-                    {metaItems.map((item) => (
-                      <span key={item} className={styles.metaChip}>
-                        <Text size="2xs" view="secondary">
-                          {item}
-                        </Text>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {(resources.length > 0 || extraExpertNeeded) && (
-                  <div className={styles.resourceSection}>
-                    <Text size="2xs" view="secondary">
-                      Ресурсы
-                    </Text>
-                    <div className={styles.resourceList}>
-                      {resources.slice(0, 3).map((resource) => (
-                        <Text key={resource.id} size="xs" truncate>
-                          {resource.name}
-                          {resource.units ? ` · ${resource.units}u` : ''}
-                        </Text>
-                      ))}
-                      {extraExpertNeeded && row.assignedExpert && (
-                        <Text size="xs" truncate>
-                          {row.assignedExpert}
-                        </Text>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className={styles.timelineCell}>
-                <div className={styles.timelineLane} />
-                <div
-                  className={styles.timelineBar}
-                  data-type={row.type}
-                  data-buffer={row.typeTag === 'buffer'}
-                  data-blocked={hasActiveBlocker}
-                  style={{ left: `${left}%`, width: `${width}%` }}
-                  title={`Длительность: ${row.durationDays} дн. · Старт D${row.startDay + 1}`}
-                >
-                  <Text size="2xs" weight="semibold" truncate>
-                    {row.effortDays ? `${row.effortDays} дн.` : row.name}
-                  </Text>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <GanttTimeline axisLabel="Исполнитель" scale={scale.value} rows={timelineRows} />
     </div>
   );
 };

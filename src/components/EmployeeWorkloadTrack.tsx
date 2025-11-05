@@ -3,9 +3,15 @@ import { Card } from '@consta/uikit/Card';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import React, { useMemo, useState } from 'react';
+import GanttTimeline, {
+  type GanttTimelineRow,
+  type GanttTimelineTaskKind,
+  timelineScaleTabs,
+  type TimelineScaleTab
+} from './GanttTimeline';
 import styles from './EmployeeWorkloadTrack.module.css';
 
-type WorkloadKind = 'project' | 'out-of-project' | 'training';
+type WorkloadKind = GanttTimelineTaskKind;
 
 type WorkloadTask = {
   id: string;
@@ -13,7 +19,6 @@ type WorkloadTask = {
   start: string;
   end: string;
   kind: WorkloadKind;
-  lane?: number;
   badge: string;
   description?: string;
 };
@@ -27,30 +32,6 @@ type EmployeeWorkload = {
   availability: string;
   focus: string;
   tasks: WorkloadTask[];
-};
-
-const scaleTabs = [
-  { label: 'Неделя', value: 'week' },
-  { label: 'Месяц', value: 'month' }
-] as const;
-
-type ScaleTab = (typeof scaleTabs)[number];
-
-type MonthSegment = {
-  label: string;
-  start: Date;
-};
-
-const timelineStart = new Date('2022-11-01T00:00:00');
-const timelineEnd = new Date('2023-08-31T23:59:59');
-
-const monthFormatter = new Intl.DateTimeFormat('ru-RU', { month: 'short', year: 'numeric' });
-const periodFormatter = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short' });
-
-const taskBadgeStatus: Record<WorkloadKind, 'system' | 'warning' | 'success'> = {
-  project: 'system',
-  'out-of-project': 'warning',
-  training: 'success'
 };
 
 const mockEmployees: EmployeeWorkload[] = [
@@ -69,7 +50,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2022-11-07',
         end: '2023-01-24',
         kind: 'project',
-        lane: 0,
         badge: 'Проект'
       },
       {
@@ -78,7 +58,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-02-03',
         end: '2023-04-18',
         kind: 'project',
-        lane: 1,
         badge: 'Проект'
       },
       {
@@ -87,7 +66,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-05-02',
         end: '2023-06-30',
         kind: 'out-of-project',
-        lane: 0,
         badge: 'Вне проекта',
         description: 'Оценка экспертизы для нового направления'
       }
@@ -108,7 +86,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2022-12-05',
         end: '2023-02-28',
         kind: 'project',
-        lane: 0,
         badge: 'Проект'
       },
       {
@@ -117,7 +94,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-03-06',
         end: '2023-05-26',
         kind: 'project',
-        lane: 1,
         badge: 'Проект'
       },
       {
@@ -126,7 +102,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-06-05',
         end: '2023-07-21',
         kind: 'out-of-project',
-        lane: 0,
         badge: 'Вне проекта'
       }
     ]
@@ -146,7 +121,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-01-16',
         end: '2023-03-31',
         kind: 'project',
-        lane: 0,
         badge: 'Проект'
       },
       {
@@ -155,7 +129,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-04-10',
         end: '2023-06-23',
         kind: 'project',
-        lane: 1,
         badge: 'Проект'
       },
       {
@@ -164,7 +137,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-07-03',
         end: '2023-08-18',
         kind: 'out-of-project',
-        lane: 0,
         badge: 'Вне проекта'
       }
     ]
@@ -184,7 +156,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2022-11-14',
         end: '2023-01-27',
         kind: 'training',
-        lane: 0,
         badge: 'Развитие'
       },
       {
@@ -193,7 +164,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-02-06',
         end: '2023-04-21',
         kind: 'project',
-        lane: 1,
         badge: 'Проект'
       },
       {
@@ -202,7 +172,6 @@ const mockEmployees: EmployeeWorkload[] = [
         start: '2023-05-08',
         end: '2023-06-30',
         kind: 'out-of-project',
-        lane: 0,
         badge: 'Вне проекта'
       }
     ]
@@ -210,63 +179,62 @@ const mockEmployees: EmployeeWorkload[] = [
 ];
 
 const EmployeeWorkloadTrack: React.FC = () => {
-  const [scale, setScale] = useState<ScaleTab>(scaleTabs[1]);
+  const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
 
-  const monthSegments = useMemo<MonthSegment[]>(() => {
-    const segments: MonthSegment[] = [];
-    let current = new Date(timelineStart.getFullYear(), timelineStart.getMonth(), 1);
-    const end = timelineEnd.getTime();
+  const timelineRows = useMemo<GanttTimelineRow[]>(() => {
+    return mockEmployees.map((employee) => {
+      const sortedTasks = employee.tasks
+        .slice()
+        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-    while (current.getTime() <= end) {
-      const labelRaw = monthFormatter.format(current);
-      const label = labelRaw.charAt(0).toUpperCase() + labelRaw.slice(1);
-      segments.push({ label, start: new Date(current) });
-      current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
-    }
+      const tasks = sortedTasks.map((task) => ({
+        id: task.id,
+        name: task.name,
+        start: task.start,
+        end: task.end,
+        kind: task.kind,
+        badge: task.badge,
+        description: task.description
+      }));
 
-    return segments;
-  }, []);
-
-  const totalDuration = timelineEnd.getTime() - timelineStart.getTime();
-
-  const renderTask = (task: WorkloadTask, index: number) => {
-    const taskStart = new Date(task.start).getTime();
-    const taskEnd = new Date(task.end).getTime();
-    const normalizedStart = Math.max(taskStart, timelineStart.getTime());
-    const normalizedEnd = Math.min(taskEnd, timelineEnd.getTime());
-    const offset = ((normalizedStart - timelineStart.getTime()) / totalDuration) * 100;
-    const width = Math.max(((normalizedEnd - normalizedStart) / totalDuration) * 100, 3);
-    const laneIndex = task.lane ?? index;
-    const top = 8 + laneIndex * 68;
-
-    const periodLabel = `${periodFormatter.format(new Date(task.start))} – ${periodFormatter.format(
-      new Date(task.end)
-    )}`;
-
-    return (
-      <div
-        key={task.id}
-        className={styles.task}
-        data-kind={task.kind}
-        style={{ left: `${offset}%`, width: `${width}%`, top }}
-      >
-        <Text size="xs" weight="semibold" className={styles.taskName} truncate>
-          {task.name}
-        </Text>
-        <div className={styles.taskMetaRow}>
-          <Badge size="xs" status={taskBadgeStatus[task.kind]} label={task.badge} className={styles.taskBadge} />
-          <Text size="2xs" view="secondary" className={styles.taskPeriod}>
-            {periodLabel}
+      const sidebar = (
+        <div className={styles.employeeCell}>
+          <div className={styles.employeeMeta}>
+            <Badge size="xs" status="success" label={`№${employee.rank}`} />
+            <Text size="s" weight="semibold">
+              {employee.fullName}
+            </Text>
+          </div>
+          <Text size="xs" view="secondary">
+            {employee.position}
+          </Text>
+          <div className={styles.employeeStats}>
+            <div className={styles.employeeStatItem}>
+              <Text size="2xs" view="secondary">
+                Загруженность
+              </Text>
+              <Text size="xs" weight="semibold">
+                {Math.round(employee.workload * 100)}%
+              </Text>
+            </div>
+            <div className={styles.employeeStatItem}>
+              <Text size="2xs" view="secondary">
+                Доступность
+              </Text>
+              <Text size="xs" weight="semibold">
+                {employee.availability}
+              </Text>
+            </div>
+          </div>
+          <Text size="2xs" view="secondary">
+            {employee.focus}
           </Text>
         </div>
-        {task.description && (
-          <Text size="2xs" view="secondary" className={styles.taskDescription}>
-            {task.description}
-          </Text>
-        )}
-      </div>
-    );
-  };
+      );
+
+      return { id: employee.id, sidebar, tasks };
+    });
+  }, []);
 
   return (
     <Card className={styles.card} verticalSpace="xl" horizontalSpace="xl">
@@ -284,9 +252,9 @@ const EmployeeWorkloadTrack: React.FC = () => {
             </Text>
           </div>
         </div>
-        <Tabs<ScaleTab>
+        <Tabs<TimelineScaleTab>
           size="s"
-          items={scaleTabs}
+          items={timelineScaleTabs}
           value={scale}
           getItemLabel={(item) => item.label}
           getItemKey={(item) => item.value}
@@ -313,74 +281,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
           </Text>
         </div>
       </div>
-      <div className={styles.timeline}>
-        <div className={styles.axisRow}>
-          <div className={styles.axisHeaderCell}>
-            <Text size="xs" view="secondary">
-              Сотрудник
-            </Text>
-          </div>
-          <div
-            className={styles.axis}
-            style={{ gridTemplateColumns: `repeat(${monthSegments.length}, minmax(0, 1fr))` }}
-          >
-            {monthSegments.map((segment) => (
-              <div key={segment.label} className={styles.axisCell}>
-                <Text size="2xs" view="secondary">
-                  {segment.label}
-                </Text>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className={styles.rows}>
-          {mockEmployees.map((employee) => {
-            const maxLane = employee.tasks.reduce((acc, task) => Math.max(acc, task.lane ?? 0), 0);
-            const minHeight = Math.max(112, 68 * (maxLane + 1) + 28);
-
-            return (
-              <div key={employee.id} className={styles.row}>
-                <div className={styles.employeeCell}>
-                  <div className={styles.employeeMeta}>
-                    <Badge size="xs" status="success" label={`№${employee.rank}`} />
-                    <Text size="s" weight="semibold">
-                      {employee.fullName}
-                    </Text>
-                  </div>
-                  <Text size="xs" view="secondary">
-                    {employee.position}
-                  </Text>
-                  <div className={styles.employeeStats}>
-                    <div className={styles.employeeStatItem}>
-                      <Text size="2xs" view="secondary">
-                        Загруженность
-                      </Text>
-                      <Text size="xs" weight="semibold">
-                        {Math.round(employee.workload * 100)}%
-                      </Text>
-                    </div>
-                    <div className={styles.employeeStatItem}>
-                      <Text size="2xs" view="secondary">
-                        Доступность
-                      </Text>
-                      <Text size="xs" weight="semibold">
-                        {employee.availability}
-                      </Text>
-                    </div>
-                  </div>
-                  <Text size="2xs" view="secondary">
-                    {employee.focus}
-                  </Text>
-                </div>
-                <div className={styles.timelineCell} style={{ minHeight }}>
-                  <div className={styles.timelineLane} />
-                  {employee.tasks.map((task, index) => renderTask(task, index))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <GanttTimeline axisLabel="Сотрудник" scale={scale.value} rows={timelineRows} />
     </Card>
   );
 };

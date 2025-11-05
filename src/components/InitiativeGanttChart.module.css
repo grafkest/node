@@ -2,228 +2,57 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 0;
 }
 
-.axisRow {
-  display: grid;
-  grid-template-columns: minmax(260px, 1.1fr) minmax(0, 2.6fr);
-  gap: 12px;
-  align-items: center;
-}
-
-.axisHeaderCell {
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-}
-
-.axis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
-  border-radius: 12px;
-  background: var(--color-bg-default);
-  border: 1px solid var(--color-bg-border);
-  overflow: hidden;
-}
-
-.axisCell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 0;
-  border-left: 1px solid var(--color-bg-border);
-  min-height: 32px;
-}
-
-.axisCell:first-child {
-  border-left: none;
-}
-
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: minmax(260px, 1.1fr) minmax(0, 2.6fr);
-  gap: 12px;
-  align-items: stretch;
-}
-
-.treeCell {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid var(--color-bg-border);
-  background: var(--color-bg-default);
-  min-width: 0;
-}
-
-.treeCell[data-level='0'] {
-  padding-left: 16px;
-}
-
-.treeCell[data-level='1'] {
-  padding-left: 26px;
-}
-
-.treeCell[data-level='2'] {
-  padding-left: 34px;
-}
-
-.treeCell[data-level='3'] {
-  padding-left: 42px;
-}
-
-.treeHeader {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.toggleButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--color-bg-border);
-  border-radius: 6px;
-  background: var(--color-bg-default);
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.toggleButton:hover {
-  background: var(--color-bg-ghost);
-}
-
-.toggleButton:focus-visible {
-  outline: 2px solid var(--color-bg-info);
-  outline-offset: 2px;
-}
-
-.toggleSpacer {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-}
-
-.toggleIcon {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-left: 2px solid var(--color-control-typo-ghost);
-  border-bottom: 2px solid var(--color-control-typo-ghost);
-  transform: rotate(45deg);
-  transition: transform 0.2s ease;
-}
-
-.toggleIcon[data-collapsed='true'] {
-  transform: rotate(-45deg);
-}
-
-.treeText {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.blockerList {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.metaChips {
+.header {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.metaChip {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--color-bg-border);
-  background: var(--color-bg-secondary);
-}
-
-.resourceSection {
+.headerInfo {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.resourceList {
+.summary {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
 }
 
-.timelineCell {
-  position: relative;
-  border-radius: 12px;
-  border: 1px solid var(--color-bg-border);
-  background: var(--color-bg-secondary);
-  padding: 12px;
-  overflow: hidden;
-  min-height: 96px;
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.timelineLane {
-  position: absolute;
-  inset: 12px;
-  border-radius: 8px;
-  background: var(--color-bg-default);
-  pointer-events: none;
-}
-
-.timelineBar {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+.legendItem {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: rgba(37, 110, 255, 0.16);
-  border: 1px solid rgba(37, 110, 255, 0.35);
-  box-shadow: 0 8px 18px rgba(17, 43, 96, 0.12);
-  min-width: 72px;
-  max-width: 320px;
-  height: 36px;
+  gap: 8px;
 }
 
-.timelineBar[data-type='project'] {
-  background: rgba(23, 162, 184, 0.14);
-  border-color: rgba(23, 162, 184, 0.4);
+.legendMarker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
 }
 
-.timelineBar[data-type='work'] {
-  background: rgba(86, 148, 255, 0.16);
-  border-color: rgba(86, 148, 255, 0.4);
+.legendMarker[data-kind='project'] {
+  background: rgba(37, 110, 255, 0.9);
 }
 
-.timelineBar[data-buffer='true'] {
-  border-style: dashed;
+.legendMarker[data-kind='out-of-project'] {
+  background: rgba(255, 166, 0, 0.9);
 }
 
-.timelineBar[data-blocked='true'] {
-  background: rgba(217, 69, 80, 0.2);
-  border-color: rgba(217, 69, 80, 0.45);
+.legendMarker[data-kind='training'] {
+  background: rgba(47, 209, 150, 0.9);
 }
 
 .emptyState {
@@ -231,30 +60,6 @@
   border-radius: 12px;
   border: 1px dashed var(--color-bg-border);
   background: var(--color-bg-default);
-}
-
-@media (max-width: 1280px) {
-  .axisRow,
-  .row {
-    grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
-  }
-}
-
-@media (max-width: 960px) {
-  .axisRow,
-  .row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .axisRow {
-    gap: 8px;
-  }
-
-  .axis {
-    grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
-  }
-
-  .timelineCell {
-    min-height: 88px;
-  }
+  display: flex;
+  justify-content: center;
 }
