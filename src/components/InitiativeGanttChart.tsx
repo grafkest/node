@@ -1,4 +1,3 @@
-import { Checkbox } from '@consta/uikit/Checkbox';
 import { Text } from '@consta/uikit/Text';
 import React, { useCallback, useMemo, useState } from 'react';
 import type { TeamRole } from '../data';
@@ -294,60 +293,64 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
 
   return (
     <div className={styles.container}>
-      <div className={styles.headerRow}>
-        <div className={styles.headerCell}>
+      <div className={styles.axisRow}>
+        <div className={styles.axisHeaderCell}>
           <Text size="xs" view="secondary">
-            Проект / Работы / Задачи
+            Проекты, работы и задачи
           </Text>
         </div>
-        <div className={styles.headerCell}>
-          <Text size="xs" view="secondary">
-            Параллельность
-          </Text>
-        </div>
-        <div className={styles.headerCell}>
-          <Text size="xs" view="secondary">
-            Мин/Макс Units
-          </Text>
-        </div>
-        <div className={styles.headerCell}>
-          <Text size="xs" view="secondary">
-            Приоритет
-          </Text>
-        </div>
-        <div className={styles.headerCell}>
-          <Text size="xs" view="secondary">
-            Роль
-          </Text>
-        </div>
-        <div className={styles.headerCell}>
-          <Text size="xs" view="secondary">
-            Ресурсы
-          </Text>
-        </div>
-        <div className={styles.timelineHeader}>
-          <div className={styles.timelineAxis}>
-            {Array.from({ length: totalDays }, (_, index) => (
-              <div key={index} className={styles.axisCell}>
-                <Text size="xs" view="secondary">
-                  Д{index + 1}
-                </Text>
-              </div>
-            ))}
-          </div>
+        <div className={styles.axis}>
+          {Array.from({ length: totalDays }, (_, index) => (
+            <div key={index} className={styles.axisCell}>
+              <Text size="2xs" view="secondary">
+                Д{index + 1}
+              </Text>
+            </div>
+          ))}
         </div>
       </div>
-      <div className={styles.body}>
+      <div className={styles.rows}>
         {visibleRows.map((row) => {
           const left = row.startDay * dayWidth;
           const width = Math.max(row.durationDays * dayWidth, dayWidth * 0.75);
           const hasActiveBlocker = (row.blockers ?? []).some((blocker) => blocker.active);
           const canToggle = (row.childIds?.length ?? 0) > 0;
           const isCollapsed = collapsedIds.has(row.id);
+          const metaItems: string[] = [];
+          if (typeof row.effortDays === 'number') {
+            metaItems.push(`Трудозатраты · ${row.effortDays} дн.`);
+          }
+          if (row.role) {
+            metaItems.push(`Роль · ${row.role}`);
+          }
+          if (row.minUnits !== undefined || row.maxUnits !== undefined) {
+            metaItems.push(`Units · ${row.minUnits ?? 0}/${row.maxUnits ?? '∞'}`);
+          }
+          if (row.parallelAllowed || row.canSplit) {
+            metaItems.push('Можно параллельно');
+          }
+          if (row.priority !== undefined && row.priority !== null) {
+            metaItems.push(`Приоритет · ${row.priority}`);
+          }
+          if (row.wipLimitTag) {
+            metaItems.push(`WIP · ${row.wipLimitTag}`);
+          }
+          if (row.scenarioBranch) {
+            metaItems.push(`Сценарий · ${row.scenarioBranch}`);
+          }
+          if (row.typeTag === 'buffer') {
+            metaItems.push('Буфер');
+          }
+
+          const resources = row.resources ?? [];
+          const hasAssignedExpert = Boolean(row.assignedExpert);
+          const extraExpertNeeded =
+            hasAssignedExpert && !resources.some((resource) => resource.name === row.assignedExpert);
+
           return (
             <div key={row.id} className={styles.row}>
-              <div className={styles.nameCell} data-level={row.level} data-type={row.type}>
-                <div className={styles.nameContent}>
+              <div className={styles.treeCell} data-level={row.level} data-type={row.type}>
+                <div className={styles.treeHeader}>
                   {canToggle ? (
                     <button
                       type="button"
@@ -361,12 +364,12 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
                   ) : (
                     <span className={styles.toggleSpacer} />
                   )}
-                  <div className={styles.nameTextGroup}>
+                  <div className={styles.treeText}>
                     <Text size="s" weight={row.type === 'project' ? 'bold' : 'semibold'} truncate>
                       {row.name}
                     </Text>
                     {hasActiveBlocker && (
-                      <div className={styles.metaRow}>
+                      <div className={styles.blockerList}>
                         {(row.blockers ?? [])
                           .filter((blocker) => blocker.active)
                           .slice(0, 2)
@@ -379,65 +382,51 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
                     )}
                   </div>
                 </div>
-              </div>
-              <div className={styles.parallelCell}>
-                <Checkbox size="s" checked={Boolean(row.parallelAllowed ?? row.canSplit)} disabled />
-              </div>
-              <div className={styles.unitsCell}>
-                <Text size="xs" view="secondary">
-                  {row.minUnits || row.maxUnits ? `${row.minUnits ?? 0}/${row.maxUnits ?? '∞'}` : '—'}
-                </Text>
-              </div>
-              <div className={styles.priorityCell}>
-                <Text size="xs" view="secondary">
-                  {row.priority ?? '—'}
-                </Text>
-              </div>
-              <div className={styles.roleCell}>
-                <Text size="xs" view="secondary">
-                  {row.role ?? '—'}
-                </Text>
-              </div>
-              <div className={styles.resourceCell}>
-                {row.resources && row.resources.length > 0 ? (
-                  <div className={styles.resourceList}>
-                    {row.resources.slice(0, 3).map((resource) => (
-                      <Text key={resource.id} size="xs" truncate>
-                        {resource.name}
-                        {resource.units ? ` · ${resource.units}u` : ''}
-                      </Text>
+                {metaItems.length > 0 && (
+                  <div className={styles.metaChips}>
+                    {metaItems.map((item) => (
+                      <span key={item} className={styles.metaChip}>
+                        <Text size="2xs" view="secondary">
+                          {item}
+                        </Text>
+                      </span>
                     ))}
-                    {row.assignedExpert &&
-                      !row.resources.some((resource) => resource.name === row.assignedExpert) && (
+                  </div>
+                )}
+                {(resources.length > 0 || extraExpertNeeded) && (
+                  <div className={styles.resourceSection}>
+                    <Text size="2xs" view="secondary">
+                      Ресурсы
+                    </Text>
+                    <div className={styles.resourceList}>
+                      {resources.slice(0, 3).map((resource) => (
+                        <Text key={resource.id} size="xs" truncate>
+                          {resource.name}
+                          {resource.units ? ` · ${resource.units}u` : ''}
+                        </Text>
+                      ))}
+                      {extraExpertNeeded && row.assignedExpert && (
                         <Text size="xs" truncate>
                           {row.assignedExpert}
                         </Text>
                       )}
+                    </div>
                   </div>
-                ) : row.assignedExpert ? (
-                  <Text size="xs" truncate>
-                    {row.assignedExpert}
-                  </Text>
-                ) : (
-                  <Text size="xs" view="secondary">
-                    —
-                  </Text>
                 )}
               </div>
               <div className={styles.timelineCell}>
-                <div className={styles.timelineLane}>
-                  <div
-                    className={styles.timelineBar}
-                    data-type={row.type}
-                    data-buffer={row.typeTag === 'buffer'}
-                    data-blocked={hasActiveBlocker}
-                    style={{ left: `${left}%`, width: `${width}%` }}
-                    title={`Длительность: ${row.durationDays} дн. · Старт D${row.startDay + 1}`}
-                  >
-                    <Text size="2xs" weight="semibold" truncate>
-                      {row.effortDays ? `${row.name} · ${row.effortDays} дн.` : row.name}
-                    </Text>
-                  </div>
+                <div className={styles.timelineLane} />
+                <div
+                  className={styles.timelineBar}
+                  data-type={row.type}
+                  data-buffer={row.typeTag === 'buffer'}
+                  data-blocked={hasActiveBlocker}
+                  style={{ left: `${left}%`, width: `${width}%` }}
+                  title={`Длительность: ${row.durationDays} дн. · Старт D${row.startDay + 1}`}
+                >
+                  <Text size="2xs" weight="semibold" truncate>
+                    {row.effortDays ? `${row.effortDays} дн.` : row.name}
+                  </Text>
                 </div>
               </div>
             </div>
