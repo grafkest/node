@@ -1,7 +1,25 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  gap: 24px;
+  width: 100%;
+  align-items: flex-start;
+}
+
 .card {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+}
+
+.taskCard {
+  position: sticky;
+  top: 24px;
+  gap: 20px;
+}
+
+.workloadCard {
   min-height: 360px;
 }
 
@@ -24,6 +42,131 @@
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+}
+
+.taskHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.taskHeaderInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.taskForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.taskFormFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.taskFormActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.taskTable {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.taskRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) 110px 130px 120px minmax(180px, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-bg-border);
+  background: var(--color-bg-secondary);
+}
+
+.taskRowHeader {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.taskRowActive {
+  background: var(--color-bg-default);
+  border-color: var(--color-bg-link);
+  box-shadow: 0 0 0 1px var(--color-bg-link) inset;
+}
+
+.taskNameButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.taskNameButton:hover,
+.taskNameButton:focus-visible {
+  text-decoration: underline;
+}
+
+.assigneeInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assigneeIndicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-bg-border);
+}
+
+.assigneeIndicator[data-level='free'] {
+  background: #2fd196;
+}
+
+.assigneeIndicator[data-level='focus'] {
+  background: #ffa600;
+}
+
+.assigneeIndicator[data-level='busy'] {
+  background: #ff5f5f;
+}
+
+.taskDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-bg-border);
+  background: var(--color-bg-secondary);
+}
+
+.taskDetailsMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.taskDetailsAssignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .legend {
@@ -85,4 +228,33 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+@media (max-width: 1440px) {
+  .layout {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .taskCard {
+    position: static;
+  }
+
+  .taskFormFields {
+    grid-template-columns: 1fr;
+  }
+
+  .taskRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .taskRowHeader {
+    display: none;
+  }
 }
