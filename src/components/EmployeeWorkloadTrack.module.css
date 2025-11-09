@@ -1,6 +1,6 @@
 .layout {
-  display: grid;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   width: 100%;
   align-items: flex-start;
@@ -17,10 +17,14 @@
   position: sticky;
   top: 24px;
   gap: 20px;
+  flex: 0 1 360px;
+  width: min(100%, 400px);
 }
 
 .workloadCard {
   min-height: 360px;
+  flex: 1 1 640px;
+  min-width: 0;
 }
 
 .header {
@@ -83,7 +87,7 @@
 
 .taskRow {
   display: grid;
-  grid-template-columns: minmax(180px, 1.2fr) 110px 130px 120px minmax(180px, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 12px 16px;
@@ -231,22 +235,25 @@
 }
 
 @media (max-width: 1440px) {
-  .layout {
-    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  .taskCard {
+    flex-basis: 340px;
+    width: min(100%, 360px);
   }
 }
 
 @media (max-width: 1024px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
   .taskCard {
     position: static;
+    flex: 1 1 100%;
+    width: 100%;
   }
 
   .taskFormFields {
     grid-template-columns: 1fr;
+  }
+
+  .workloadCard {
+    flex: 1 1 100%;
   }
 
   .taskRow {
