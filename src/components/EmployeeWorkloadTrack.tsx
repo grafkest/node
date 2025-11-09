@@ -313,12 +313,20 @@ const initialTaskList: TaskListItem[] = [
   }
 ];
 
+const viewTabs = [
+  { label: 'Дорожка загрузки', value: 'timeline' },
+  { label: 'Постановка задач', value: 'planner' }
+] as const;
+
+type ViewTab = (typeof viewTabs)[number];
+
 const EmployeeWorkloadTrack: React.FC = () => {
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
   const [tasks, setTasks] = useState<TaskListItem[]>(initialTaskList);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
     initialTaskList[0]?.id ?? null
   );
+  const [activeView, setActiveView] = useState<ViewTab>(viewTabs[0]);
   const [taskDraft, setTaskDraft] = useState<{
     name: string;
     priority: TaskPriority;
@@ -523,12 +531,23 @@ const EmployeeWorkloadTrack: React.FC = () => {
   }, [taskDraft]);
 
   return (
-    <div className={styles.layout}>
-      <Card
-        className={`${styles.card} ${styles.taskCard}`}
-        verticalSpace="xl"
-        horizontalSpace="xl"
-      >
+    <div className={styles.wrapper}>
+      <div className={styles.viewTabs}>
+        <Tabs<ViewTab>
+          size="s"
+          items={viewTabs}
+          value={activeView}
+          getItemLabel={(item) => item.label}
+          getItemKey={(item) => item.value}
+          onChange={setActiveView}
+        />
+      </div>
+      {activeView.value === 'planner' ? (
+        <Card
+          className={`${styles.card} ${styles.taskCard}`}
+          verticalSpace="xl"
+          horizontalSpace="xl"
+        >
         <header className={styles.taskHeader}>
           <div className={styles.taskHeaderInfo}>
             <Text size="s" weight="semibold">
@@ -767,12 +786,13 @@ const EmployeeWorkloadTrack: React.FC = () => {
             </Text>
           </div>
         )}
-      </Card>
-      <Card
-        className={`${styles.card} ${styles.workloadCard}`}
-        verticalSpace="xl"
-        horizontalSpace="xl"
-      >
+        </Card>
+      ) : (
+        <Card
+          className={`${styles.card} ${styles.workloadCard}`}
+          verticalSpace="xl"
+          horizontalSpace="xl"
+        >
       <header className={styles.header}>
         <div className={styles.headerInfo}>
           <Text size="s" weight="semibold">
@@ -817,7 +837,8 @@ const EmployeeWorkloadTrack: React.FC = () => {
         </div>
       </div>
       <GanttTimeline axisLabel="Сотрудник" scale={scale.value} rows={timelineRows} />
-    </Card>
+        </Card>
+      )}
     </div>
   );
 };
