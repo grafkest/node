@@ -77,8 +77,8 @@
   border-radius: 10px;
   border: 1px solid transparent;
   box-shadow: 0 8px 18px rgba(17, 43, 96, 0.12);
-  min-width: 92px;
-  max-width: 280px;
+  min-width: 0;
+  max-width: none;
 }
 
 .task[data-kind='project'] {
