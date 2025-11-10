@@ -2533,6 +2533,7 @@ function App() {
       const normalizedOwner = request.owner.trim() || 'Ответственный не указан';
       const normalizedImpact = request.expectedImpact.trim() || 'Эффект не оценён';
       const normalizedTarget = request.targetModuleName.trim() || normalizedName;
+      const normalizedStartDate = request.startDate?.trim() || new Date().toISOString().slice(0, 10);
       const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
       const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
         request.potentialModules
@@ -2746,6 +2747,7 @@ function App() {
         requiredSkills,
         workItems,
         approvalStages,
+        startDate: normalizedStartDate,
         status: request.status,
         owner: normalizedOwner,
         expectedImpact: normalizedImpact,
@@ -2789,6 +2791,7 @@ function App() {
       const normalizedOwner = request.owner.trim() || existing.owner;
       const normalizedImpact = request.expectedImpact.trim() || existing.expectedImpact;
       const normalizedTarget = request.targetModuleName.trim() || existing.targetModuleName;
+      const normalizedStartDate = request.startDate?.trim() || existing.startDate || new Date().toISOString().slice(0, 10);
       const domains = request.domains.map((domain) => domain.trim()).filter(Boolean);
       const { potentialModules, plannedModuleIds } = preparePlannerModuleSelections(
         request.potentialModules
@@ -2869,6 +2872,7 @@ function App() {
         owner: normalizedOwner,
         expectedImpact: normalizedImpact,
         targetModuleName: normalizedTarget,
+        startDate: normalizedStartDate,
         lastUpdated: new Date().toISOString(),
         roles,
         potentialModules,

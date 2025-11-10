@@ -91,6 +91,8 @@ const collectGraphDomainIds = (domains: DomainNode[]): string[] => {
   return result;
 };
 
+type AssignmentStartMode = 'project-start' | 'after-assignment' | 'fixed-date';
+
 type WorkAssignmentDraft = {
   id: string;
   role: TeamRole;
@@ -99,6 +101,9 @@ type WorkAssignmentDraft = {
   effortDays: number;
   startDay: number;
   durationDays: number;
+  startMode: AssignmentStartMode;
+  startAfterId?: string | null;
+  startDate?: string | null;
   isCustom?: boolean;
   tasks?: string[];
   minUnits?: number;
@@ -124,6 +129,83 @@ type WorkDraft = {
   timeframe: string;
   status: InitiativeWorkItemStatus;
   assignments: WorkAssignmentDraft[];
+};
+
+type AssignmentSchedule = {
+  startDay: number;
+  durationDays: number;
+  startDate: Date | null;
+};
+
+const buildAssignmentSchedule = (
+  works: WorkDraft[],
+  initiativeStartDate: string | null
+): Map<string, AssignmentSchedule> => {
+  const lookup = new Map<string, { assignment: WorkAssignmentDraft }>();
+  works.forEach((work) => {
+    work.assignments.forEach((assignment) => {
+      lookup.set(assignment.id, { assignment });
+    });
+  });
+
+  const baseStart = initiativeStartDate ? startOfDay(new Date(initiativeStartDate)) : null;
+  const memo = new Map<string, number>();
+
+  const computeStart = (assignmentId: string, visited: Set<string>): number => {
+    if (memo.has(assignmentId)) {
+      return memo.get(assignmentId) ?? 0;
+    }
+    const record = lookup.get(assignmentId);
+    if (!record) {
+      memo.set(assignmentId, 0);
+      return 0;
+    }
+    const assignment = record.assignment;
+    const sanitizedStart = Math.max(0, Math.round(assignment.startDay));
+    const mode = assignment.startMode ?? 'project-start';
+    let resolved = sanitizedStart;
+
+    if (mode === 'project-start') {
+      resolved = 0;
+    } else if (mode === 'fixed-date') {
+      if (assignment.startDate && baseStart) {
+        const target = new Date(assignment.startDate);
+        if (!Number.isNaN(target.getTime())) {
+          resolved = Math.max(0, differenceInDays(baseStart, target));
+        }
+      }
+    } else if (mode === 'after-assignment') {
+      const referenceId = assignment.startAfterId;
+      if (
+        referenceId &&
+        referenceId !== assignmentId &&
+        lookup.has(referenceId) &&
+        !visited.has(referenceId)
+      ) {
+        const nextVisited = new Set(visited);
+        nextVisited.add(assignmentId);
+        const referenceStart = computeStart(referenceId, nextVisited);
+        const reference = lookup.get(referenceId);
+        if (reference) {
+          const referenceDuration = Math.max(1, Math.round(reference.assignment.durationDays));
+          resolved = referenceStart + referenceDuration;
+        }
+      }
+    }
+
+    memo.set(assignmentId, resolved);
+    return resolved;
+  };
+
+  const schedule = new Map<string, AssignmentSchedule>();
+  lookup.forEach((record, assignmentId) => {
+    const startDay = computeStart(assignmentId, new Set());
+    const durationDays = Math.max(1, Math.round(record.assignment.durationDays));
+    const startDate = baseStart ? addDays(baseStart, startDay) : null;
+    schedule.set(assignmentId, { startDay, durationDays, startDate });
+  });
+
+  return schedule;
 };
 
 type ApprovalStageDraft = {
@@ -175,6 +257,12 @@ const workItemStatusOptions: SelectOption<InitiativeWorkItemStatus>[] = [
   { label: 'Внедрение', value: 'delivery' }
 ];
 
+const startModeOptions: SelectOption<AssignmentStartMode>[] = [
+  { label: 'С начала проекта', value: 'project-start' },
+  { label: 'После задачи/работы', value: 'after-assignment' },
+  { label: 'С определённой даты', value: 'fixed-date' }
+];
+
 const approvalStatusOptions: SelectOption<InitiativeApprovalStatus>[] = [
   { label: 'Ожидание', value: 'pending' },
   { label: 'В работе', value: 'in-progress' },
@@ -203,6 +291,32 @@ const resolveTaskLabel = (rawValue: string, fallback: string): string => {
   return getSkillNameById(trimmed) ?? trimmed;
 };
 
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
+
+const startOfDay = (input: Date): Date => {
+  const result = new Date(input);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const addDays = (input: Date, amount: number): Date => {
+  const result = new Date(input);
+  result.setDate(result.getDate() + amount);
+  return result;
+};
+
+const differenceInDays = (start: Date, end: Date): number => {
+  const startTime = startOfDay(start).getTime();
+  const endTime = startOfDay(end).getTime();
+  return Math.floor((endTime - startTime) / MS_IN_DAY);
+};
+
+const startDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric'
+});
+
 const createWorkAssignmentDraft = (
   role: TeamRole = roleOptions[0].value,
   startDay = 0,
@@ -214,7 +328,10 @@ const createWorkAssignmentDraft = (
   description: '',
   effortDays: 5,
   startDay,
-  durationDays
+  durationDays,
+  startMode: 'project-start',
+  startAfterId: null,
+  startDate: null
 });
 
 const createWorkDraft = (offset = 0): WorkDraft => ({
@@ -238,6 +355,7 @@ const createApprovalStageDraft = (): ApprovalStageDraft => ({
 
 const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraft[] => {
   const workMap = new Map<string, WorkDraft>();
+  const baseStartDate = draft.startDate ? startOfDay(new Date(draft.startDate)) : null;
   const workItemMetadata = new Map(
     draft.workItems.map((item) => [item.id, item])
   );
@@ -279,14 +397,23 @@ const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraf
       }
 
       const tasks = item.tasks ?? [];
+      const normalizedStart = Math.max(0, Math.round(item.startDay));
+      const normalizedDuration = Math.max(1, Math.round(item.durationDays));
+      const startDateValue =
+        baseStartDate !== null ? addDays(baseStartDate, normalizedStart).toISOString().slice(0, 10) : null;
+      const startMode: AssignmentStartMode =
+        normalizedStart === 0 || !startDateValue ? 'project-start' : 'fixed-date';
       const assignment: WorkAssignmentDraft = {
         id: createId(),
         role: role.role,
         task: tasks[0]?.skill ?? '',
         description: item.description ?? '',
         effortDays: Math.max(1, Math.round(item.effortDays)),
-        startDay: Math.max(0, Math.round(item.startDay)),
-        durationDays: Math.max(1, Math.round(item.durationDays)),
+        startDay: normalizedStart,
+        durationDays: normalizedDuration,
+        startMode,
+        startAfterId: null,
+        startDate: startDateValue,
         isCustom: tasks.some((task) => task.isCustom),
         tasks: tasks.map((task) => task.skill)
       };
@@ -403,6 +530,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [expectedImpact, setExpectedImpact] = useState('');
   const [targetModule, setTargetModule] = useState('');
   const [status, setStatus] = useState<InitiativeStatus>('initiated');
+  const [initiativeStartDate, setInitiativeStartDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [domainItems, setDomainItems] = useState<OptionItem[]>(() => [...domainBaseItems]);
   const [selectedDomains, setSelectedDomains] = useState<OptionItem[]>([]);
   const [isCreatingDomain, setIsCreatingDomain] = useState(false);
@@ -461,9 +591,10 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         setDescription('');
         setOwner('');
         setExpectedImpact('');
-        setTargetModule('');
-        setStatus('initiated');
-        setDomainItems([...domainBaseItems]);
+      setTargetModule('');
+      setStatus('initiated');
+      setInitiativeStartDate(new Date().toISOString().slice(0, 10));
+      setDomainItems([...domainBaseItems]);
         setSelectedDomains([]);
         setIsCreatingDomain(false);
         setNewDomainLabel('');
@@ -493,6 +624,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setExpectedImpact(draft.expectedImpact);
       setTargetModule(draft.targetModuleName);
       setStatus(draft.status);
+      setInitiativeStartDate(draft.startDate ?? new Date().toISOString().slice(0, 10));
 
       const nextDomainItems = [...domainBaseItems];
       const domainSelections = draft.domains
@@ -797,14 +929,88 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     setIsCreatingUnit(false);
   };
 
+  const handleAssignmentStartModeChange = (
+    workId: string,
+    assignmentId: string,
+    mode: AssignmentStartMode
+  ) => {
+    if (mode === 'after-assignment') {
+      const fallback = assignmentReferenceOptions.find((option) => option.value !== assignmentId);
+      if (!fallback) {
+        handleAssignmentChange(workId, assignmentId, {
+          startMode: 'project-start',
+          startAfterId: null,
+          startDate: null
+        });
+        return;
+      }
+      handleAssignmentChange(workId, assignmentId, {
+        startMode: mode,
+        startAfterId: fallback?.value ?? null
+      });
+      return;
+    }
+
+    if (mode === 'fixed-date') {
+      const currentAssignment = works
+        .find((work) => work.id === workId)
+        ?.assignments.find((assignment) => assignment.id === assignmentId);
+      const fallbackDate =
+        initiativeStartDate?.trim() && initiativeStartDate.length > 0
+          ? initiativeStartDate
+          : new Date().toISOString().slice(0, 10);
+      const defaultDate = currentAssignment?.startDate ?? fallbackDate;
+      handleAssignmentChange(workId, assignmentId, {
+        startMode: mode,
+        startAfterId: null,
+        startDate: defaultDate
+      });
+      return;
+    }
+
+    handleAssignmentChange(workId, assignmentId, {
+      startMode: mode,
+      startAfterId: null,
+      startDate: null
+    });
+  };
+
+  const handleAssignmentStartAfterChange = (
+    workId: string,
+    assignmentId: string,
+    referenceId: string | null
+  ) => {
+    handleAssignmentChange(workId, assignmentId, {
+      startMode: 'after-assignment',
+      startAfterId: referenceId ?? null
+    });
+  };
+
+  const handleAssignmentStartDateChange = (
+    workId: string,
+    assignmentId: string,
+    date: string | null
+  ) => {
+    handleAssignmentChange(workId, assignmentId, {
+      startMode: 'fixed-date',
+      startDate: date ?? null
+    });
+  };
+
+  const assignmentSchedule = useMemo(
+    () => buildAssignmentSchedule(works, initiativeStartDate?.trim() ? initiativeStartDate : null),
+    [works, initiativeStartDate]
+  );
+
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
     () =>
       works.flatMap((work) => {
         const normalizedTitle = work.title.trim() || 'Задача';
         return work.assignments.flatMap((assignment, index) => {
           const normalizedTaskName = resolveTaskLabel(assignment.task, normalizedTitle);
-          const normalizedStart = Math.max(0, Math.round(assignment.startDay));
-          const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
+          const schedule = assignmentSchedule.get(assignment.id);
+          const normalizedStart = schedule?.startDay ?? Math.max(0, Math.round(assignment.startDay));
+          const normalizedDuration = schedule?.durationDays ?? Math.max(1, Math.round(assignment.durationDays));
           const normalizedEffort = Math.max(1, Math.round(assignment.effortDays));
           const resources: InitiativeGanttResource[] = assignment.assignedExpertId
             ? [
@@ -830,6 +1036,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           if (index > 0) {
             const previous = work.assignments[index - 1];
             dependencies.push({ id: `${work.id}-${previous.id}`, type: 'FS' });
+          }
+          if (assignment.startMode === 'after-assignment' && assignment.startAfterId) {
+            dependencies.push({ id: assignment.startAfterId, type: 'FS' });
           }
 
           const baseTask: InitiativeGanttTask = {
@@ -864,7 +1073,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           return [baseTask];
         });
       }),
-    [works]
+    [assignmentSchedule, works]
   );
 
   const totalEffortDays = works.reduce((acc, work) => {
@@ -909,6 +1118,18 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const submitButtonLabel = mode === 'edit' ? 'Сохранить изменения' : 'Создать инициативу';
   const teamStepForwardLabel = mode === 'edit' ? 'Обновить команду' : 'Сформировать команду';
 
+  const assignmentReferenceOptions = useMemo<SelectOption<string>[]>(() => {
+    const options: SelectOption<string>[] = [];
+    works.forEach((work) => {
+      const workTitle = work.title.trim() || 'Работа';
+      work.assignments.forEach((assignment) => {
+        const label = `${workTitle} · ${resolveTaskLabel(assignment.task, workTitle)}`;
+        options.push({ label, value: assignment.id });
+      });
+    });
+    return options;
+  }, [works]);
+
   const { planningRoles, roleAssignmentRefs } = useMemo(() => {
     const accumulator = new Map<
       TeamRole,
@@ -926,8 +1147,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       const normalizedTitle = work.title.trim() || 'Задача';
       const normalizedDescription = work.description.trim();
       work.assignments.forEach((assignment) => {
-        const assignmentStart = Math.max(0, Math.round(assignment.startDay));
-        const assignmentDuration = Math.max(1, Math.round(assignment.durationDays));
+        const schedule = assignmentSchedule.get(assignment.id);
+        const assignmentStart = schedule?.startDay ?? Math.max(0, Math.round(assignment.startDay));
+        const assignmentDuration = schedule?.durationDays ?? Math.max(1, Math.round(assignment.durationDays));
         const entry =
           accumulator.get(assignment.role) ??
           {
@@ -989,7 +1211,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     );
 
     return { planningRoles: planning, roleAssignmentRefs: assignmentRefs };
-  }, [works]);
+  }, [assignmentSchedule, works]);
 
   const draftPayload = useMemo<InitiativeCreationRequest>(
     () => {
@@ -1028,6 +1250,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         status,
         domains: selectedDomains.map((item) => item.value.trim()).filter(Boolean),
         potentialModules: selectedModules.map((item) => item.value.trim()).filter(Boolean),
+        startDate: initiativeStartDate?.trim() || undefined,
         customer: {
           companies: selectedCompanies
             .map((item) => item.value.trim())
@@ -1092,7 +1315,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       selectedModules,
       status,
       targetModule,
-      works
+      works,
+      initiativeStartDate
     ]
   );
 
@@ -1133,8 +1357,15 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     assignmentId: string,
     patch: Partial<WorkAssignmentDraft>
   ) => {
-    setWorks((prev) =>
-      prev.map((work) => {
+    setWorks((prev) => {
+      const assignmentLookup = new Map<string, WorkAssignmentDraft>();
+      prev.forEach((candidate) => {
+        candidate.assignments.forEach((item) => {
+          assignmentLookup.set(item.id, item);
+        });
+      });
+
+      return prev.map((work) => {
         if (work.id !== workId) {
           return work;
         }
@@ -1143,8 +1374,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
           ...work,
           assignments: work.assignments.map((assignment) => {
             if (assignment.id !== assignmentId) {
-            return assignment;
-          }
+              return assignment;
+            }
 
             let nextEffort =
               patch.effortDays !== undefined
@@ -1170,19 +1401,59 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
               }
             }
 
+            const nextStartMode: AssignmentStartMode = patch.startMode ?? assignment.startMode ?? 'project-start';
+            let nextStartAfterId: string | null =
+              patch.startAfterId !== undefined
+                ? patch.startAfterId ?? null
+                : assignment.startAfterId ?? null;
+            let nextStartDate: string | null =
+              patch.startDate !== undefined
+                ? patch.startDate?.trim() || null
+                : assignment.startDate ?? null;
+            let computedStart = nextStart;
+
+            if (nextStartMode === 'project-start') {
+              nextStartAfterId = null;
+              nextStartDate = null;
+              computedStart = 0;
+            } else if (nextStartMode === 'after-assignment') {
+              nextStartDate = null;
+              const referenceId = nextStartAfterId && nextStartAfterId !== assignment.id ? nextStartAfterId : null;
+              if (referenceId) {
+                const reference = assignmentLookup.get(referenceId);
+                if (reference) {
+                  const referenceStart = Math.max(0, Math.round(reference.startDay));
+                  const referenceDuration = Math.max(1, Math.round(reference.durationDays));
+                  computedStart = referenceStart + referenceDuration;
+                }
+              }
+            } else if (nextStartMode === 'fixed-date') {
+              nextStartAfterId = null;
+              if (nextStartDate) {
+                const base = initiativeStartDate ? startOfDay(new Date(initiativeStartDate)) : null;
+                const target = new Date(nextStartDate);
+                if (base && !Number.isNaN(target.getTime())) {
+                  computedStart = Math.max(0, differenceInDays(base, target));
+                }
+              }
+            }
+
             const nextAssignment: WorkAssignmentDraft = {
               ...assignment,
               ...patch,
               effortDays: nextEffort,
-              startDay: nextStart,
-              durationDays: nextDuration
+              startDay: computedStart,
+              durationDays: nextDuration,
+              startMode: nextStartMode,
+              startAfterId: nextStartAfterId,
+              startDate: nextStartDate
             };
 
             return nextAssignment;
           })
         };
-      })
-    );
+      });
+    });
   };
 
   const handleAssignmentRoleChange = (workId: string, assignmentId: string, role: TeamRole) => {
@@ -1398,6 +1669,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                     onChange={(value) => setOwner(value ?? '')}
                   />
                 </div>
+                <TextField
+                  size="s"
+                  label="Дата старта инициативы"
+                  type="date"
+                  value={initiativeStartDate}
+                  onChange={(value) => setInitiativeStartDate(value ?? '')}
+                />
                 <TextField
                   size="s"
                   label="Краткое описание"
@@ -1715,8 +1993,9 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   <div className={styles.workList}>
                     {works.map((work) => {
                       const scheduleBounds = work.assignments.map((assignment) => {
-                        const normalizedStart = Math.max(0, Math.round(assignment.startDay));
-                        const normalizedDuration = Math.max(1, Math.round(assignment.durationDays));
+                        const schedule = assignmentSchedule.get(assignment.id);
+                        const normalizedStart = schedule?.startDay ?? Math.max(0, Math.round(assignment.startDay));
+                        const normalizedDuration = schedule?.durationDays ?? Math.max(1, Math.round(assignment.durationDays));
                         return {
                           start: normalizedStart,
                           end: normalizedStart + normalizedDuration
@@ -1831,11 +2110,11 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                 const selectedTask =
                                   skillOptionsForRole.find((option) => option.value === assignment.task) ?? null;
                                 return (
-                                  <div key={assignment.id} className={styles.assignmentCard}>
-                                    <div className={styles.assignmentRow}>
-                                      <Select<SelectOption<TeamRole>>
-                                        size="s"
-                                        label={`Роль сотрудника ${index + 1}`}
+                                <div key={assignment.id} className={styles.assignmentCard}>
+                                  <div className={styles.assignmentRow}>
+                                    <Select<SelectOption<TeamRole>>
+                                      size="s"
+                                      label={`Роль сотрудника ${index + 1}`}
                                         items={roleOptions}
                                         value={roleOption}
                                         getItemLabel={(item) => item.label}
@@ -1889,41 +2168,123 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                       type="textarea"
                                       minRows={2}
                                     />
-                                    <div className={styles.assignmentTimingGrid}>
-                                      <TextField
-                                        size="s"
-                                        label="Старт (день)"
-                                        type="number"
-                                        value={String(assignment.startDay)}
-                                        onChange={(value) =>
-                                          handleAssignmentChange(work.id, assignment.id, {
-                                            startDay: Number(value ?? assignment.startDay) || 0
-                                          })
-                                        }
-                                      />
-                                      <TextField
-                                        size="s"
-                                        label="Длительность (дней)"
-                                        type="number"
-                                        value={String(assignment.durationDays)}
-                                        onChange={(value) =>
-                                          handleAssignmentChange(work.id, assignment.id, {
-                                            durationDays: Number(value ?? assignment.durationDays) || 1
-                                          })
-                                        }
-                                      />
-                                      <TextField
-                                        size="s"
-                                        label="Трудозатраты (дней)"
-                                        type="number"
-                                        value={String(assignment.effortDays)}
-                                        onChange={(value) =>
-                                          handleAssignmentChange(work.id, assignment.id, {
-                                            effortDays: Number(value ?? assignment.effortDays) || 1
-                                          })
-                                        }
-                                      />
-                                    </div>
+                                    {(() => {
+                                      const schedule = assignmentSchedule.get(assignment.id);
+                                      const computedStart =
+                                        schedule?.startDay ?? Math.max(0, Math.round(assignment.startDay));
+                                      const computedDuration =
+                                        schedule?.durationDays ?? Math.max(1, Math.round(assignment.durationDays));
+                                      const computedFinish = computedStart + computedDuration;
+                                      const rawStartDate = assignment.startDate
+                                        ? new Date(assignment.startDate)
+                                        : null;
+                                      const startDateDisplay = schedule?.startDate
+                                        ? startDateFormatter.format(schedule.startDate)
+                                        : rawStartDate && !Number.isNaN(rawStartDate.getTime())
+                                          ? startDateFormatter.format(rawStartDate)
+                                          : null;
+                                      const finishDate =
+                                        schedule?.startDate && computedDuration > 0
+                                          ? addDays(schedule.startDate, computedDuration - 1)
+                                          : rawStartDate && !Number.isNaN(rawStartDate.getTime()) && computedDuration > 0
+                                            ? addDays(rawStartDate, computedDuration - 1)
+                                            : null;
+                                      const startModeOption =
+                                        startModeOptions.find((option) => option.value === assignment.startMode) ??
+                                        startModeOptions[0];
+                                      const referenceItems = assignmentReferenceOptions.filter(
+                                        (option) => option.value !== assignment.id
+                                      );
+                                      const referenceValue = referenceItems.find(
+                                        (option) => option.value === assignment.startAfterId
+                                      );
+                                      const fallbackDate =
+                                        initiativeStartDate?.trim() && initiativeStartDate.length > 0
+                                          ? initiativeStartDate
+                                          : new Date().toISOString().slice(0, 10);
+                                      const dateValue = assignment.startDate ?? fallbackDate;
+
+                                      return (
+                                        <>
+                                          <div className={styles.assignmentTimingGrid}>
+                                            <Select<SelectOption<AssignmentStartMode>>
+                                              size="s"
+                                              label="Начало работы"
+                                              items={startModeOptions}
+                                              value={startModeOption}
+                                              getItemLabel={(item) => item.label}
+                                              getItemKey={(item) => item.value}
+                                              onChange={(option) =>
+                                                option &&
+                                                handleAssignmentStartModeChange(work.id, assignment.id, option.value)
+                                              }
+                                            />
+                                            {assignment.startMode === 'after-assignment' ? (
+                                              <Select<SelectOption<string>>
+                                                size="s"
+                                                label="После задачи"
+                                                items={referenceItems}
+                                                value={referenceValue ?? null}
+                                                getItemLabel={(item) => item.label}
+                                                getItemKey={(item) => item.value}
+                                                disabled={referenceItems.length === 0}
+                                                onChange={(option) =>
+                                                  handleAssignmentStartAfterChange(
+                                                    work.id,
+                                                    assignment.id,
+                                                    option?.value ?? null
+                                                  )
+                                                }
+                                              />
+                                            ) : assignment.startMode === 'fixed-date' ? (
+                                              <TextField
+                                                size="s"
+                                                label="Дата начала"
+                                                type="date"
+                                                value={dateValue}
+                                                onChange={(value) =>
+                                                  handleAssignmentStartDateChange(
+                                                    work.id,
+                                                    assignment.id,
+                                                    value ?? null
+                                                  )
+                                                }
+                                              />
+                                            ) : (
+                                              <div className={styles.assignmentTimingPlaceholder} />
+                                            )}
+                                            <TextField
+                                              size="s"
+                                              label="Длительность (дней)"
+                                              type="number"
+                                              value={String(assignment.durationDays)}
+                                              onChange={(value) =>
+                                                handleAssignmentChange(work.id, assignment.id, {
+                                                  durationDays: Number(value ?? assignment.durationDays) || 1
+                                                })
+                                              }
+                                            />
+                                            <TextField
+                                              size="s"
+                                              label="Трудозатраты (дней)"
+                                              type="number"
+                                              value={String(assignment.effortDays)}
+                                              onChange={(value) =>
+                                                handleAssignmentChange(work.id, assignment.id, {
+                                                  effortDays: Number(value ?? assignment.effortDays) || 1
+                                                })
+                                              }
+                                            />
+                                          </div>
+                                          <Text size="2xs" view="secondary" className={styles.assignmentTimingHint}>
+                                            Старт: Д{computedStart + 1}
+                                            {startDateDisplay ? ` · ${startDateDisplay}` : ''}
+                                            {` · Завершение: Д${computedFinish}`}
+                                            {finishDate ? ` (${startDateFormatter.format(finishDate)})` : ''}
+                                          </Text>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })}
@@ -1946,7 +2307,10 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                     </div>
                   </div>
                   <div className={styles.ganttPreview}>
-                    <InitiativeGanttChart tasks={ganttTasks} />
+                    <InitiativeGanttChart
+                      tasks={ganttTasks}
+                      startDate={initiativeStartDate?.trim() ? initiativeStartDate : undefined}
+                    />
                   </div>
                 </div>
               </div>

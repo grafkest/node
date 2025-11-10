@@ -1,7 +1,8 @@
 import { Badge } from '@consta/uikit/Badge';
+import { Select } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { TeamRole } from '../data';
 import GanttTimeline, {
   type GanttTimelineRow,
@@ -73,6 +74,7 @@ export type InitiativeGanttTask = {
 
 type InitiativeGanttChartProps = {
   tasks: InitiativeGanttTask[];
+  startDate?: string | Date;
 };
 
 type InitiativeTimelineGroup = {
@@ -93,7 +95,190 @@ const addDays = (date: Date, amount: number): Date => {
   return result;
 };
 
-const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) => {
+const startOfDay = (date: Date): Date => {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const startOfWeek = (date: Date): Date => {
+  const result = startOfDay(date);
+  const day = result.getDay();
+  const diff = (day + 6) % 7;
+  result.setDate(result.getDate() - diff);
+  return result;
+};
+
+const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const startOfYear = (date: Date): Date => new Date(date.getFullYear(), 0, 1);
+
+const addMonths = (date: Date, amount: number): Date => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + amount, 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const addYears = (date: Date, amount: number): Date => {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() + amount, 1);
+  result.setMonth(0, 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const weekFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'short'
+});
+
+const monthLabelFormatter = new Intl.DateTimeFormat('ru-RU', {
+  month: 'long',
+  year: 'numeric'
+});
+
+const yearLabelFormatter = new Intl.DateTimeFormat('ru-RU', {
+  year: 'numeric'
+});
+
+const capitalize = (value: string): string => {
+  if (!value) {
+    return value;
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const formatWeekLabel = (start: Date, endInclusive: Date): string => {
+  const startLabel = capitalize(weekFormatter.format(start));
+  const endLabel = capitalize(weekFormatter.format(endInclusive));
+  if (startLabel === endLabel) {
+    return startLabel;
+  }
+  return `${startLabel} – ${endLabel}`;
+};
+
+const toDate = (value: Date | string): Date => {
+  if (value instanceof Date) {
+    return value;
+  }
+  return new Date(value);
+};
+
+type PeriodOption = {
+  label: string;
+  value: string;
+  start: Date;
+  end: Date;
+};
+
+type TimelineScale = TimelineScaleTab['value'];
+
+const buildWeekOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfWeek(addDays(minDate, -7));
+  const latest = startOfWeek(addDays(maxDate, 7));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 104) {
+    const start = cursor;
+    const end = addDays(start, 7);
+    options.push({
+      label: formatWeekLabel(start, addDays(end, -1)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addDays(cursor, 7);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfWeek(baseStart);
+    const end = addDays(start, 7);
+    options.push({
+      label: formatWeekLabel(start, addDays(end, -1)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
+};
+
+const buildMonthOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfMonth(addMonths(minDate, -1));
+  const latest = startOfMonth(addMonths(maxDate, 1));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 48) {
+    const start = cursor;
+    const end = addMonths(start, 1);
+    options.push({
+      label: capitalize(monthLabelFormatter.format(start)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addMonths(cursor, 1);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfMonth(baseStart);
+    const end = addMonths(start, 1);
+    options.push({
+      label: capitalize(monthLabelFormatter.format(start)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
+};
+
+const buildYearOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfYear(addYears(minDate, -1));
+  const latest = startOfYear(addYears(maxDate, 1));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 12) {
+    const start = cursor;
+    const end = addYears(start, 1);
+    options.push({
+      label: yearLabelFormatter.format(start),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addYears(cursor, 1);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfYear(baseStart);
+    const end = addYears(start, 1);
+    options.push({
+      label: yearLabelFormatter.format(start),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
+};
+
+const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks, startDate }) => {
+  const baseStart = useMemo(() => {
+    if (!startDate) {
+      return startOfDay(new Date(Date.UTC(2024, 0, 1)));
+    }
+    const parsed = new Date(startDate);
+    if (Number.isNaN(parsed.getTime())) {
+      return startOfDay(new Date(Date.UTC(2024, 0, 1)));
+    }
+    return startOfDay(parsed);
+  }, [startDate]);
+
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
 
   const groups = useMemo(() => {
@@ -101,7 +286,6 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
       return [] as InitiativeTimelineGroup[];
     }
 
-    const referenceStart = new Date(Date.UTC(2024, 0, 1));
     const map = new Map<string, InitiativeTimelineGroup>();
 
     tasks.forEach((task) => {
@@ -138,8 +322,8 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
       }
 
       const normalizedDuration = Math.max(1, Math.round(task.durationDays));
-      const startDate = addDays(referenceStart, Math.max(0, Math.round(task.startDay)));
-      const endDate = addDays(startDate, normalizedDuration - 1);
+      const startDateValue = addDays(baseStart, Math.max(0, Math.round(task.startDay)));
+      const endDate = addDays(startDateValue, normalizedDuration - 1);
       const details: string[] = [];
       if (task.role) {
         details.push(`Роль: ${task.role}`);
@@ -157,7 +341,7 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
       const timelineTask: GanttTimelineTask = {
         id: task.id,
         name: task.name,
-        start: startDate,
+        start: startDateValue,
         end: endDate,
         kind: 'project',
         badge: task.projectName ?? 'Проект',
@@ -184,7 +368,69 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
       }
       return a.displayName.localeCompare(b.displayName, 'ru');
     });
-  }, [tasks]);
+  }, [baseStart, tasks]);
+
+  const timelineTasks = useMemo(() => groups.flatMap((group) => group.tasks), [groups]);
+
+  const minTaskStart = useMemo(() => {
+    if (timelineTasks.length === 0) {
+      return baseStart;
+    }
+    return timelineTasks.reduce((min, task) => {
+      const startDate = startOfDay(toDate(task.start));
+      return startDate < min ? startDate : min;
+    }, startOfDay(toDate(timelineTasks[0].start)));
+  }, [baseStart, timelineTasks]);
+
+  const maxTaskEnd = useMemo(() => {
+    if (timelineTasks.length === 0) {
+      return baseStart;
+    }
+    return timelineTasks.reduce((max, task) => {
+      const endDate = startOfDay(toDate(task.end));
+      return endDate > max ? endDate : max;
+    }, startOfDay(toDate(timelineTasks[0].end)));
+  }, [baseStart, timelineTasks]);
+
+  const periodOptions = useMemo(
+    () => ({
+      week: buildWeekOptions(baseStart, minTaskStart, maxTaskEnd),
+      month: buildMonthOptions(baseStart, minTaskStart, maxTaskEnd),
+      year: buildYearOptions(baseStart, minTaskStart, maxTaskEnd)
+    }),
+    [baseStart, maxTaskEnd, minTaskStart]
+  );
+
+  const [selectedPeriods, setSelectedPeriods] = useState<Record<TimelineScale, string | null>>(() => ({
+    week: periodOptions.week[0]?.value ?? null,
+    month: periodOptions.month[0]?.value ?? null,
+    year: periodOptions.year[0]?.value ?? null
+  }));
+
+  useEffect(() => {
+    setSelectedPeriods((prev) => ({
+      week:
+        prev.week && periodOptions.week.some((option) => option.value === prev.week)
+          ? prev.week
+          : periodOptions.week[0]?.value ?? null,
+      month:
+        prev.month && periodOptions.month.some((option) => option.value === prev.month)
+          ? prev.month
+          : periodOptions.month[0]?.value ?? null,
+      year:
+        prev.year && periodOptions.year.some((option) => option.value === prev.year)
+          ? prev.year
+          : periodOptions.year[0]?.value ?? null
+    }));
+  }, [periodOptions]);
+
+  const currentPeriodOptions = periodOptions[scale.value];
+  const selectedPeriodValue = selectedPeriods[scale.value];
+  const activePeriod = currentPeriodOptions.find((option) => option.value === selectedPeriodValue) ?? null;
+  const displayedPeriod = activePeriod ?? currentPeriodOptions[0] ?? null;
+  const resolvedViewRange = displayedPeriod
+    ? { start: displayedPeriod.start, end: displayedPeriod.end }
+    : undefined;
 
   const timelineRows = useMemo<GanttTimelineRow[]>(() => {
     return groups.map((group) => {
@@ -280,14 +526,33 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
             </Text>
           </div>
         </div>
-        <Tabs<TimelineScaleTab>
-          size="s"
-          items={timelineScaleTabs}
-          value={scale}
-          getItemLabel={(item) => item.label}
-          getItemKey={(item) => item.value}
-          onChange={setScale}
-        />
+        <div className={styles.headerControls}>
+          <Tabs<TimelineScaleTab>
+            size="s"
+            items={timelineScaleTabs}
+            value={scale}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={setScale}
+          />
+          <Select<PeriodOption>
+            size="s"
+            className={styles.periodSelect}
+            label="Период"
+            placeholder="Выберите период"
+            items={currentPeriodOptions}
+            value={displayedPeriod ?? null}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={(option) =>
+              setSelectedPeriods((prev) => ({
+                ...prev,
+                [scale.value]: option?.value ?? null
+              }))
+            }
+            disabled={currentPeriodOptions.length === 0}
+          />
+        </div>
       </header>
       <div className={styles.legend} aria-hidden={true}>
         <div className={styles.legendItem}>
@@ -309,7 +574,12 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks }) =>
           </Text>
         </div>
       </div>
-      <GanttTimeline axisLabel="Исполнитель" scale={scale.value} rows={timelineRows} />
+      <GanttTimeline
+        axisLabel="Исполнитель"
+        scale={scale.value}
+        rows={timelineRows}
+        viewRange={resolvedViewRange}
+      />
     </div>
   );
 };

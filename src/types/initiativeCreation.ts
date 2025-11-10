@@ -69,4 +69,5 @@ export type InitiativeCreationRequest = {
   roles: InitiativeCreationRoleDraft[];
   workItems: InitiativeCreationWorkItemDraft[];
   approvalStages: InitiativeCreationApprovalStageDraft[];
+  startDate?: string;
 };

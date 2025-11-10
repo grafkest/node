@@ -669,7 +669,10 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
               </Text>
             </div>
             <div className={styles.timelineBody}>
-              <InitiativeGanttChart tasks={timelineTasks} />
+              <InitiativeGanttChart
+                tasks={timelineTasks}
+                startDate={selectedInitiative.startDate}
+              />
             </div>
           </Card>
           <aside className={styles.riskSection} aria-label="Риски инициативы">

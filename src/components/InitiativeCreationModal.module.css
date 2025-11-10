@@ -207,6 +207,14 @@
   gap: 12px;
 }
 
+.assignmentTimingPlaceholder {
+  min-height: 1px;
+}
+
+.assignmentTimingHint {
+  margin-top: 4px;
+}
+
 
 .recommendationList {
   display: grid;
