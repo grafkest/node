@@ -20,7 +20,14 @@ import ForceGraph2D, {
   LinkObject,
   NodeObject
 } from 'react-force-graph-2d';
-import type { Initiative, ExpertProfile, ExpertSkill, ModuleNode, TeamRole } from '../data';
+import {
+  domainNameById,
+  type Initiative,
+  type ExpertProfile,
+  type ExpertSkill,
+  type ModuleNode,
+  type TeamRole
+} from '../data';
 import styles from './ExpertExplorer.module.css';
 import SkillEditorModal from './SkillEditorModal';
 import SoftSkillEditorModal from './SoftSkillEditorModal';
@@ -203,11 +210,21 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
+  const initialGraphZoomAppliedRef = useRef<Record<'graph' | 'assignments', boolean>>({
+    graph: false,
+    assignments: false
+  });
   const graphContainerRef = useRef<HTMLDivElement | null>(null);
   const [graphDimensions, setGraphDimensions] = useState({ width: 0, height: 0 });
   const roleGraphRef = useRef<ForceGraphMethods | null>(null);
+  const roleGraphZoomAppliedRef = useRef(false);
   const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
   const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
+
+  const resolveDomainName = useCallback(
+    (domainId: string) => domainNameMap[domainId] ?? domainNameById[domainId] ?? domainId,
+    [domainNameMap]
+  );
 
   const expertById = useMemo(() => {
     const map = new Map<string, ExpertProfile>();
@@ -282,9 +299,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       expert.domains.forEach((domainId) => set.add(domainId));
     });
     return Array.from(set).sort((a, b) =>
-      (domainNameMap[a] ?? a).localeCompare(domainNameMap[b] ?? b, 'ru')
+      resolveDomainName(a).localeCompare(resolveDomainName(b), 'ru')
     );
-  }, [experts, domainNameMap]);
+  }, [experts, resolveDomainName]);
 
   const competencyOptions = useMemo(() => {
     const set = new Set<string>();
@@ -384,9 +401,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         const moduleNames = expert.modules.map(
           (moduleId) => moduleNameMap[moduleId] ?? moduleId
         );
-        const domainNames = expert.domains.map(
-          (domainId) => domainNameMap[domainId] ?? domainId
-        );
+        const domainNames = expert.domains.map((domainId) => resolveDomainName(domainId));
         const roleLabels = expertRoles ? Array.from(expertRoles.keys()) : [];
         const haystack = [
           expert.fullName,
@@ -412,7 +427,6 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'));
   }, [
     experts,
-    domainNameMap,
     moduleNameMap,
     normalizedSearch,
     expertRolesMap,
@@ -420,7 +434,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     selectedConsultingSet,
     selectedDomainSet,
     selectedRoleSet,
-    selectedSoftSkillSet
+    selectedSoftSkillSet,
+    resolveDomainName
   ]);
 
   const selectedExpert = useMemo(
@@ -740,7 +755,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           id: nodeId,
           originId: domainId,
           type: 'domain',
-          label: domainNameMap[domainId] ?? domainId
+          label: resolveDomainName(domainId)
         });
         appendLink({
           id: `${expertNodeId}->${nodeId}`,
@@ -800,7 +815,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     });
 
     return { nodes, links };
-  }, [domainNameMap, filteredExperts]);
+  }, [filteredExperts, resolveDomainName]);
 
   const {
     nodes: assignmentGraphNodes,
@@ -992,20 +1007,33 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const skillGraphLinks = skillGraphData.links;
 
   useEffect(() => {
+    if (viewMode === 'graph' || viewMode === 'assignments') {
+      initialGraphZoomAppliedRef.current[viewMode] = false;
+    }
+    if (viewMode === 'roles') {
+      roleGraphZoomAppliedRef.current = false;
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
     if (viewMode !== 'graph' && viewMode !== 'assignments') {
       return;
     }
 
-    if (!graphRef.current) {
+    const graph = graphRef.current;
+    if (!graph) {
       return;
     }
 
+    const zoomKey: 'graph' | 'assignments' = viewMode;
+    const padding = initialGraphZoomAppliedRef.current[zoomKey] ? 120 : 40;
     const timeout = window.setTimeout(() => {
-      if (viewMode === 'graph') {
-        graphRef.current?.zoomToFit(400, 40, (node) => (node as ForceNode).type === 'expert');
+      if (zoomKey === 'graph') {
+        graph.zoomToFit(400, padding, (node) => (node as ForceNode).type === 'expert');
       } else {
-        graphRef.current?.zoomToFit(400, 40);
+        graph.zoomToFit(400, padding);
       }
+      initialGraphZoomAppliedRef.current[zoomKey] = true;
     }, 250);
 
     return () => window.clearTimeout(timeout);
@@ -1125,12 +1153,15 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       return;
     }
 
-    if (!roleGraphRef.current) {
+    const graph = roleGraphRef.current;
+    if (!graph) {
       return;
     }
 
+    const padding = roleGraphZoomAppliedRef.current ? 120 : 40;
     const timeout = window.setTimeout(() => {
-      roleGraphRef.current?.zoomToFit(400, 40);
+      graph.zoomToFit(400, padding);
+      roleGraphZoomAppliedRef.current = true;
     }, 250);
 
     return () => window.clearTimeout(timeout);
@@ -1703,7 +1734,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
             value={domainFilter}
             multiple
             getItemKey={(item) => item}
-            getItemLabel={(item) => domainNameMap[item] ?? item}
+            getItemLabel={(item) => resolveDomainName(item)}
             onChange={(value) => setDomainFilter(value ?? [])}
             placeholder="Все домены"
           />
@@ -2469,7 +2500,12 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
         </Text>
         <div className={styles.badgeGroup}>
           {expert.domains.map((domainId) => (
-            <Badge key={domainId} size="xs" view="stroked" label={domainNameMap[domainId] ?? domainId} />
+            <Badge
+              key={domainId}
+              size="xs"
+              view="stroked"
+              label={domainNameMap[domainId] ?? domainNameById[domainId] ?? domainId}
+            />
           ))}
         </div>
       </section>
@@ -2536,7 +2572,7 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
                     key={`${module.id}-${domainId}`}
                     size="xs"
                     view="stroked"
-                    label={domainNameMap[domainId] ?? domainId}
+                    label={domainNameMap[domainId] ?? domainNameById[domainId] ?? domainId}
                   />
                 ))}
               </div>
