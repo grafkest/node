@@ -266,9 +266,10 @@ type GanttTimelineProps = {
   axisLabel: string;
   rows: GanttTimelineRow[];
   scale: TimelineScale;
+  viewRange?: { start: Date | string; end: Date | string };
 };
 
-const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale }) => {
+const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale, viewRange }) => {
   const normalizedRows = useMemo<NormalizedRow[]>(() => {
     return rows.map((row) => {
       const normalizedTasks = row.tasks.map((task) => {
@@ -301,7 +302,24 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale })
     [normalizedRows]
   );
 
-  const { viewStart, viewEnd } = useMemo(() => computeViewRange(allTasks, scale), [allTasks, scale]);
+  const explicitRange = useMemo(() => {
+    if (!viewRange) {
+      return null;
+    }
+    const start = startOfDay(toDate(viewRange.start));
+    const end = startOfDay(toDate(viewRange.end));
+    if (end <= start) {
+      return { viewStart: start, viewEnd: addDays(start, 1) };
+    }
+    return { viewStart: start, viewEnd: end };
+  }, [viewRange]);
+
+  const { viewStart, viewEnd } = useMemo(() => {
+    if (explicitRange) {
+      return explicitRange;
+    }
+    return computeViewRange(allTasks, scale);
+  }, [allTasks, explicitRange, scale]);
   const totalDuration = Math.max(viewEnd.getTime() - viewStart.getTime(), MS_IN_DAY);
   const segments = useMemo(() => buildSegments(viewStart, viewEnd, scale), [viewEnd, viewStart, scale]);
   const gridTemplateColumns = useMemo(() => {

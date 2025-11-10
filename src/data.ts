@@ -272,6 +272,7 @@ export type InitiativeNode = {
   name: string;
   description: string;
   domains: string[];
+  startDate?: string;
   plannedModuleIds: string[];
   requiredSkills: string[];
   workItems: InitiativeWorkItem[];
@@ -1299,6 +1300,7 @@ export const initiativeNodes: InitiativeNode[] = [
     description:
       'Создание цифрового контура подготовки площадок и проектирования наземной инфраструктуры для новых кустов скважин.',
     domains: ['layout-optimization', 'surface-readiness'],
+    startDate: '2025-01-06',
     plannedModuleIds: ['module-infraplan-layout', 'module-infraplan-datahub', 'module-infraplan-economics'],
     requiredSkills: [
       'Оптимизация промысловой инфраструктуры',
@@ -1361,6 +1363,7 @@ export const initiativeNodes: InitiativeNode[] = [
     description:
       'Интеграция цифровых двойников и сервисов диспетчеризации для безопасного дистанционного управления фонда скважин.',
     domains: ['real-time-monitoring', 'workover-automation'],
+    startDate: '2024-11-18',
     plannedModuleIds: [
       'module-dtwin-optimizer',
       'module-dtwin-remote-ops',
@@ -1420,6 +1423,7 @@ export const initiativeNodes: InitiativeNode[] = [
     description:
       'Запуск цифрового двойника удалённого промысла с круглосуточным мониторингом телеметрии и сценарным моделированием отклонений.',
     domains: ['real-time-monitoring', 'data-preparation'],
+    startDate: '2024-10-21',
     plannedModuleIds: [
       'module-dtwin-monitoring',
       'module-dtwin-optimizer',
@@ -1479,6 +1483,7 @@ export const initiativeNodes: InitiativeNode[] = [
     description:
       'Расширение экономического блока INFRAPLAN для поддержки сделок M&A и стресс-тестов финансовых сценариев.',
     domains: ['economic-evaluation', 'development-scenarios'],
+    startDate: '2024-08-19',
     plannedModuleIds: ['module-infraplan-economics', 'module-infraplan-datahub'],
     requiredSkills: [
       'Финансовое моделирование M&A',

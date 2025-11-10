@@ -49,6 +49,7 @@ export function buildCreationRequestFromInitiative(
     status: initiative.status,
     domains: [...initiative.domains],
     potentialModules: moduleSelections,
+    startDate: initiative.startDate,
     customer: {
       companies: [...(initiative.customer?.companies ?? [])],
       units: [...(initiative.customer?.units ?? [])],
