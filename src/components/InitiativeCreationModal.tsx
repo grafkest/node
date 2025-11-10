@@ -997,6 +997,11 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     });
   };
 
+  const assignmentSchedule = useMemo(
+    () => buildAssignmentSchedule(works, initiativeStartDate?.trim() ? initiativeStartDate : null),
+    [works, initiativeStartDate]
+  );
+
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
     () =>
       works.flatMap((work) => {
@@ -1112,11 +1117,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const modalTitle = mode === 'edit' ? 'Редактирование инициативы' : 'Новая инициатива';
   const submitButtonLabel = mode === 'edit' ? 'Сохранить изменения' : 'Создать инициативу';
   const teamStepForwardLabel = mode === 'edit' ? 'Обновить команду' : 'Сформировать команду';
-
-  const assignmentSchedule = useMemo(
-    () => buildAssignmentSchedule(works, initiativeStartDate?.trim() ? initiativeStartDate : null),
-    [works, initiativeStartDate]
-  );
 
   const assignmentReferenceOptions = useMemo<SelectOption<string>[]>(() => {
     const options: SelectOption<string>[] = [];
@@ -1300,7 +1300,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     },
     [
       approvalStages,
-      assignmentSchedule,
       customerComment,
       customerContact,
       customerRepresentative,
