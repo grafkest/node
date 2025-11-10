@@ -1161,7 +1161,7 @@ function App() {
       markGraphDirty();
       showAdminNotice('success', `Сотрудник «${profile.fullName}» создан.`);
     },
-    [domainIdSet, expertProfiles, markGraphDirty, moduleIdSet, showAdminNotice]
+    [domainIdSet, expertProfiles, markGraphDirty, moduleIdSet, moduleNameMap, showAdminNotice]
   );
   const handleUpdateExpert = useCallback(
     (expertId: string, draft: ExpertDraftPayload) => {
@@ -1184,7 +1184,7 @@ function App() {
       markGraphDirty();
       showAdminNotice('success', `Сотрудник «${updated.fullName}» обновлён.`);
     },
-    [domainIdSet, expertProfiles, markGraphDirty, moduleIdSet, showAdminNotice]
+    [domainIdSet, expertProfiles, markGraphDirty, moduleIdSet, moduleNameMap, showAdminNotice]
   );
   const handleDeleteExpert = useCallback(
     (expertId: string) => {

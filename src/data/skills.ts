@@ -117,7 +117,7 @@ export const evidenceStatuses: EvidenceStatusDescriptor[] = [
   }
 ];
 
-export const skills: Record<string, SkillDefinition> = {
+const initialSkills: Record<string, SkillDefinition> = {
   'requirements-elicitation': {
     id: 'requirements-elicitation',
     name: 'Сбор и анализ требований',
@@ -526,26 +526,129 @@ export const skills: Record<string, SkillDefinition> = {
   }
 };
 
-export const roleToSkillsMap: Record<TeamRole, string[]> = Object.values(skills).reduce(
-  (acc, skill) => {
-    skill.roles.forEach((role) => {
-      if (!acc[role]) {
-        acc[role] = [];
+type SkillListener = () => void;
+
+const skillRegistry: Record<string, SkillDefinition> = {};
+const roleSkillIndex = new Map<TeamRole, Set<string>>();
+
+let roleToSkillsMap: Record<TeamRole, string[]> = {} as Record<TeamRole, string[]>;
+let registryVersion = 0;
+const registryListeners = new Set<SkillListener>();
+
+const rebuildRoleIndex = () => {
+  const next: Record<TeamRole, string[]> = {} as Record<TeamRole, string[]>;
+  roleSkillIndex.forEach((set, role) => {
+    next[role] = Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+  });
+  roleToSkillsMap = next;
+};
+
+const notifyRegistryChange = () => {
+  registryVersion += 1;
+  registryListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.error('Skill registry listener failed', error);
+    }
+  });
+};
+
+const normalizeSkillDefinition = (definition: SkillDefinition): SkillDefinition => {
+  const id = definition.id.trim();
+  const name = definition.name.trim();
+  const description = definition.description.trim();
+  const sources = Array.from(new Set(definition.sources.map((source) => source.trim()))).filter(
+    (source) => source.length > 0
+  ) as SkillSource[];
+  const roles = Array.from(new Set(definition.roles));
+
+  return {
+    ...definition,
+    id,
+    name,
+    description,
+    sources,
+    roles
+  };
+};
+
+const upsertSkillDefinition = (
+  definition: SkillDefinition,
+  options: { silent?: boolean } = {}
+): SkillDefinition => {
+  const normalized = normalizeSkillDefinition(definition);
+  const previous = skillRegistry[normalized.id];
+
+  if (previous) {
+    previous.roles.forEach((role) => {
+      const set = roleSkillIndex.get(role);
+      if (!set) {
+        return;
       }
-      acc[role].push(skill.id);
+      set.delete(previous.id);
+      if (set.size === 0) {
+        roleSkillIndex.delete(role);
+      }
     });
-    return acc;
-  },
-  {} as Record<TeamRole, string[]>
-);
+  }
+
+  skillRegistry[normalized.id] = normalized;
+  normalized.roles.forEach((role) => {
+    const set = roleSkillIndex.get(role) ?? new Set<string>();
+    set.add(normalized.id);
+    roleSkillIndex.set(role, set);
+  });
+
+  rebuildRoleIndex();
+
+  if (!options.silent) {
+    notifyRegistryChange();
+  }
+
+  return normalized;
+};
+
+Object.values(initialSkills).forEach((definition) => {
+  upsertSkillDefinition(definition, { silent: true });
+});
+
+export const skills = skillRegistry;
+
+export { roleToSkillsMap };
+
+export const getSkillRegistryVersion = (): number => registryVersion;
+
+export const subscribeToSkillRegistry = (listener: SkillListener): (() => void) => {
+  registryListeners.add(listener);
+  return () => {
+    registryListeners.delete(listener);
+  };
+};
+
+export const registerSkillDefinition = (definition: SkillDefinition): SkillDefinition =>
+  upsertSkillDefinition(definition);
+
+export const ensureSkillDefinition = (definition: SkillDefinition): SkillDefinition => {
+  const existing = skillRegistry[definition.id];
+  if (existing) {
+    return existing;
+  }
+  return upsertSkillDefinition(definition);
+};
 
 export const getSkillsByRole = (role: TeamRole): SkillDefinition[] => {
   const skillIds = roleToSkillsMap[role] ?? [];
-  return skillIds.map((id) => skills[id]).filter(Boolean);
+  return skillIds.map((id) => skillRegistry[id]).filter((skill): skill is SkillDefinition => Boolean(skill));
 };
 
 export const getSkillIdsByRole = (role: TeamRole): string[] => roleToSkillsMap[role] ?? [];
 
-export const getRolesForSkill = (skillId: string): TeamRole[] => skills[skillId]?.roles ?? [];
+export const getRolesForSkill = (skillId: string): TeamRole[] => skillRegistry[skillId]?.roles ?? [];
 
-export const getSkillNameById = (skillId: string): string | undefined => skills[skillId]?.name;
+export const getSkillNameById = (skillId: string): string | undefined => skillRegistry[skillId]?.name;
+
+export const findSkillByName = (name: string): SkillDefinition | undefined => {
+  const normalized = name.trim().toLowerCase();
+  return Object.values(skillRegistry).find((skill) => skill.name.toLowerCase() === normalized);
+};

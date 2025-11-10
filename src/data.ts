@@ -2937,7 +2937,12 @@ export {
   getSkillIdsByRole,
   getRolesForSkill,
   skillLevels,
-  evidenceStatuses
+  evidenceStatuses,
+  registerSkillDefinition,
+  ensureSkillDefinition,
+  subscribeToSkillRegistry,
+  getSkillRegistryVersion,
+  findSkillByName
 } from './data/skills';
 
 export type {

@@ -29,6 +29,7 @@ import {
   buildRoleMatchReports,
   type RolePlanningDraft
 } from '../utils/initiativeMatching';
+import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
 import styles from './InitiativeCreationModal.module.css';
 
 type SelectOption<Value extends string> = {
@@ -557,9 +558,11 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     createApprovalStageDraft()
   ]);
   const [activeStep, setActiveStep] = useState<CreationStep>('details');
+  const skillRegistryVersion = useSkillRegistryVersion();
   const baseRoleSkillOptions = useMemo<Record<TeamRole, OptionItem[]>>(
     () =>
       roleOptions.reduce((acc, option) => {
+        void skillRegistryVersion;
         const skillOptions = getSkillsByRole(option.value)
           .map((skill) => ({
             id: skill.id,
@@ -570,7 +573,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         acc[option.value] = skillOptions;
         return acc;
       }, {} as Record<TeamRole, OptionItem[]>),
-    []
+    [skillRegistryVersion]
   );
   const createRoleSkillState = useCallback(
     () =>

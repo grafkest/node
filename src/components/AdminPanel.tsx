@@ -1,12 +1,13 @@
 import { Button } from '@consta/uikit/Button';
 import { Combobox } from '@consta/uikit/Combobox';
 import { Collapse } from '@consta/uikit/Collapse';
+import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ArtifactNode,
   type DomainNode,
@@ -27,8 +28,17 @@ import {
   type UserStats,
   evidenceStatuses,
   getSkillsByRole,
+  registerSkillDefinition,
   skillLevels
 } from '../data';
+import type { ExpertDraftPayload } from '../types/expert';
+import {
+  exportExpertToExcel,
+  parseExpertWorkbook,
+  type ExpertImportResult,
+  type MissingSkillEntry
+} from '../utils/expertExcel';
+import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
 import styles from './AdminPanel.module.css';
 
 export type ModuleDraftPayload = {
@@ -89,7 +99,7 @@ export type ArtifactDraftPayload = {
   sampleUrl: string;
 };
 
-export type ExpertDraftPayload = Omit<ExpertProfile, 'id'>;
+export type { ExpertDraftPayload } from '../types/expert';
 
 type AdminPanelProps = {
   modules: ModuleNode[];
@@ -850,6 +860,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           <ExpertForm
             mode={selectedExpertId === '__new__' ? 'create' : 'edit'}
             draft={expertDraft}
+            expertId={selectedExpertId === '__new__' ? null : selectedExpertId}
             domainItems={parentDomainIds}
             domainLabelMap={domainLabelMap}
             moduleLabelMap={moduleLabelMap}
@@ -3014,6 +3025,7 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
 type ExpertFormProps = {
   mode: 'create' | 'edit';
   draft: ExpertDraftPayload;
+  expertId: string | null;
   domainItems: string[];
   domainLabelMap: Record<string, string>;
   moduleLabelMap: Record<string, string>;
@@ -3026,9 +3038,17 @@ type ExpertFormProps = {
   onDelete?: () => void;
 };
 
+type ExpertImportDialogState = {
+  draft: ExpertDraftPayload;
+  result: ExpertImportResult;
+  pendingSkills: MissingSkillEntry[];
+  fileName: string;
+};
+
 const ExpertForm: React.FC<ExpertFormProps> = ({
   mode,
   draft,
+  expertId,
   domainItems,
   domainLabelMap,
   moduleLabelMap,
@@ -3040,6 +3060,13 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   onSubmit,
   onDelete
 }) => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importState, setImportState] = useState<ExpertImportDialogState | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const skillRegistryVersion = useSkillRegistryVersion();
+
   const handleDraftChange = <Key extends keyof ExpertDraftPayload>(
     key: Key,
     value: ExpertDraftPayload[Key]
@@ -3054,6 +3081,154 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       .filter((item) => item.length > 0);
 
   const formatList = (values: string[]): string => values.join('\n');
+
+  const buildExportFileName = () => {
+    const baseName = draft.fullName.trim() || 'expert-profile';
+    const normalized = baseName
+      .replace(/[^0-9A-Za-zА-Яа-яЁё\s-]+/g, '')
+      .trim()
+      .replace(/\s+/g, '_');
+    return `${normalized || 'expert-profile'}.xlsx`;
+  };
+
+  const openImportPreview = (result: ExpertImportResult, fileName: string) => {
+    const normalizedDraft = cloneExpertDraft(result.draft);
+    setImportState({
+      draft: normalizedDraft,
+      result: {
+        ...result,
+        errors: [...result.errors],
+        warnings: [...result.warnings],
+        missingHardSkills: [...result.missingHardSkills]
+      },
+      pendingSkills: [...result.missingHardSkills],
+      fileName
+    });
+    setIsImportModalOpen(true);
+  };
+
+  const handleExpertExport = () => {
+    try {
+      const buffer = exportExpertToExcel({
+        draft,
+        expertId,
+        domainLabelMap,
+        moduleLabelMap
+      });
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = buildExportFileName();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setImportError('Не удалось экспортировать профиль. Попробуйте ещё раз.');
+      console.error('Failed to export expert profile', error);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportClose = () => {
+    setIsImportModalOpen(false);
+    setImportState(null);
+  };
+
+  const handleImportApply = () => {
+    if (!importState) {
+      return;
+    }
+    onChange(importState.draft);
+    setImportState(null);
+    setIsImportModalOpen(false);
+    setImportError(null);
+  };
+
+  const handleRegisterMissingSkill = (entry: MissingSkillEntry) => {
+    registerSkillDefinition(entry.definition);
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingSkills = prev.pendingSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      const remainingMissing = prev.result.missingHardSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      return {
+        ...prev,
+        pendingSkills,
+        result: {
+          ...prev.result,
+          missingHardSkills: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Навык «${entry.definition.name}» добавлен в базу и будет импортирован.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleSkipMissingSkill = (entry: MissingSkillEntry) => {
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingSkills = prev.pendingSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      const remainingMissing = prev.result.missingHardSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      const filteredSkills = prev.draft.skills.filter((skill) => skill.id !== entry.requestedId);
+      return {
+        ...prev,
+        draft: { ...prev.draft, skills: filteredSkills },
+        pendingSkills,
+        result: {
+          ...prev.result,
+          missingHardSkills: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Навык «${entry.definition.name}» будет исключён из профиля.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const [file] = event.target.files ?? [];
+    if (!file) {
+      return;
+    }
+    event.target.value = '';
+    setImportError(null);
+    setIsImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const result = parseExpertWorkbook({
+        buffer,
+        domainLabelMap,
+        moduleLabelMap
+      });
+      openImportPreview(result, file.name);
+    } catch (error) {
+      setImportError('Не удалось обработать файл. Проверьте формат и попробуйте снова.');
+      console.error('Failed to import expert profile', error);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleExperienceChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const numeric = Number(event.target.value);
@@ -3078,18 +3253,20 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   );
 
   const hardSkillDefinitions = useMemo(() => {
+    void skillRegistryVersion;
     if (!selectedRole) {
       return [] as ReturnType<typeof getSkillsByRole>;
     }
     return getSkillsByRole(selectedRole).filter((definition) => definition.category === 'hard');
-  }, [selectedRole]);
+  }, [selectedRole, skillRegistryVersion]);
 
   const softSkillDefinitions = useMemo(() => {
+    void skillRegistryVersion;
     if (!selectedRole) {
       return [] as ReturnType<typeof getSkillsByRole>;
     }
     return getSkillsByRole(selectedRole).filter((definition) => definition.category === 'soft');
-  }, [selectedRole]);
+  }, [selectedRole, skillRegistryVersion]);
 
   const hardSkillMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof getSkillsByRole>[number]>();
@@ -3138,23 +3315,23 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     return [...base, CREATE_LANGUAGE_OPTION];
   }, [draft.languages, languages]);
 
-  const updateCompetenciesFromSkills = (
-    skills: ExpertSkill[],
-    currentCompetencies: string[]
-  ): string[] => {
-    if (!hardSkillDefinitions.length) {
-      return currentCompetencies;
-    }
-    const activeNames = new Set<string>();
-    skills.forEach((skill) => {
-      const definition = hardSkillMap.get(skill.id);
-      if (definition) {
-        activeNames.add(definition.name);
+  const updateCompetenciesFromSkills = useCallback(
+    (skills: ExpertSkill[], currentCompetencies: string[]): string[] => {
+      if (!hardSkillDefinitions.length) {
+        return currentCompetencies;
       }
-    });
-    const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
-    return mergeStringCollections(preserved, Array.from(activeNames));
-  };
+      const activeNames = new Set<string>();
+      skills.forEach((skill) => {
+        const definition = hardSkillMap.get(skill.id);
+        if (definition) {
+          activeNames.add(definition.name);
+        }
+      });
+      const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
+      return mergeStringCollections(preserved, Array.from(activeNames));
+    },
+    [hardSkillDefinitions.length, hardSkillMap, hardSkillNameSet]
+  );
 
   const areArraysEqual = (first: string[], second: string[]): boolean => {
     if (first.length !== second.length) {
@@ -3231,10 +3408,36 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     if (!areArraysEqual(recalculated, draft.competencies)) {
       onChange({ ...draft, competencies: recalculated });
     }
-  }, [draft.skills, draft.competencies, hardSkillDefinitions, onChange]);
+  }, [draft, hardSkillDefinitions.length, onChange, updateCompetenciesFromSkills]);
 
   return (
     <div className={styles.formBody}>
+      <div className={styles.importToolbar}>
+        <Button
+          size="s"
+          view="ghost"
+          label="Импорт из Excel"
+          disabled={isImporting}
+          onClick={handleImportClick}
+        />
+        <Button size="s" view="ghost" label="Экспорт в Excel" onClick={handleExpertExport} />
+        <Text size="xs" view="secondary" className={styles.importHint}>
+          Используйте Excel-шаблон для обмена профилями сотрудников.
+        </Text>
+      </div>
+      {importError && (
+        <Text size="xs" view="alert" className={styles.importError}>
+          {importError}
+        </Text>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx"
+        hidden
+        onChange={handleFileChange}
+      />
+
       <div className={styles.formHeader}>
         <div>
           <Text size="l" weight="semibold" className={styles.formTitle}>
@@ -3703,9 +3906,167 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
           />
         </div>
       </div>
+
+      <Modal isOpen={isImportModalOpen && Boolean(importState)} hasOverlay onClose={handleImportClose}>
+        {importState && (
+          <div className={styles.importModal}>
+            <Text size="l" weight="semibold">
+              Импорт профиля сотрудника
+            </Text>
+            <div className={styles.importSummary}>
+              <div>
+                <Text size="xs" view="secondary">
+                  Файл
+                </Text>
+                <Text size="s">{importState.fileName}</Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Имя сотрудника
+                </Text>
+                <Text size="s">{importState.draft.fullName || 'Не указано'}</Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Количество навыков
+                </Text>
+                <Text size="s">{importState.draft.skills.length}</Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Домены
+                </Text>
+                <Text size="s">{importState.draft.domains.length}</Text>
+              </div>
+            </div>
+            {importState.result.requestedExpertId && (
+              <Text size="xs" view="secondary">
+                Идентификатор из файла: {importState.result.requestedExpertId}
+              </Text>
+            )}
+            {importState.result.errors.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold" view="alert">
+                  Обнаружены ошибки
+                </Text>
+                <ul className={styles.importWarningList}>
+                  {importState.result.errors.map((message, index) => (
+                    <li key={`import-error-${index}`}>
+                      <Text size="s" view="alert">
+                        {message}
+                      </Text>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importState.result.warnings.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold" view="warning">
+                  Предупреждения
+                </Text>
+                <ul className={styles.importWarningList}>
+                  {importState.result.warnings.map((message, index) => (
+                    <li key={`import-warning-${index}`}>
+                      <Text size="s" view="warning">
+                        {message}
+                      </Text>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importState.pendingSkills.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold">
+                  Новые hard skills
+                </Text>
+                <Text size="xs" view="secondary">
+                  Эти навыки отсутствуют в базе. Добавьте их или исключите из импорта.
+                </Text>
+                {importState.pendingSkills.map((entry) => (
+                  <div key={entry.requestedId} className={styles.importSkillCard}>
+                    <Text size="s" weight="semibold">
+                      {entry.definition.name}
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      Категория: {entry.definition.category}, рекомендуемый уровень: {entry.definition.recommendedLevel}
+                    </Text>
+                    {entry.definition.description && (
+                      <Text size="xs" view="secondary">{entry.definition.description}</Text>
+                    )}
+                    <Text size="xs" view="secondary">
+                      Источники:{' '}
+                      {entry.definition.sources.length > 0
+                        ? entry.definition.sources.join(', ')
+                        : 'не указаны'}
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      Роли:{' '}
+                      {entry.definition.roles.length > 0
+                        ? entry.definition.roles.join(', ')
+                        : 'не указаны'}
+                    </Text>
+                    <Text size="xs" view="secondary">Строка в файле: {entry.rowNumber}</Text>
+                    <div className={styles.importSkillActions}>
+                      <Button
+                        size="xs"
+                        view="primary"
+                        label="Добавить в базу"
+                        onClick={() => handleRegisterMissingSkill(entry)}
+                      />
+                      <Button
+                        size="xs"
+                        view="ghost"
+                        label="Не импортировать"
+                        onClick={() => handleSkipMissingSkill(entry)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className={styles.submitButtons}>
+              <Button size="s" view="ghost" label="Отмена" onClick={handleImportClose} />
+              <Button
+                size="s"
+                view="primary"
+                label="Импортировать"
+                disabled={
+                  importState.result.errors.length > 0 || importState.pendingSkills.length > 0
+                }
+                onClick={handleImportApply}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
+
+function cloneExpertDraft(draft: ExpertDraftPayload): ExpertDraftPayload {
+  return {
+    ...draft,
+    domains: [...draft.domains],
+    modules: [...draft.modules],
+    competencies: [...draft.competencies],
+    consultingSkills: [...draft.consultingSkills],
+    softSkills: [...draft.softSkills],
+    focusAreas: [...draft.focusAreas],
+    languages: [...draft.languages],
+    notableProjects: [...draft.notableProjects],
+    skills: draft.skills.map((skill) => ({
+      ...skill,
+      artifacts: [...skill.artifacts],
+      evidence: (skill.evidence ?? []).map((entry) => ({
+        ...entry,
+        artifactIds: entry.artifactIds ? [...entry.artifactIds] : undefined
+      })),
+      usage: skill.usage ? { ...skill.usage } : undefined
+    }))
+  };
+}
 
 function createDefaultExpertDraft(): ExpertDraftPayload {
   return {
