@@ -2936,6 +2936,7 @@ export {
   getSkillsByRole,
   getSkillIdsByRole,
   getRolesForSkill,
+  getSkillNameById,
   skillLevels,
   evidenceStatuses,
   registerSkillDefinition,
