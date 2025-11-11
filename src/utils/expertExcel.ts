@@ -20,6 +20,7 @@ type Workbook = ReturnType<typeof utils.book_new>;
 
 const PROFILE_SHEET = 'Profile';
 const SKILLS_SHEET = 'Skills';
+const HARD_SKILLS_SHEET = 'Hard навыки';
 const EVIDENCE_SHEET = 'Evidence';
 
 const PROFILE_FIELDS = {
@@ -89,6 +90,10 @@ const SKILL_HEADERS = [
 
 type SkillHeader = (typeof SKILL_HEADERS)[number];
 
+const HARD_SKILL_HEADERS = ['ID навыка', 'Навык', 'Уровень', 'Подтверждение'] as const;
+
+type HardSkillHeader = (typeof HARD_SKILL_HEADERS)[number];
+
 const EVIDENCE_HEADERS = ['Skill ID', 'Status', 'Initiative ID', 'Artifacts', 'Comment'] as const;
 
 type EvidenceHeader = (typeof EVIDENCE_HEADERS)[number];
@@ -108,11 +113,21 @@ const proofStatusMap = evidenceStatuses.reduce<Record<string, SkillEvidenceStatu
   return acc;
 }, {});
 
+const proofStatusLabelMap = evidenceStatuses.reduce<Record<SkillEvidenceStatus, string>>((acc, status) => {
+  acc[status.id as SkillEvidenceStatus] = status.label;
+  return acc;
+}, {} as Record<SkillEvidenceStatus, string>);
+
 const skillLevelMap = skillLevels.reduce<Record<string, SkillLevel>>((acc, descriptor) => {
   acc[descriptor.id] = descriptor.id as SkillLevel;
   acc[descriptor.label.toLowerCase()] = descriptor.id as SkillLevel;
   return acc;
 }, {});
+
+const skillLevelLabelMap = skillLevels.reduce<Record<SkillLevel, string>>((acc, descriptor) => {
+  acc[descriptor.id as SkillLevel] = descriptor.label;
+  return acc;
+}, {} as Record<SkillLevel, string>);
 
 const interestMap: Record<string, ExpertSkill['interest']> = {
   high: 'high',
@@ -310,6 +325,31 @@ export const createExpertWorkbook = ({
   });
   utils.book_append_sheet(workbook, skillsSheet, SKILLS_SHEET);
 
+  const hardSkillRows = draft.skills
+    .map((skill) => {
+      const definition = skills[skill.id];
+      if (definition && definition.category !== 'hard') {
+        return null;
+      }
+
+      const skillName = definition?.name ?? getSkillNameById(skill.id) ?? skill.id;
+
+      return {
+        'ID навыка': skill.id,
+        Навык: skillName,
+        Уровень: skillLevelLabelMap[skill.level] ?? skill.level,
+        Подтверждение: proofStatusLabelMap[skill.proofStatus] ?? skill.proofStatus
+      } as Record<HardSkillHeader, string>;
+    })
+    .filter((row): row is Record<HardSkillHeader, string> => Boolean(row));
+
+  if (hardSkillRows.length > 0) {
+    const hardSkillsSheet = utils.json_to_sheet(hardSkillRows, {
+      header: [...HARD_SKILL_HEADERS]
+    });
+    utils.book_append_sheet(workbook, hardSkillsSheet, HARD_SKILLS_SHEET);
+  }
+
   const evidenceRows: Array<Record<EvidenceHeader, string>> = [];
   draft.skills.forEach((skill) => {
     (skill.evidence ?? []).forEach((entry) => {
@@ -337,6 +377,8 @@ export const exportExpertToExcel = (params: ExpertExcelExportParams): ArrayBuffe
 type SkillSheetRow = Record<SkillHeader, string | number>;
 
 type EvidenceSheetRow = Record<EvidenceHeader, string | number>;
+
+type HardSkillSheetRow = Partial<Record<HardSkillHeader, string | number>>;
 
 const parseSkillCategory = (raw: string): SkillDefinition['category'] | null => {
   const normalized = raw.trim().toLowerCase();
@@ -444,6 +486,7 @@ export const parseExpertWorkbook = ({
 
   const profileSheet = workbook.Sheets[PROFILE_SHEET];
   const skillsSheet = workbook.Sheets[SKILLS_SHEET];
+  const hardSkillsSheet = workbook.Sheets[HARD_SKILLS_SHEET];
   const evidenceSheet = workbook.Sheets[EVIDENCE_SHEET];
 
   const errors: string[] = [];
@@ -549,6 +592,97 @@ export const parseExpertWorkbook = ({
   const requestedExpertId = getProfileValue('id') || undefined;
 
   const missingHardSkills: MissingSkillEntry[] = [];
+  const hardSkillOverrides = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      level: SkillLevel;
+      proofStatus: SkillEvidenceStatus;
+      definition?: SkillDefinition;
+      rowNumber: number;
+    }
+  >();
+
+  if (hardSkillsSheet) {
+    const rows = utils.sheet_to_json<HardSkillSheetRow>(hardSkillsSheet, { defval: '' });
+    rows.forEach((row, index) => {
+      const rawId = String(row['ID навыка'] ?? '').trim();
+      const rawName = String(row['Навык'] ?? '').trim();
+      if (!rawId && !rawName) {
+        return;
+      }
+
+      let skillId = rawId;
+      let definition = skillId ? skills[skillId] : undefined;
+
+      if (!definition && rawName) {
+        const existing = findSkillByName(rawName);
+        if (existing) {
+          skillId = existing.id;
+          definition = existing;
+        }
+      }
+
+      if (!skillId && rawName) {
+        skillId = slugifySkillId(rawName);
+      }
+
+      if (!skillId) {
+        errors.push(`Лист «${HARD_SKILLS_SHEET}», строка ${index + 2}: не указан идентификатор или название навыка.`);
+        return;
+      }
+
+      const level = parseSkillLevel(String(row['Уровень'] ?? ''));
+      if (!level) {
+        errors.push(
+          `Лист «${HARD_SKILLS_SHEET}», строка ${index + 2}: некорректное значение уровня для «${rawName || skillId}».`
+        );
+        return;
+      }
+
+      const proofStatus = parseProofStatus(String(row['Подтверждение'] ?? ''));
+      if (!proofStatus) {
+        errors.push(
+          `Лист «${HARD_SKILLS_SHEET}», строка ${index + 2}: некорректный статус подтверждения для «${rawName || skillId}».`
+        );
+        return;
+      }
+
+      const resolvedName = rawName || definition?.name || skillId;
+
+      if (!definition) {
+        const existingMissing = missingHardSkills.find((entry) => entry.requestedId === skillId);
+        if (!existingMissing) {
+          missingHardSkills.push({
+            definition: {
+              id: skillId,
+              name: resolvedName,
+              description: resolvedName,
+              category: 'hard',
+              sources: [],
+              recommendedLevel: 'P',
+              evidenceStatus: 'screened',
+              roles: []
+            },
+            requestedId: skillId,
+            requestedName: resolvedName,
+            rowNumber: index + 2
+          });
+        }
+      }
+
+      hardSkillOverrides.set(skillId, {
+        id: skillId,
+        name: resolvedName,
+        level,
+        proofStatus,
+        definition,
+        rowNumber: index + 2
+      });
+    });
+  }
+
   const skillRows = skillsSheet ? utils.sheet_to_json<SkillSheetRow>(skillsSheet, { defval: '' }) : [];
 
   const skillMap = new Map<string, ExpertSkill>();
@@ -613,21 +747,24 @@ export const parseExpertWorkbook = ({
         parseEvidenceStatus(String(row['Definition Evidence Status'] ?? '')) ?? 'screened';
       const roles = parseRoles(String(row['Definition Roles'] ?? ''));
 
-      missingHardSkills.push({
-        definition: {
-          id: skillId,
-          name: resolvedSkillName,
-          description: definitionDescription || resolvedSkillName,
-          category,
-          sources: definitionSources,
-          recommendedLevel,
-          evidenceStatus,
-          roles
-        },
-        requestedId: skillId,
-        requestedName: resolvedSkillName,
-        rowNumber: index + 2
-      });
+      const alreadyMissing = missingHardSkills.find((entry) => entry.requestedId === skillId);
+      if (!alreadyMissing) {
+        missingHardSkills.push({
+          definition: {
+            id: skillId,
+            name: resolvedSkillName,
+            description: definitionDescription || resolvedSkillName,
+            category,
+            sources: definitionSources,
+            recommendedLevel,
+            evidenceStatus,
+            roles
+          },
+          requestedId: skillId,
+          requestedName: resolvedSkillName,
+          rowNumber: index + 2
+        });
+      }
     }
 
     const usage = usageFrom || usageTo || usageDescription ? { from: usageFrom, to: usageTo, description: usageDescription } : undefined;
@@ -644,6 +781,25 @@ export const parseExpertWorkbook = ({
     };
 
     skillMap.set(skillId, expertSkill);
+  });
+
+  hardSkillOverrides.forEach((override) => {
+    const skill = skillMap.get(override.id);
+    if (skill) {
+      skill.level = override.level;
+      skill.proofStatus = override.proofStatus;
+      return;
+    }
+
+    skillMap.set(override.id, {
+      id: override.id,
+      level: override.level,
+      proofStatus: override.proofStatus,
+      evidence: [],
+      artifacts: [],
+      interest: 'medium',
+      availableFte: 0
+    });
   });
 
   if (evidenceSheet) {
