@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   type ArtifactNode,
   type DomainNode,
+  type ExpertCompetencyRecord,
   type ExpertProfile,
   type ExpertSkill,
   type LibraryDependency,
@@ -28,6 +29,7 @@ import {
   type UserStats,
   evidenceStatuses,
   getSkillsByRole,
+  registerRoleCompetency,
   registerSkillDefinition,
   skillLevels
 } from '../data';
@@ -36,6 +38,7 @@ import {
   exportExpertToExcel,
   parseExpertWorkbook,
   type ExpertImportResult,
+  type MissingCompetencyEntry,
   type MissingSkillEntry
 } from '../utils/expertExcel';
 import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
@@ -3042,6 +3045,7 @@ type ExpertImportDialogState = {
   draft: ExpertDraftPayload;
   result: ExpertImportResult;
   pendingSkills: MissingSkillEntry[];
+  pendingCompetencies: MissingCompetencyEntry[];
   fileName: string;
 };
 
@@ -3099,9 +3103,11 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         ...result,
         errors: [...result.errors],
         warnings: [...result.warnings],
-        missingHardSkills: [...result.missingHardSkills]
+        missingHardSkills: [...result.missingHardSkills],
+        missingCompetencies: [...result.missingCompetencies]
       },
       pendingSkills: [...result.missingHardSkills],
+      pendingCompetencies: [...result.missingCompetencies],
       fileName
     });
     setIsImportModalOpen(true);
@@ -3190,9 +3196,19 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         (item) => item.requestedId !== entry.requestedId
       );
       const filteredSkills = prev.draft.skills.filter((skill) => skill.id !== entry.requestedId);
+      const nextCompetencies = updateCompetenciesFromSkills(
+        filteredSkills,
+        prev.draft.competencies,
+        prev.draft.competencyRecords ?? []
+      );
       return {
         ...prev,
-        draft: { ...prev.draft, skills: filteredSkills },
+        draft: {
+          ...prev.draft,
+          skills: filteredSkills,
+          competencies: nextCompetencies.names,
+          competencyRecords: nextCompetencies.records
+        },
         pendingSkills,
         result: {
           ...prev.result,
@@ -3200,6 +3216,76 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
           warnings: [
             ...prev.result.warnings,
             `Навык «${entry.definition.name}» будет исключён из профиля.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleRegisterMissingCompetency = (entry: MissingCompetencyEntry) => {
+    registerRoleCompetency(entry.roleTitle, entry.competencyName);
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingCompetencies = prev.pendingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      const remainingMissing = prev.result.missingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      return {
+        ...prev,
+        pendingCompetencies,
+        result: {
+          ...prev.result,
+          missingCompetencies: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Компетенция «${entry.competencyName}» добавлена в базу роли «${
+              entry.roleTitle || 'роль не указана'
+            }» и будет импортирована.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleSkipMissingCompetency = (entry: MissingCompetencyEntry) => {
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingCompetencies = prev.pendingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      const remainingMissing = prev.result.missingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      const filteredCompetencies = prev.draft.competencies.filter(
+        (competency) => competency !== entry.competencyName
+      );
+      const filteredRecords = (prev.draft.competencyRecords ?? []).filter(
+        (record) => record.name !== entry.competencyName
+      );
+      return {
+        ...prev,
+        draft: {
+          ...prev.draft,
+          competencies: filteredCompetencies,
+          competencyRecords: filteredRecords
+        },
+        pendingCompetencies,
+        result: {
+          ...prev.result,
+          missingCompetencies: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Компетенция «${entry.competencyName}» будет исключена из профиля.`
           ]
         }
       };
@@ -3316,21 +3402,48 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   }, [draft.languages, languages]);
 
   const updateCompetenciesFromSkills = useCallback(
-    (skills: ExpertSkill[], currentCompetencies: string[]): string[] => {
-      if (!hardSkillDefinitions.length) {
-        return currentCompetencies;
-      }
+    (
+      skills: ExpertSkill[],
+      currentCompetencies: string[],
+      currentRecords: ExpertCompetencyRecord[]
+    ): { names: string[]; records: ExpertCompetencyRecord[] } => {
       const activeNames = new Set<string>();
+      const derivedRecords = new Map<string, ExpertCompetencyRecord>();
       skills.forEach((skill) => {
         const definition = hardSkillMap.get(skill.id);
-        if (definition) {
-          activeNames.add(definition.name);
+        if (!definition) {
+          return;
+        }
+        activeNames.add(definition.name);
+        derivedRecords.set(definition.name, {
+          name: definition.name,
+          level: skill.level,
+          proofStatus: skill.proofStatus
+        });
+      });
+
+      const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
+      const names = mergeStringCollections(preserved, Array.from(activeNames));
+
+      const recordMap = new Map<string, ExpertCompetencyRecord>();
+      currentRecords.forEach((record) => {
+        if (!recordMap.has(record.name)) {
+          recordMap.set(record.name, { ...record });
         }
       });
-      const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
-      return mergeStringCollections(preserved, Array.from(activeNames));
+
+      const records = names.map((name) => {
+        const derived = derivedRecords.get(name);
+        if (derived) {
+          return derived;
+        }
+        const existing = recordMap.get(name);
+        return existing ? { ...existing } : { name };
+      });
+
+      return { names, records };
     },
-    [hardSkillDefinitions.length, hardSkillMap, hardSkillNameSet]
+    [hardSkillMap, hardSkillNameSet]
   );
 
   const areArraysEqual = (first: string[], second: string[]): boolean => {
@@ -3338,6 +3451,23 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       return false;
     }
     return first.every((value, index) => value === second[index]);
+  };
+
+  const areCompetencyRecordsEqual = (
+    first: ExpertCompetencyRecord[],
+    second: ExpertCompetencyRecord[]
+  ): boolean => {
+    if (first.length !== second.length) {
+      return false;
+    }
+    return first.every((record, index) => {
+      const other = second[index];
+      return (
+        record.name === other.name &&
+        record.level === other.level &&
+        record.proofStatus === other.proofStatus
+      );
+    });
   };
 
   const handleHardSkillToggle = (definition: ReturnType<typeof getSkillsByRole>[number], enabled: boolean) => {
@@ -3357,13 +3487,31 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
               availableFte: 0
             }
           ];
-      const nextCompetencies = updateCompetenciesFromSkills(nextSkills, draft.competencies);
-      onChange({ ...draft, skills: nextSkills, competencies: nextCompetencies });
+      const nextCompetencies = updateCompetenciesFromSkills(
+        nextSkills,
+        draft.competencies,
+        draft.competencyRecords ?? []
+      );
+      onChange({
+        ...draft,
+        skills: nextSkills,
+        competencies: nextCompetencies.names,
+        competencyRecords: nextCompetencies.records
+      });
       return;
     }
     const nextSkills = draft.skills.filter((entry) => entry.id !== definition.id);
-    const nextCompetencies = updateCompetenciesFromSkills(nextSkills, draft.competencies);
-    onChange({ ...draft, skills: nextSkills, competencies: nextCompetencies });
+    const nextCompetencies = updateCompetenciesFromSkills(
+      nextSkills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    onChange({
+      ...draft,
+      skills: nextSkills,
+      competencies: nextCompetencies.names,
+      competencyRecords: nextCompetencies.records
+    });
   };
 
   const handleHardSkillLevelChange = (skillId: string, level: SkillLevel) => {
@@ -3375,7 +3523,17 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
           }
         : skill
     );
-    onChange({ ...draft, skills: nextSkills });
+    const nextCompetencies = updateCompetenciesFromSkills(
+      nextSkills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    onChange({
+      ...draft,
+      skills: nextSkills,
+      competencies: nextCompetencies.names,
+      competencyRecords: nextCompetencies.records
+    });
   };
 
   const handleHardSkillEvidenceChange = (skillId: string, status: SkillEvidenceStatus) => {
@@ -3387,7 +3545,17 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
           }
         : skill
     );
-    onChange({ ...draft, skills: nextSkills });
+    const nextCompetencies = updateCompetenciesFromSkills(
+      nextSkills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    onChange({
+      ...draft,
+      skills: nextSkills,
+      competencies: nextCompetencies.names,
+      competencyRecords: nextCompetencies.records
+    });
   };
 
   const handleSoftSkillToggle = (skillName: string, enabled: boolean) => {
@@ -3404,9 +3572,20 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     if (!hardSkillDefinitions.length) {
       return;
     }
-    const recalculated = updateCompetenciesFromSkills(draft.skills, draft.competencies);
-    if (!areArraysEqual(recalculated, draft.competencies)) {
-      onChange({ ...draft, competencies: recalculated });
+    const recalculated = updateCompetenciesFromSkills(
+      draft.skills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    if (
+      !areArraysEqual(recalculated.names, draft.competencies) ||
+      !areCompetencyRecordsEqual(recalculated.records, draft.competencyRecords ?? [])
+    ) {
+      onChange({
+        ...draft,
+        competencies: recalculated.names,
+        competencyRecords: recalculated.records
+      });
     }
   }, [draft, hardSkillDefinitions.length, onChange, updateCompetenciesFromSkills]);
 
@@ -4026,6 +4205,54 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
                 ))}
               </div>
             )}
+            {importState.pendingCompetencies.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold">
+                  Новые компетенции
+                </Text>
+                <Text size="xs" view="secondary">
+                  Эти компетенции отсутствуют в базе для указанной роли. Добавьте их или исключите из импорта.
+                </Text>
+                {importState.pendingCompetencies.map((entry, index) => (
+                  <div
+                    key={`${entry.competencyName}-${entry.roleTitle}-${entry.rowNumber}-${index}`}
+                    className={styles.importSkillCard}
+                  >
+                    <Text size="s" weight="semibold">
+                      {entry.competencyName}
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      Роль: {entry.roleTitle || 'не указана'}
+                    </Text>
+                    {entry.levelLabel && (
+                      <Text size="xs" view="secondary">
+                        Уровень: {entry.levelLabel}
+                      </Text>
+                    )}
+                    {entry.proofLabel && (
+                      <Text size="xs" view="secondary">
+                        Подтверждение: {entry.proofLabel}
+                      </Text>
+                    )}
+                    <Text size="xs" view="secondary">Строка в файле: {entry.rowNumber}</Text>
+                    <div className={styles.importSkillActions}>
+                      <Button
+                        size="xs"
+                        view="primary"
+                        label="Добавить в базу"
+                        onClick={() => handleRegisterMissingCompetency(entry)}
+                      />
+                      <Button
+                        size="xs"
+                        view="ghost"
+                        label="Не импортировать"
+                        onClick={() => handleSkipMissingCompetency(entry)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className={styles.submitButtons}>
               <Button size="s" view="ghost" label="Отмена" onClick={handleImportClose} />
               <Button
@@ -4033,7 +4260,9 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
                 view="primary"
                 label="Импортировать"
                 disabled={
-                  importState.result.errors.length > 0 || importState.pendingSkills.length > 0
+                  importState.result.errors.length > 0 ||
+                  importState.pendingSkills.length > 0 ||
+                  importState.pendingCompetencies.length > 0
                 }
                 onClick={handleImportApply}
               />
@@ -4051,6 +4280,7 @@ function cloneExpertDraft(draft: ExpertDraftPayload): ExpertDraftPayload {
     domains: [...draft.domains],
     modules: [...draft.modules],
     competencies: [...draft.competencies],
+    competencyRecords: (draft.competencyRecords ?? []).map((record) => ({ ...record })),
     consultingSkills: [...draft.consultingSkills],
     softSkills: [...draft.softSkills],
     focusAreas: [...draft.focusAreas],
@@ -4076,6 +4306,7 @@ function createDefaultExpertDraft(): ExpertDraftPayload {
     domains: [],
     modules: [],
     competencies: [],
+    competencyRecords: [],
     consultingSkills: [],
     softSkills: [],
     focusAreas: [],
@@ -4098,6 +4329,7 @@ function expertToDraft(expert: ExpertProfile): ExpertDraftPayload {
     domains: [...expert.domains],
     modules: [...expert.modules],
     competencies: [...expert.competencies],
+    competencyRecords: (expert.competencyRecords ?? []).map((record) => ({ ...record })),
     consultingSkills: [...expert.consultingSkills],
     softSkills: Array.isArray(expert.softSkills) ? [...expert.softSkills] : [],
     focusAreas: [...expert.focusAreas],

@@ -1,6 +1,7 @@
 import { read, utils, write } from 'xlsx';
 import {
   type ExpertAvailability,
+  type ExpertCompetencyRecord,
   type ExpertSkill,
   type SkillDefinition,
   type SkillEvidenceStatus,
@@ -10,6 +11,7 @@ import {
   evidenceStatuses,
   findSkillByName,
   getSkillNameById,
+  isRoleCompetencyKnown,
   roleToSkillsMap,
   skills,
   skillLevels
@@ -22,6 +24,10 @@ const PROFILE_SHEET = 'Profile';
 const SKILLS_SHEET = 'Skills';
 const HARD_SKILLS_SHEET = 'Hard навыки';
 const EVIDENCE_SHEET = 'Evidence';
+
+const PROFILE_HEADERS = ['Атрибут', 'Значение', 'Уровень', 'Подтверждение'] as const;
+const COMPETENCY_FIELD_REGEX = /^компетенция\s*\d+$/i;
+const COMPETENCY_FIELD_EN_REGEX = /^competency\s*\d+$/i;
 
 const PROFILE_FIELDS = {
   id: 'ID эксперта',
@@ -197,12 +203,21 @@ export type MissingSkillEntry = {
   requestedName: string;
 };
 
+export type MissingCompetencyEntry = {
+  competencyName: string;
+  roleTitle: string;
+  rowNumber: number;
+  levelLabel?: string;
+  proofLabel?: string;
+};
+
 export type ExpertImportResult = {
   draft: ExpertDraftPayload;
   requestedExpertId?: string;
   errors: string[];
   warnings: string[];
   missingHardSkills: MissingSkillEntry[];
+  missingCompetencies: MissingCompetencyEntry[];
 };
 
 export type ExpertExcelImportParams = {
@@ -219,9 +234,15 @@ export const createExpertWorkbook = ({
 }: ExpertExcelExportParams): Workbook => {
   const workbook = utils.book_new();
 
-  const profileRows: Array<{ Field: string; Value: string }> = (Object.keys(
-    PROFILE_FIELDS
-  ) as ProfileFieldKey[]).map((key) => {
+  const profileMatrix: string[][] = [
+    [...PROFILE_HEADERS]
+  ];
+
+  const profileKeys = (Object.keys(PROFILE_FIELDS) as ProfileFieldKey[]).filter(
+    (key) => key !== 'competencies'
+  );
+
+  profileKeys.forEach((key) => {
     const field = PROFILE_FIELDS[key];
     let value = '';
 
@@ -268,9 +289,6 @@ export const createExpertWorkbook = ({
       case 'moduleIds':
         value = joinMultivalue(draft.modules);
         break;
-      case 'competencies':
-        value = joinMultivalue(draft.competencies);
-        break;
       case 'consultingSkills':
         value = joinMultivalue(draft.consultingSkills);
         break;
@@ -288,12 +306,44 @@ export const createExpertWorkbook = ({
         break;
     }
 
-    return { Field: field, Value: value };
+    profileMatrix.push([field, value, '', '']);
   });
 
-  const profileSheet = utils.json_to_sheet(profileRows, {
-    header: ['Атрибут', 'Значение']
+  const competencyOrder: string[] = [];
+  const seenCompetencies = new Set<string>();
+  draft.competencies.forEach((name) => {
+    const trimmed = name.trim();
+    if (trimmed && !seenCompetencies.has(trimmed)) {
+      seenCompetencies.add(trimmed);
+      competencyOrder.push(trimmed);
+    }
   });
+  (draft.competencyRecords ?? []).forEach((record) => {
+    const trimmed = record.name.trim();
+    if (trimmed && !seenCompetencies.has(trimmed)) {
+      seenCompetencies.add(trimmed);
+      competencyOrder.push(trimmed);
+    }
+  });
+
+  const competencyRecordMap = new Map<string, ExpertCompetencyRecord>();
+  (draft.competencyRecords ?? []).forEach((record) => {
+    const trimmed = record.name.trim();
+    if (trimmed && !competencyRecordMap.has(trimmed)) {
+      competencyRecordMap.set(trimmed, record);
+    }
+  });
+
+  competencyOrder.forEach((name, index) => {
+    const record = competencyRecordMap.get(name);
+    const levelLabel = record?.level ? skillLevelLabelMap[record.level] ?? record.level : '';
+    const proofLabel = record?.proofStatus
+      ? proofStatusLabelMap[record.proofStatus] ?? record.proofStatus
+      : '';
+    profileMatrix.push([`Компетенция ${index + 1}`, name, levelLabel, proofLabel]);
+  });
+
+  const profileSheet = utils.aoa_to_sheet(profileMatrix);
   utils.book_append_sheet(workbook, profileSheet, PROFILE_SHEET);
 
   const skillRows = draft.skills.map((skill) => {
@@ -496,19 +546,30 @@ export const parseExpertWorkbook = ({
   const moduleNameMap = buildNameMap(moduleLabelMap);
 
   const profileValues = new Map<string, string>();
+  const competencyRows: Array<{ name: string; level: string; proof: string; rowNumber: number }> = [];
   if (profileSheet) {
-    const rows = utils.sheet_to_json<[string, string]>(profileSheet, { header: 1, blankrows: false });
+    const rows = utils.sheet_to_json<(string | number)[]>(profileSheet, {
+      header: 1,
+      blankrows: false
+    });
     rows.forEach((row, index) => {
-      const header = String(row[0] ?? '').trim();
-      if (index === 0 && (header === 'Field' || header === 'Атрибут')) {
+      const fieldLabel = String(row[0] ?? '').trim();
+      if (index === 0 && (fieldLabel === 'Field' || fieldLabel === 'Атрибут')) {
         return;
       }
-      const field = row[0];
-      const value = row[1];
-      if (!field) {
+      if (!fieldLabel) {
         return;
       }
-      profileValues.set(String(field).trim(), String(value ?? ''));
+      const value = row[1] !== undefined ? String(row[1]).trim() : '';
+      const level = row[2] !== undefined ? String(row[2]).trim() : '';
+      const proof = row[3] !== undefined ? String(row[3]).trim() : '';
+
+      if (COMPETENCY_FIELD_REGEX.test(fieldLabel) || COMPETENCY_FIELD_EN_REGEX.test(fieldLabel)) {
+        competencyRows.push({ name: value, level, proof, rowNumber: index + 1 });
+        return;
+      }
+
+      profileValues.set(fieldLabel, value);
     });
   }
 
@@ -532,6 +593,90 @@ export const parseExpertWorkbook = ({
   if (!availabilityValue) {
     errors.push('Некорректное значение доступности сотрудника.');
   }
+
+  type CompetencyCandidate = {
+    record: ExpertCompetencyRecord;
+    rowNumber: number;
+    levelLabel?: string;
+    proofLabel?: string;
+  };
+
+  const competencyCandidateMap = new Map<string, CompetencyCandidate>();
+
+  competencyRows.forEach((row) => {
+    const name = row.name.trim();
+    if (!name) {
+      errors.push(
+        `Лист «${PROFILE_SHEET}», строка ${row.rowNumber}: не указано название компетенции.`
+      );
+      return;
+    }
+
+    let level: SkillLevel | undefined;
+    if (row.level) {
+      const parsedLevel = parseSkillLevel(row.level);
+      if (!parsedLevel) {
+        errors.push(
+          `Лист «${PROFILE_SHEET}», строка ${row.rowNumber}: некорректный уровень компетенции «${name}».`
+        );
+      } else {
+        level = parsedLevel;
+      }
+    }
+
+    let proofStatus: SkillEvidenceStatus | undefined;
+    if (row.proof) {
+      const parsedProof = parseProofStatus(row.proof);
+      if (!parsedProof) {
+        errors.push(
+          `Лист «${PROFILE_SHEET}», строка ${row.rowNumber}: некорректный статус подтверждения для компетенции «${name}».`
+        );
+      } else {
+        proofStatus = parsedProof;
+      }
+    }
+
+    if (competencyCandidateMap.has(name)) {
+      return;
+    }
+
+    const record: ExpertCompetencyRecord = { name };
+    if (level) {
+      record.level = level;
+    }
+    if (proofStatus) {
+      record.proofStatus = proofStatus;
+    }
+
+    competencyCandidateMap.set(name, {
+      record,
+      rowNumber: row.rowNumber,
+      levelLabel: level ? skillLevelLabelMap[level] ?? level : undefined,
+      proofLabel: proofStatus ? proofStatusLabelMap[proofStatus] ?? proofStatus : undefined
+    });
+  });
+
+  const competencyCandidates = Array.from(competencyCandidateMap.values());
+  const fallbackCompetencies = splitMultiline(getProfileValue('competencies'));
+
+  const competencyRecordMap = new Map<string, ExpertCompetencyRecord>();
+  const competencyOrder: string[] = [];
+
+  competencyCandidates.forEach((candidate) => {
+    const name = candidate.record.name;
+    if (!competencyRecordMap.has(name)) {
+      competencyOrder.push(name);
+      competencyRecordMap.set(name, candidate.record);
+    }
+  });
+
+  fallbackCompetencies.forEach((name) => {
+    const trimmed = name.trim();
+    if (trimmed && !competencyRecordMap.has(trimmed)) {
+      competencyOrder.push(trimmed);
+      competencyRecordMap.set(trimmed, { name: trimmed });
+    }
+  });
 
   const domainIds = splitMultiline(getProfileValue('domainIds'));
   const domainNames = splitMultiline(getProfileValue('domains'));
@@ -580,7 +725,8 @@ export const parseExpertWorkbook = ({
     notableProjects: splitMultiline(getProfileValue('notableProjects')),
     availability: availabilityValue ?? 'available',
     availabilityComment: getProfileValue('availabilityComment'),
-    competencies: splitMultiline(getProfileValue('competencies')),
+    competencies: competencyOrder,
+    competencyRecords: competencyOrder.map((name) => competencyRecordMap.get(name) ?? { name }),
     consultingSkills: splitMultiline(getProfileValue('consultingSkills')),
     softSkills: splitMultiline(getProfileValue('softSkills')),
     focusAreas: splitMultiline(getProfileValue('focusAreas')),
@@ -592,6 +738,7 @@ export const parseExpertWorkbook = ({
   const requestedExpertId = getProfileValue('id') || undefined;
 
   const missingHardSkills: MissingSkillEntry[] = [];
+  const missingCompetencies: MissingCompetencyEntry[] = [];
   const hardSkillOverrides = new Map<
     string,
     {
@@ -831,12 +978,28 @@ export const parseExpertWorkbook = ({
 
   draft.skills = Array.from(skillMap.values());
 
+  if (competencyCandidates.length > 0) {
+    const roleTitle = draft.title.trim();
+    competencyCandidates.forEach((candidate) => {
+      if (!isRoleCompetencyKnown(roleTitle, candidate.record.name)) {
+        missingCompetencies.push({
+          competencyName: candidate.record.name,
+          roleTitle,
+          rowNumber: candidate.rowNumber,
+          levelLabel: candidate.levelLabel,
+          proofLabel: candidate.proofLabel
+        });
+      }
+    });
+  }
+
   return {
     draft,
     requestedExpertId,
     errors,
     warnings,
-    missingHardSkills
+    missingHardSkills,
+    missingCompetencies
   };
 };
 

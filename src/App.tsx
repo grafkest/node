@@ -57,6 +57,7 @@ import {
   reuseIndexHistory,
   type ArtifactNode,
   type DomainNode,
+  type ExpertCompetencyRecord,
   type ExpertProfile,
   type ExpertSkill,
   type GraphLink,
@@ -3597,6 +3598,24 @@ function buildExpertFromDraft(
   const domains = deduplicateNonEmpty(draft.domains).filter((id) => options.domainIdSet.has(id));
   const modules = deduplicateNonEmpty(draft.modules).filter((id) => options.moduleIdSet.has(id));
   const competencies = deduplicateNonEmpty(draft.competencies);
+  const competencyRecordLookup = new Map<string, ExpertCompetencyRecord>();
+  (draft.competencyRecords ?? []).forEach((record) => {
+    const name = record.name.trim();
+    if (!name || competencyRecordLookup.has(name)) {
+      return;
+    }
+    const normalized: ExpertCompetencyRecord = { name };
+    if (record.level) {
+      normalized.level = record.level;
+    }
+    if (record.proofStatus) {
+      normalized.proofStatus = record.proofStatus;
+    }
+    competencyRecordLookup.set(name, normalized);
+  });
+  const competencyRecords = competencies.map(
+    (name) => competencyRecordLookup.get(name) ?? { name }
+  );
   const consultingSkills = deduplicateNonEmpty(draft.consultingSkills);
   const softSkills = deduplicateNonEmpty(draft.softSkills ?? []);
   const focusAreas = deduplicateNonEmpty(draft.focusAreas);
@@ -3626,6 +3645,7 @@ function buildExpertFromDraft(
     domains,
     modules,
     competencies,
+    competencyRecords,
     consultingSkills,
     softSkills,
     focusAreas,

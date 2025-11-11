@@ -73,6 +73,12 @@ export type SkillUsage = {
   description?: string;
 };
 
+export type ExpertCompetencyRecord = {
+  name: string;
+  level?: SkillLevel;
+  proofStatus?: SkillEvidenceStatus;
+};
+
 export type ExpertSkill = {
   id: string;
   level: SkillLevel;
@@ -92,6 +98,7 @@ export type ExpertProfile = {
   domains: string[];
   modules: string[];
   competencies: string[];
+  competencyRecords?: ExpertCompetencyRecord[];
   consultingSkills: string[];
   softSkills: string[];
   focusAreas: string[];
@@ -103,6 +110,49 @@ export type ExpertProfile = {
   availability: ExpertAvailability;
   availabilityComment: string;
   skills: ExpertSkill[];
+};
+
+const normalizeRoleTitle = (role: string): string => role.trim().toLowerCase();
+
+const roleCompetencyIndex = new Map<string, Set<string>>();
+
+const addCompetencyToRoleIndex = (roleTitle: string, competency: string) => {
+  const normalizedRole = normalizeRoleTitle(roleTitle);
+  if (!normalizedRole) {
+    return;
+  }
+  const normalizedCompetency = competency.trim();
+  if (!normalizedCompetency) {
+    return;
+  }
+  const current = roleCompetencyIndex.get(normalizedRole) ?? new Set<string>();
+  current.add(normalizedCompetency);
+  roleCompetencyIndex.set(normalizedRole, current);
+};
+
+export const getRoleCompetencies = (roleTitle: string): string[] => {
+  const normalizedRole = normalizeRoleTitle(roleTitle);
+  const values = roleCompetencyIndex.get(normalizedRole);
+  if (!values) {
+    return [];
+  }
+  return Array.from(values).sort((a, b) => a.localeCompare(b, 'ru'));
+};
+
+export const isRoleCompetencyKnown = (roleTitle: string, competency: string): boolean => {
+  const normalizedRole = normalizeRoleTitle(roleTitle);
+  if (!normalizedRole) {
+    return false;
+  }
+  const normalizedCompetency = competency.trim();
+  if (!normalizedCompetency) {
+    return false;
+  }
+  return roleCompetencyIndex.get(normalizedRole)?.has(normalizedCompetency) ?? false;
+};
+
+export const registerRoleCompetency = (roleTitle: string, competency: string): void => {
+  addCompetencyToRoleIndex(roleTitle, competency);
 };
 
 export type InitiativeStatus = 'initiated' | 'in-progress' | 'converted';
@@ -1535,7 +1585,7 @@ export const initiativeNodes: InitiativeNode[] = [
 ];
 
 
- export const experts: ExpertProfile[] = [
+export const experts: ExpertProfile[] = [
   {
     id: 'expert-viktoria-berezhnaya',
     fullName: 'Виктория Бережная',
@@ -2906,6 +2956,11 @@ export const initiatives: Initiative[] = initiativeNodes.map((node, index) => {
     works,
     requirements
   };
+});
+
+experts.forEach((expert) => {
+  expert.competencies.forEach((competency) => addCompetencyToRoleIndex(expert.title, competency));
+  (expert.competencyRecords ?? []).forEach((record) => addCompetencyToRoleIndex(expert.title, record.name));
 });
 
 export { moduleById };
