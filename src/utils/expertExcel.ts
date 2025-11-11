@@ -23,26 +23,48 @@ const SKILLS_SHEET = 'Skills';
 const EVIDENCE_SHEET = 'Evidence';
 
 const PROFILE_FIELDS = {
-  id: 'Expert ID',
-  fullName: 'Full Name',
-  title: 'Title',
-  summary: 'Summary',
-  experienceYears: 'Experience Years',
-  availability: 'Availability',
-  availabilityComment: 'Availability Comment',
-  location: 'Location',
-  contact: 'Contact',
-  languages: 'Languages',
-  domains: 'Domains',
-  domainIds: 'Domain IDs',
-  modules: 'Modules',
-  moduleIds: 'Module IDs',
-  competencies: 'Competencies',
-  consultingSkills: 'Consulting Skills',
-  softSkills: 'Soft Skills',
-  focusAreas: 'Focus Areas',
-  notableProjects: 'Notable Projects'
+  id: 'ID эксперта',
+  fullName: 'ФИО',
+  title: 'Роль / должность',
+  summary: 'Краткое описание',
+  experienceYears: 'Опыт (лет)',
+  availability: 'Доступность',
+  availabilityComment: 'Комментарий по доступности',
+  location: 'Локация',
+  contact: 'Контакты',
+  languages: 'Языки',
+  domains: 'Доменные области',
+  domainIds: 'ID доменов',
+  modules: 'Модули',
+  moduleIds: 'ID модулей',
+  competencies: 'Компетенции',
+  consultingSkills: 'Консалтинговые навыки',
+  softSkills: 'Soft skills',
+  focusAreas: 'Фокусы и задачи',
+  notableProjects: 'Значимые проекты'
 } as const;
+
+const PROFILE_FIELD_ALIASES: Partial<Record<ProfileFieldKey, string[]>> = {
+  id: ['Expert ID'],
+  fullName: ['Full Name'],
+  title: ['Title'],
+  summary: ['Summary'],
+  experienceYears: ['Experience Years'],
+  availability: ['Availability'],
+  availabilityComment: ['Availability Comment'],
+  location: ['Location'],
+  contact: ['Contact'],
+  languages: ['Languages'],
+  domains: ['Domains'],
+  domainIds: ['Domain IDs'],
+  modules: ['Modules'],
+  moduleIds: ['Module IDs'],
+  competencies: ['Competencies'],
+  consultingSkills: ['Consulting Skills'],
+  softSkills: ['Soft Skills'],
+  focusAreas: ['Focus Areas'],
+  notableProjects: ['Notable Projects']
+};
 
 type ProfileFieldKey = keyof typeof PROFILE_FIELDS;
 
@@ -121,9 +143,11 @@ const recommendedLevelMap = skillLevels.reduce<Record<string, SkillLevel>>((acc,
 
 const splitMultiline = (value: string): string[] =>
   value
-    .split(/\r?\n|,/)
+    .split(/[\r\n,;]+/)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+
+const joinMultivalue = (values: string[]): string => values.join('; ');
 
 const buildNameMap = (record: Record<string, string>): Map<string, string> => {
   const map = new Map<string, string>();
@@ -215,34 +239,34 @@ export const createExpertWorkbook = ({
         value = draft.contact;
         break;
       case 'languages':
-        value = draft.languages.join('\n');
+        value = joinMultivalue(draft.languages);
         break;
       case 'domains':
-        value = draft.domains.map((id) => domainLabelMap[id] ?? id).join('\n');
+        value = joinMultivalue(draft.domains.map((id) => domainLabelMap[id] ?? id));
         break;
       case 'domainIds':
-        value = draft.domains.join('\n');
+        value = joinMultivalue(draft.domains);
         break;
       case 'modules':
-        value = draft.modules.map((id) => moduleLabelMap[id] ?? id).join('\n');
+        value = joinMultivalue(draft.modules.map((id) => moduleLabelMap[id] ?? id));
         break;
       case 'moduleIds':
-        value = draft.modules.join('\n');
+        value = joinMultivalue(draft.modules);
         break;
       case 'competencies':
-        value = draft.competencies.join('\n');
+        value = joinMultivalue(draft.competencies);
         break;
       case 'consultingSkills':
-        value = draft.consultingSkills.join('\n');
+        value = joinMultivalue(draft.consultingSkills);
         break;
       case 'softSkills':
-        value = (draft.softSkills ?? []).join('\n');
+        value = joinMultivalue(draft.softSkills ?? []);
         break;
       case 'focusAreas':
-        value = draft.focusAreas.join('\n');
+        value = joinMultivalue(draft.focusAreas);
         break;
       case 'notableProjects':
-        value = draft.notableProjects.join('\n');
+        value = joinMultivalue(draft.notableProjects);
         break;
       default:
         value = '';
@@ -253,7 +277,7 @@ export const createExpertWorkbook = ({
   });
 
   const profileSheet = utils.json_to_sheet(profileRows, {
-    header: ['Field', 'Value']
+    header: ['Атрибут', 'Значение']
   });
   utils.book_append_sheet(workbook, profileSheet, PROFILE_SHEET);
 
@@ -269,15 +293,15 @@ export const createExpertWorkbook = ({
       'Proof Status': skill.proofStatus,
       Interest: skill.interest,
       'Available FTE': skill.availableFte ?? 0,
-      Artifacts: skill.artifacts.join('\n'),
+      Artifacts: joinMultivalue(skill.artifacts),
       'Usage From': usage.from ?? '',
       'Usage To': usage.to ?? '',
       'Usage Description': usage.description ?? '',
       'Definition Description': definition?.description ?? '',
-      'Definition Sources': definition?.sources.join(', ') ?? '',
+      'Definition Sources': joinMultivalue(definition?.sources ?? []),
       'Definition Recommended Level': definition?.recommendedLevel ?? '',
       'Definition Evidence Status': definition?.evidenceStatus ?? '',
-      'Definition Roles': definition?.roles.join(', ') ?? ''
+      'Definition Roles': joinMultivalue(definition?.roles ?? [])
     };
   });
 
@@ -293,7 +317,7 @@ export const createExpertWorkbook = ({
         'Skill ID': skill.id,
         Status: entry.status,
         'Initiative ID': entry.initiativeId ?? '',
-        Artifacts: (entry.artifactIds ?? []).join('\n'),
+        Artifacts: joinMultivalue(entry.artifactIds ?? []),
         Comment: entry.comment ?? ''
       });
     });
@@ -432,7 +456,8 @@ export const parseExpertWorkbook = ({
   if (profileSheet) {
     const rows = utils.sheet_to_json<[string, string]>(profileSheet, { header: 1, blankrows: false });
     rows.forEach((row, index) => {
-      if (index === 0 && row[0] === 'Field') {
+      const header = String(row[0] ?? '').trim();
+      if (index === 0 && (header === 'Field' || header === 'Атрибут')) {
         return;
       }
       const field = row[0];
@@ -444,8 +469,16 @@ export const parseExpertWorkbook = ({
     });
   }
 
-  const getProfileValue = (key: ProfileFieldKey): string =>
-    profileValues.get(PROFILE_FIELDS[key]) ?? '';
+  const getProfileValue = (key: ProfileFieldKey): string => {
+    const labels = [PROFILE_FIELDS[key], ...(PROFILE_FIELD_ALIASES[key] ?? [])];
+    for (const label of labels) {
+      const value = profileValues.get(label);
+      if (value !== undefined) {
+        return value;
+      }
+    }
+    return '';
+  };
 
   const fullName = getProfileValue('fullName').trim();
   if (!fullName) {
