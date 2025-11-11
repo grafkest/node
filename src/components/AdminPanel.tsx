@@ -1,15 +1,17 @@
 import { Button } from '@consta/uikit/Button';
 import { Combobox } from '@consta/uikit/Combobox';
 import { Collapse } from '@consta/uikit/Collapse';
+import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ArtifactNode,
   type DomainNode,
+  type ExpertCompetencyRecord,
   type ExpertProfile,
   type ExpertSkill,
   type LibraryDependency,
@@ -27,8 +29,19 @@ import {
   type UserStats,
   evidenceStatuses,
   getSkillsByRole,
+  registerRoleCompetency,
+  registerSkillDefinition,
   skillLevels
 } from '../data';
+import type { ExpertDraftPayload } from '../types/expert';
+import {
+  exportExpertToExcel,
+  parseExpertWorkbook,
+  type ExpertImportResult,
+  type MissingCompetencyEntry,
+  type MissingSkillEntry
+} from '../utils/expertExcel';
+import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
 import styles from './AdminPanel.module.css';
 
 export type ModuleDraftPayload = {
@@ -89,7 +102,7 @@ export type ArtifactDraftPayload = {
   sampleUrl: string;
 };
 
-export type ExpertDraftPayload = Omit<ExpertProfile, 'id'>;
+export type { ExpertDraftPayload } from '../types/expert';
 
 type AdminPanelProps = {
   modules: ModuleNode[];
@@ -850,6 +863,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           <ExpertForm
             mode={selectedExpertId === '__new__' ? 'create' : 'edit'}
             draft={expertDraft}
+            expertId={selectedExpertId === '__new__' ? null : selectedExpertId}
             domainItems={parentDomainIds}
             domainLabelMap={domainLabelMap}
             moduleLabelMap={moduleLabelMap}
@@ -3014,6 +3028,7 @@ const ArtifactForm: React.FC<ArtifactFormProps> = ({
 type ExpertFormProps = {
   mode: 'create' | 'edit';
   draft: ExpertDraftPayload;
+  expertId: string | null;
   domainItems: string[];
   domainLabelMap: Record<string, string>;
   moduleLabelMap: Record<string, string>;
@@ -3026,9 +3041,18 @@ type ExpertFormProps = {
   onDelete?: () => void;
 };
 
+type ExpertImportDialogState = {
+  draft: ExpertDraftPayload;
+  result: ExpertImportResult;
+  pendingSkills: MissingSkillEntry[];
+  pendingCompetencies: MissingCompetencyEntry[];
+  fileName: string;
+};
+
 const ExpertForm: React.FC<ExpertFormProps> = ({
   mode,
   draft,
+  expertId,
   domainItems,
   domainLabelMap,
   moduleLabelMap,
@@ -3040,6 +3064,13 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   onSubmit,
   onDelete
 }) => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importState, setImportState] = useState<ExpertImportDialogState | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const skillRegistryVersion = useSkillRegistryVersion();
+
   const handleDraftChange = <Key extends keyof ExpertDraftPayload>(
     key: Key,
     value: ExpertDraftPayload[Key]
@@ -3054,6 +3085,236 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       .filter((item) => item.length > 0);
 
   const formatList = (values: string[]): string => values.join('\n');
+
+  const buildExportFileName = () => {
+    const baseName = draft.fullName.trim() || 'expert-profile';
+    const normalized = baseName
+      .replace(/[^0-9A-Za-zА-Яа-яЁё\s-]+/g, '')
+      .trim()
+      .replace(/\s+/g, '_');
+    return `${normalized || 'expert-profile'}.xlsx`;
+  };
+
+  const openImportPreview = (result: ExpertImportResult, fileName: string) => {
+    const normalizedDraft = cloneExpertDraft(result.draft);
+    setImportState({
+      draft: normalizedDraft,
+      result: {
+        ...result,
+        errors: [...result.errors],
+        warnings: [...result.warnings],
+        missingHardSkills: [...result.missingHardSkills],
+        missingCompetencies: [...result.missingCompetencies]
+      },
+      pendingSkills: [...result.missingHardSkills],
+      pendingCompetencies: [...result.missingCompetencies],
+      fileName
+    });
+    setIsImportModalOpen(true);
+  };
+
+  const handleExpertExport = () => {
+    try {
+      const buffer = exportExpertToExcel({
+        draft,
+        expertId,
+        domainLabelMap,
+        moduleLabelMap
+      });
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = buildExportFileName();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setImportError('Не удалось экспортировать профиль. Попробуйте ещё раз.');
+      console.error('Failed to export expert profile', error);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportClose = () => {
+    setIsImportModalOpen(false);
+    setImportState(null);
+  };
+
+  const handleImportApply = () => {
+    if (!importState) {
+      return;
+    }
+    onChange(importState.draft);
+    setImportState(null);
+    setIsImportModalOpen(false);
+    setImportError(null);
+  };
+
+  const handleRegisterMissingSkill = (entry: MissingSkillEntry) => {
+    registerSkillDefinition(entry.definition);
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingSkills = prev.pendingSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      const remainingMissing = prev.result.missingHardSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      return {
+        ...prev,
+        pendingSkills,
+        result: {
+          ...prev.result,
+          missingHardSkills: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Навык «${entry.definition.name}» добавлен в базу и будет импортирован.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleSkipMissingSkill = (entry: MissingSkillEntry) => {
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingSkills = prev.pendingSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      const remainingMissing = prev.result.missingHardSkills.filter(
+        (item) => item.requestedId !== entry.requestedId
+      );
+      const filteredSkills = prev.draft.skills.filter((skill) => skill.id !== entry.requestedId);
+      const nextCompetencies = updateCompetenciesFromSkills(
+        filteredSkills,
+        prev.draft.competencies,
+        prev.draft.competencyRecords ?? []
+      );
+      return {
+        ...prev,
+        draft: {
+          ...prev.draft,
+          skills: filteredSkills,
+          competencies: nextCompetencies.names,
+          competencyRecords: nextCompetencies.records
+        },
+        pendingSkills,
+        result: {
+          ...prev.result,
+          missingHardSkills: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Навык «${entry.definition.name}» будет исключён из профиля.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleRegisterMissingCompetency = (entry: MissingCompetencyEntry) => {
+    registerRoleCompetency(entry.roleTitle, entry.competencyName);
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingCompetencies = prev.pendingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      const remainingMissing = prev.result.missingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      return {
+        ...prev,
+        pendingCompetencies,
+        result: {
+          ...prev.result,
+          missingCompetencies: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Компетенция «${entry.competencyName}» добавлена в базу роли «${
+              entry.roleTitle || 'роль не указана'
+            }» и будет импортирована.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleSkipMissingCompetency = (entry: MissingCompetencyEntry) => {
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingCompetencies = prev.pendingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      const remainingMissing = prev.result.missingCompetencies.filter(
+        (item) =>
+          item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
+      );
+      const filteredCompetencies = prev.draft.competencies.filter(
+        (competency) => competency !== entry.competencyName
+      );
+      const filteredRecords = (prev.draft.competencyRecords ?? []).filter(
+        (record) => record.name !== entry.competencyName
+      );
+      return {
+        ...prev,
+        draft: {
+          ...prev.draft,
+          competencies: filteredCompetencies,
+          competencyRecords: filteredRecords
+        },
+        pendingCompetencies,
+        result: {
+          ...prev.result,
+          missingCompetencies: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Компетенция «${entry.competencyName}» будет исключена из профиля.`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const [file] = event.target.files ?? [];
+    if (!file) {
+      return;
+    }
+    event.target.value = '';
+    setImportError(null);
+    setIsImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const result = parseExpertWorkbook({
+        buffer,
+        domainLabelMap,
+        moduleLabelMap
+      });
+      openImportPreview(result, file.name);
+    } catch (error) {
+      setImportError('Не удалось обработать файл. Проверьте формат и попробуйте снова.');
+      console.error('Failed to import expert profile', error);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleExperienceChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const numeric = Number(event.target.value);
@@ -3078,18 +3339,20 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   );
 
   const hardSkillDefinitions = useMemo(() => {
+    void skillRegistryVersion;
     if (!selectedRole) {
       return [] as ReturnType<typeof getSkillsByRole>;
     }
     return getSkillsByRole(selectedRole).filter((definition) => definition.category === 'hard');
-  }, [selectedRole]);
+  }, [selectedRole, skillRegistryVersion]);
 
   const softSkillDefinitions = useMemo(() => {
+    void skillRegistryVersion;
     if (!selectedRole) {
       return [] as ReturnType<typeof getSkillsByRole>;
     }
     return getSkillsByRole(selectedRole).filter((definition) => definition.category === 'soft');
-  }, [selectedRole]);
+  }, [selectedRole, skillRegistryVersion]);
 
   const hardSkillMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof getSkillsByRole>[number]>();
@@ -3138,29 +3401,73 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     return [...base, CREATE_LANGUAGE_OPTION];
   }, [draft.languages, languages]);
 
-  const updateCompetenciesFromSkills = (
-    skills: ExpertSkill[],
-    currentCompetencies: string[]
-  ): string[] => {
-    if (!hardSkillDefinitions.length) {
-      return currentCompetencies;
-    }
-    const activeNames = new Set<string>();
-    skills.forEach((skill) => {
-      const definition = hardSkillMap.get(skill.id);
-      if (definition) {
+  const updateCompetenciesFromSkills = useCallback(
+    (
+      skills: ExpertSkill[],
+      currentCompetencies: string[],
+      currentRecords: ExpertCompetencyRecord[]
+    ): { names: string[]; records: ExpertCompetencyRecord[] } => {
+      const activeNames = new Set<string>();
+      const derivedRecords = new Map<string, ExpertCompetencyRecord>();
+      skills.forEach((skill) => {
+        const definition = hardSkillMap.get(skill.id);
+        if (!definition) {
+          return;
+        }
         activeNames.add(definition.name);
-      }
-    });
-    const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
-    return mergeStringCollections(preserved, Array.from(activeNames));
-  };
+        derivedRecords.set(definition.name, {
+          name: definition.name,
+          level: skill.level,
+          proofStatus: skill.proofStatus
+        });
+      });
+
+      const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
+      const names = mergeStringCollections(preserved, Array.from(activeNames));
+
+      const recordMap = new Map<string, ExpertCompetencyRecord>();
+      currentRecords.forEach((record) => {
+        if (!recordMap.has(record.name)) {
+          recordMap.set(record.name, { ...record });
+        }
+      });
+
+      const records = names.map((name) => {
+        const derived = derivedRecords.get(name);
+        if (derived) {
+          return derived;
+        }
+        const existing = recordMap.get(name);
+        return existing ? { ...existing } : { name };
+      });
+
+      return { names, records };
+    },
+    [hardSkillMap, hardSkillNameSet]
+  );
 
   const areArraysEqual = (first: string[], second: string[]): boolean => {
     if (first.length !== second.length) {
       return false;
     }
     return first.every((value, index) => value === second[index]);
+  };
+
+  const areCompetencyRecordsEqual = (
+    first: ExpertCompetencyRecord[],
+    second: ExpertCompetencyRecord[]
+  ): boolean => {
+    if (first.length !== second.length) {
+      return false;
+    }
+    return first.every((record, index) => {
+      const other = second[index];
+      return (
+        record.name === other.name &&
+        record.level === other.level &&
+        record.proofStatus === other.proofStatus
+      );
+    });
   };
 
   const handleHardSkillToggle = (definition: ReturnType<typeof getSkillsByRole>[number], enabled: boolean) => {
@@ -3180,13 +3487,31 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
               availableFte: 0
             }
           ];
-      const nextCompetencies = updateCompetenciesFromSkills(nextSkills, draft.competencies);
-      onChange({ ...draft, skills: nextSkills, competencies: nextCompetencies });
+      const nextCompetencies = updateCompetenciesFromSkills(
+        nextSkills,
+        draft.competencies,
+        draft.competencyRecords ?? []
+      );
+      onChange({
+        ...draft,
+        skills: nextSkills,
+        competencies: nextCompetencies.names,
+        competencyRecords: nextCompetencies.records
+      });
       return;
     }
     const nextSkills = draft.skills.filter((entry) => entry.id !== definition.id);
-    const nextCompetencies = updateCompetenciesFromSkills(nextSkills, draft.competencies);
-    onChange({ ...draft, skills: nextSkills, competencies: nextCompetencies });
+    const nextCompetencies = updateCompetenciesFromSkills(
+      nextSkills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    onChange({
+      ...draft,
+      skills: nextSkills,
+      competencies: nextCompetencies.names,
+      competencyRecords: nextCompetencies.records
+    });
   };
 
   const handleHardSkillLevelChange = (skillId: string, level: SkillLevel) => {
@@ -3198,7 +3523,17 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
           }
         : skill
     );
-    onChange({ ...draft, skills: nextSkills });
+    const nextCompetencies = updateCompetenciesFromSkills(
+      nextSkills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    onChange({
+      ...draft,
+      skills: nextSkills,
+      competencies: nextCompetencies.names,
+      competencyRecords: nextCompetencies.records
+    });
   };
 
   const handleHardSkillEvidenceChange = (skillId: string, status: SkillEvidenceStatus) => {
@@ -3210,7 +3545,17 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
           }
         : skill
     );
-    onChange({ ...draft, skills: nextSkills });
+    const nextCompetencies = updateCompetenciesFromSkills(
+      nextSkills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    onChange({
+      ...draft,
+      skills: nextSkills,
+      competencies: nextCompetencies.names,
+      competencyRecords: nextCompetencies.records
+    });
   };
 
   const handleSoftSkillToggle = (skillName: string, enabled: boolean) => {
@@ -3227,14 +3572,51 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     if (!hardSkillDefinitions.length) {
       return;
     }
-    const recalculated = updateCompetenciesFromSkills(draft.skills, draft.competencies);
-    if (!areArraysEqual(recalculated, draft.competencies)) {
-      onChange({ ...draft, competencies: recalculated });
+    const recalculated = updateCompetenciesFromSkills(
+      draft.skills,
+      draft.competencies,
+      draft.competencyRecords ?? []
+    );
+    if (
+      !areArraysEqual(recalculated.names, draft.competencies) ||
+      !areCompetencyRecordsEqual(recalculated.records, draft.competencyRecords ?? [])
+    ) {
+      onChange({
+        ...draft,
+        competencies: recalculated.names,
+        competencyRecords: recalculated.records
+      });
     }
-  }, [draft.skills, draft.competencies, hardSkillDefinitions, onChange]);
+  }, [draft, hardSkillDefinitions.length, onChange, updateCompetenciesFromSkills]);
 
   return (
     <div className={styles.formBody}>
+      <div className={styles.importToolbar}>
+        <Button
+          size="s"
+          view="ghost"
+          label="Импорт из Excel"
+          disabled={isImporting}
+          onClick={handleImportClick}
+        />
+        <Button size="s" view="ghost" label="Экспорт в Excel" onClick={handleExpertExport} />
+        <Text size="xs" view="secondary" className={styles.importHint}>
+          Используйте Excel-шаблон для обмена профилями сотрудников.
+        </Text>
+      </div>
+      {importError && (
+        <Text size="xs" view="alert" className={styles.importError}>
+          {importError}
+        </Text>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx"
+        hidden
+        onChange={handleFileChange}
+      />
+
       <div className={styles.formHeader}>
         <div>
           <Text size="l" weight="semibold" className={styles.formTitle}>
@@ -3703,9 +4085,218 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
           />
         </div>
       </div>
+
+      <Modal isOpen={isImportModalOpen && Boolean(importState)} hasOverlay onClose={handleImportClose}>
+        {importState && (
+          <div className={styles.importModal}>
+            <Text size="l" weight="semibold">
+              Импорт профиля сотрудника
+            </Text>
+            <div className={styles.importSummary}>
+              <div>
+                <Text size="xs" view="secondary">
+                  Файл
+                </Text>
+                <Text size="s">{importState.fileName}</Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Имя сотрудника
+                </Text>
+                <Text size="s">{importState.draft.fullName || 'Не указано'}</Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Количество навыков
+                </Text>
+                <Text size="s">{importState.draft.skills.length}</Text>
+              </div>
+              <div>
+                <Text size="xs" view="secondary">
+                  Домены
+                </Text>
+                <Text size="s">{importState.draft.domains.length}</Text>
+              </div>
+            </div>
+            {importState.result.requestedExpertId && (
+              <Text size="xs" view="secondary">
+                Идентификатор из файла: {importState.result.requestedExpertId}
+              </Text>
+            )}
+            {importState.result.errors.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold" view="alert">
+                  Обнаружены ошибки
+                </Text>
+                <ul className={styles.importWarningList}>
+                  {importState.result.errors.map((message, index) => (
+                    <li key={`import-error-${index}`}>
+                      <Text size="s" view="alert">
+                        {message}
+                      </Text>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importState.result.warnings.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold" view="warning">
+                  Предупреждения
+                </Text>
+                <ul className={styles.importWarningList}>
+                  {importState.result.warnings.map((message, index) => (
+                    <li key={`import-warning-${index}`}>
+                      <Text size="s" view="warning">
+                        {message}
+                      </Text>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importState.pendingSkills.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold">
+                  Новые hard skills
+                </Text>
+                <Text size="xs" view="secondary">
+                  Эти навыки отсутствуют в базе. Добавьте их или исключите из импорта.
+                </Text>
+                {importState.pendingSkills.map((entry) => (
+                  <div key={entry.requestedId} className={styles.importSkillCard}>
+                    <Text size="s" weight="semibold">
+                      {entry.definition.name}
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      Категория: {entry.definition.category}, рекомендуемый уровень: {entry.definition.recommendedLevel}
+                    </Text>
+                    {entry.definition.description && (
+                      <Text size="xs" view="secondary">{entry.definition.description}</Text>
+                    )}
+                    <Text size="xs" view="secondary">
+                      Источники:{' '}
+                      {entry.definition.sources.length > 0
+                        ? entry.definition.sources.join(', ')
+                        : 'не указаны'}
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      Роли:{' '}
+                      {entry.definition.roles.length > 0
+                        ? entry.definition.roles.join(', ')
+                        : 'не указаны'}
+                    </Text>
+                    <Text size="xs" view="secondary">Строка в файле: {entry.rowNumber}</Text>
+                    <div className={styles.importSkillActions}>
+                      <Button
+                        size="xs"
+                        view="primary"
+                        label="Добавить в базу"
+                        onClick={() => handleRegisterMissingSkill(entry)}
+                      />
+                      <Button
+                        size="xs"
+                        view="ghost"
+                        label="Не импортировать"
+                        onClick={() => handleSkipMissingSkill(entry)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {importState.pendingCompetencies.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold">
+                  Новые компетенции
+                </Text>
+                <Text size="xs" view="secondary">
+                  Эти компетенции отсутствуют в базе для указанной роли. Добавьте их или исключите из импорта.
+                </Text>
+                {importState.pendingCompetencies.map((entry, index) => (
+                  <div
+                    key={`${entry.competencyName}-${entry.roleTitle}-${entry.rowNumber}-${index}`}
+                    className={styles.importSkillCard}
+                  >
+                    <Text size="s" weight="semibold">
+                      {entry.competencyName}
+                    </Text>
+                    <Text size="xs" view="secondary">
+                      Роль: {entry.roleTitle || 'не указана'}
+                    </Text>
+                    {entry.levelLabel && (
+                      <Text size="xs" view="secondary">
+                        Уровень: {entry.levelLabel}
+                      </Text>
+                    )}
+                    {entry.proofLabel && (
+                      <Text size="xs" view="secondary">
+                        Подтверждение: {entry.proofLabel}
+                      </Text>
+                    )}
+                    <Text size="xs" view="secondary">Строка в файле: {entry.rowNumber}</Text>
+                    <div className={styles.importSkillActions}>
+                      <Button
+                        size="xs"
+                        view="primary"
+                        label="Добавить в базу"
+                        onClick={() => handleRegisterMissingCompetency(entry)}
+                      />
+                      <Button
+                        size="xs"
+                        view="ghost"
+                        label="Не импортировать"
+                        onClick={() => handleSkipMissingCompetency(entry)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className={styles.submitButtons}>
+              <Button size="s" view="ghost" label="Отмена" onClick={handleImportClose} />
+              <Button
+                size="s"
+                view="primary"
+                label="Импортировать"
+                disabled={
+                  importState.result.errors.length > 0 ||
+                  importState.pendingSkills.length > 0 ||
+                  importState.pendingCompetencies.length > 0
+                }
+                onClick={handleImportApply}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
+
+function cloneExpertDraft(draft: ExpertDraftPayload): ExpertDraftPayload {
+  return {
+    ...draft,
+    domains: [...draft.domains],
+    modules: [...draft.modules],
+    competencies: [...draft.competencies],
+    competencyRecords: (draft.competencyRecords ?? []).map((record) => ({ ...record })),
+    consultingSkills: [...draft.consultingSkills],
+    softSkills: [...draft.softSkills],
+    focusAreas: [...draft.focusAreas],
+    languages: [...draft.languages],
+    notableProjects: [...draft.notableProjects],
+    skills: draft.skills.map((skill) => ({
+      ...skill,
+      artifacts: [...skill.artifacts],
+      evidence: (skill.evidence ?? []).map((entry) => ({
+        ...entry,
+        artifactIds: entry.artifactIds ? [...entry.artifactIds] : undefined
+      })),
+      usage: skill.usage ? { ...skill.usage } : undefined
+    }))
+  };
+}
 
 function createDefaultExpertDraft(): ExpertDraftPayload {
   return {
@@ -3715,6 +4306,7 @@ function createDefaultExpertDraft(): ExpertDraftPayload {
     domains: [],
     modules: [],
     competencies: [],
+    competencyRecords: [],
     consultingSkills: [],
     softSkills: [],
     focusAreas: [],
@@ -3737,6 +4329,7 @@ function expertToDraft(expert: ExpertProfile): ExpertDraftPayload {
     domains: [...expert.domains],
     modules: [...expert.modules],
     competencies: [...expert.competencies],
+    competencyRecords: (expert.competencyRecords ?? []).map((record) => ({ ...record })),
     consultingSkills: [...expert.consultingSkills],
     softSkills: Array.isArray(expert.softSkills) ? [...expert.softSkills] : [],
     focusAreas: [...expert.focusAreas],
