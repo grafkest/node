@@ -1006,7 +1006,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
               placeholder="Например, подготовить паспорт проекта"
               className={styles.fullWidthField}
               value={taskDraft.name}
-              onChange={({ value }) => {
+              onChange={(value) => {
                 setTaskDraft((prev) => ({
                   ...prev,
                   name: value ?? ''
@@ -1047,7 +1047,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                 type="date"
                 label="Срок до"
                 value={taskDraft.dueDate}
-                onChange={({ value }) => {
+                onChange={(value) => {
                   setTaskDraft((prev) => ({
                     ...prev,
                     dueDate: value ?? ''
@@ -1062,7 +1062,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                   type="date"
                   label="Дата начала"
                   value={taskDraft.startDate}
-                  onChange={({ value }) => {
+                  onChange={(value) => {
                     setTaskDraft((prev) => ({
                       ...prev,
                       startDate: value ?? ''
@@ -1075,7 +1075,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                   label="Срок, дни"
                   value={taskDraft.durationDays}
                   min={1}
-                  onChange={({ value }) => {
+                  onChange={(value) => {
                     setTaskDraft((prev) => ({
                       ...prev,
                       durationDays: value ?? ''
@@ -1091,7 +1091,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                   type="date"
                   label="Дата начала"
                   value={taskDraft.startDate}
-                  onChange={({ value }) => {
+                  onChange={(value) => {
                     setTaskDraft((prev) => ({
                       ...prev,
                       startDate: value ?? ''
@@ -1103,7 +1103,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                   type="date"
                   label="Дата окончания"
                   value={taskDraft.endDate}
-                  onChange={({ value }) => {
+                  onChange={(value) => {
                     setTaskDraft((prev) => ({
                       ...prev,
                       endDate: value ?? ''
@@ -1139,7 +1139,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                   label="Срок после, дни"
                   value={taskDraft.durationDays}
                   min={1}
-                  onChange={({ value }) => {
+                  onChange={(value) => {
                     setTaskDraft((prev) => ({
                       ...prev,
                       durationDays: value ?? ''
@@ -1273,7 +1273,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
             rows={3}
             placeholder="Кратко опишите ожидаемый результат"
             value={taskDraft.description}
-            onChange={({ value }) => {
+            onChange={(value) => {
               setTaskDraft((prev) => ({
                 ...prev,
                 description: value ?? ''
