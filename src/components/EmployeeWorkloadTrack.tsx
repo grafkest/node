@@ -770,40 +770,6 @@ const EmployeeWorkloadTrack: React.FC = () => {
       .map((task) => ({ label: task.name, value: task.id }));
   }, [editingTaskId, tasks]);
 
-  const getAssigneeRenderItem = useCallback(
-    (
-      contextTask: TaskListItem | null,
-      previewTask: TaskListItem | null
-    ): SelectProps<SelectOption<string>>['renderItem'] => {
-      // eslint-disable-next-line react/display-name
-      return ({ item, active, hovered, onMouseEnter, onClick, ref }) => {
-        const referenceTask = contextTask ?? previewTask;
-        const loadLevel = referenceTask
-          ? getAssigneeLoadLevel(item.value, referenceTask)
-          : 'free';
-
-        return (
-          <div
-            ref={ref}
-            className={styles.assigneeOption}
-            data-active={active ? 'true' : 'false'}
-            data-hovered={hovered ? 'true' : 'false'}
-            onMouseEnter={onMouseEnter}
-            onClick={(event) => {
-              onClick(event);
-            }}
-          >
-            <div className={styles.assigneeOptionContent}>
-              <span className={styles.assigneeIndicator} data-level={loadLevel ?? 'free'} />
-              <Text size="xs" weight="semibold">{item.label}</Text>
-            </div>
-          </div>
-        );
-      };
-    },
-    [getAssigneeLoadLevel]
-  );
-
   const calculateParallelTasks = useCallback(
     (assigneeId: string, referenceTask: TaskListItem) => {
       const dueDate = getScheduleDueDate(referenceTask.schedule);
@@ -855,6 +821,40 @@ const EmployeeWorkloadTrack: React.FC = () => {
       return 'busy';
     },
     [calculateParallelTasks]
+  );
+
+  const getAssigneeRenderItem = useCallback(
+    (
+      contextTask: TaskListItem | null,
+      previewTask: TaskListItem | null
+    ): SelectProps<SelectOption<string>>['renderItem'] => {
+      // eslint-disable-next-line react/display-name
+      return ({ item, active, hovered, onMouseEnter, onClick, ref }) => {
+        const referenceTask = contextTask ?? previewTask;
+        const loadLevel = referenceTask
+          ? getAssigneeLoadLevel(item.value, referenceTask)
+          : 'free';
+
+        return (
+          <div
+            ref={ref}
+            className={styles.assigneeOption}
+            data-active={active ? 'true' : 'false'}
+            data-hovered={hovered ? 'true' : 'false'}
+            onMouseEnter={onMouseEnter}
+            onClick={(event) => {
+              onClick(event);
+            }}
+          >
+            <div className={styles.assigneeOptionContent}>
+              <span className={styles.assigneeIndicator} data-level={loadLevel ?? 'free'} />
+              <Text size="xs" weight="semibold">{item.label}</Text>
+            </div>
+          </div>
+        );
+      };
+    },
+    [getAssigneeLoadLevel]
   );
 
   const handleAssignTask = useCallback((taskId: string, assigneeId: string | null) => {
