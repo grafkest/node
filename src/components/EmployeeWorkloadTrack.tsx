@@ -1,7 +1,9 @@
+/* eslint-disable react/prop-types */
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Card } from '@consta/uikit/Card';
 import { Select } from '@consta/uikit/Select';
+import type { SelectProps } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
@@ -40,14 +42,48 @@ type EmployeeWorkload = {
 type TaskPriority = 'low' | 'medium' | 'high';
 type TaskStatus = 'new' | 'in-progress' | 'paused' | 'rejected' | 'completed';
 
+type TaskScheduleType = 'due-date' | 'start-duration' | 'date-range' | 'after-task';
+
+type TaskSchedule =
+  | { type: 'due-date'; dueDate: string }
+  | { type: 'start-duration'; startDate: string; durationDays: number }
+  | { type: 'date-range'; startDate: string; endDate: string }
+  | { type: 'after-task'; predecessorId: string; durationDays: number };
+
+type TaskRelationType = 'system' | 'initiative' | 'external' | 'methodology';
+
+type TaskRelation =
+  | { type: 'system'; targetId: string | null }
+  | { type: 'initiative'; targetId: string | null }
+  | { type: 'external' }
+  | { type: 'methodology' };
+
 type TaskListItem = {
   id: string;
   name: string;
   priority: TaskPriority;
-  dueDate: string;
   status: TaskStatus;
   assigneeId: string | null;
   description: string;
+  schedule: TaskSchedule;
+  relation: TaskRelation;
+};
+
+type TaskDraft = {
+  name: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assigneeId: string | null;
+  description: string;
+  scheduleType: TaskScheduleType;
+  dueDate: string;
+  startDate: string;
+  endDate: string;
+  durationDays: string;
+  predecessorId: string | null;
+  relationType: TaskRelationType;
+  relatedSystemId: string | null;
+  relatedInitiativeId: string | null;
 };
 
 type SelectOption<Value extends string> = {
@@ -227,91 +263,389 @@ const priorityBadges: Record<TaskPriority, { label: string; badgeStatus: 'normal
   'high': { label: 'Высокий', badgeStatus: 'alert' }
 };
 
+const scheduleTypeOptions: SelectOption<TaskScheduleType>[] = [
+  { label: 'Сделать до даты', value: 'due-date' },
+  { label: 'Дата начала + срок', value: 'start-duration' },
+  { label: 'Период выполнения', value: 'date-range' },
+  { label: 'После другой задачи', value: 'after-task' }
+];
+
+const systemOptions: SelectOption<string>[] = [
+  { label: 'Платформа мониторинга промыслов', value: 'system-monitoring' },
+  { label: 'Цифровой двойник месторождения', value: 'system-digital-twin' },
+  { label: 'Система управления добычей', value: 'system-production-control' },
+  { label: 'Лаборатория продвинутой аналитики', value: 'system-analytics-lab' }
+];
+
+const initiativeOptions: SelectOption<string>[] = [
+  { label: 'Цифровизация добычи 2025', value: 'initiative-digital-2025' },
+  { label: 'Экосистема интеллектуальных скважин', value: 'initiative-smart-wells' },
+  { label: 'Программа беспилотного мониторинга', value: 'initiative-drone-monitoring' },
+  { label: 'Устойчивое бурение', value: 'initiative-sustainable-drilling' }
+];
+
+const relationTypeOptions: SelectOption<TaskRelationType>[] = [
+  { label: 'К системе', value: 'system' },
+  { label: 'К инициативе', value: 'initiative' },
+  { label: 'Внешний запрос', value: 'external' },
+  { label: 'Методологическая активность', value: 'methodology' }
+];
+
+const relationLabels: Record<TaskRelationType, string> = {
+  system: 'К системе',
+  initiative: 'К инициативе',
+  external: 'Внешний запрос',
+  methodology: 'Методологическая активность'
+};
+
 const initialTaskList: TaskListItem[] = [
   {
     id: 'team-task-1',
     name: 'Скрининг участков',
     priority: 'medium',
-    dueDate: '2024-03-11',
     status: 'paused',
     assigneeId: 'emp-1',
     description:
-      'Провести аналитический скрининг участков и подготовить рекомендации для инвест-совета.'
+      'Провести аналитический скрининг участков и подготовить рекомендации для инвест-совета.',
+    schedule: { type: 'due-date', dueDate: '2024-03-11' },
+    relation: { type: 'system', targetId: 'system-production-control' }
   },
   {
     id: 'team-task-2',
     name: 'Первичный расчёт экономики',
     priority: 'high',
-    dueDate: '2024-02-15',
     status: 'in-progress',
     assigneeId: 'emp-2',
-    description: 'Собрать исходные данные и подготовить первичный расчёт показателей экономики проекта.'
+    description: 'Собрать исходные данные и подготовить первичный расчёт показателей экономики проекта.',
+    schedule: { type: 'start-duration', startDate: '2024-01-29', durationDays: 14 },
+    relation: { type: 'initiative', targetId: 'initiative-digital-2025' }
   },
   {
     id: 'team-task-3',
     name: 'Формирование паспорта инвест-проекта',
     priority: 'medium',
-    dueDate: '2024-03-29',
     status: 'new',
     assigneeId: 'emp-3',
     description:
-      'Согласовать исходные данные, актуализировать паспорт проекта и подтвердить ответственных исполнителей.'
+      'Согласовать исходные данные, актуализировать паспорт проекта и подтвердить ответственных исполнителей.',
+    schedule: { type: 'date-range', startDate: '2024-02-19', endDate: '2024-03-29' },
+    relation: { type: 'initiative', targetId: 'initiative-smart-wells' }
   },
   {
     id: 'team-task-4',
     name: 'Разбор запускных параметров тепловой схемы',
     priority: 'low',
-    dueDate: '2024-03-29',
     status: 'new',
     assigneeId: null,
-    description: 'Подготовить рекомендации по корректировке запускных параметров и согласовать их с технологами.'
+    description: 'Подготовить рекомендации по корректировке запускных параметров и согласовать их с технологами.',
+    schedule: { type: 'due-date', dueDate: '2024-03-29' },
+    relation: { type: 'external' }
   },
   {
     id: 'team-task-5',
     name: 'Актуализация профилей добычи',
     priority: 'low',
-    dueDate: '2024-03-29',
     status: 'new',
     assigneeId: 'emp-4',
-    description: 'Собрать данные по текущим профилям добычи и обновить отчётность для инвестиционного комитета.'
+    description: 'Собрать данные по текущим профилям добычи и обновить отчётность для инвестиционного комитета.',
+    schedule: { type: 'start-duration', startDate: '2024-02-12', durationDays: 21 },
+    relation: { type: 'system', targetId: 'system-monitoring' }
   },
   {
     id: 'team-task-6',
     name: 'Расчёт кустов без учёта инфраструктуры',
     priority: 'medium',
-    dueDate: '2024-03-29',
     status: 'new',
     assigneeId: null,
-    description: 'Подготовить сравнительный анализ кустовых расчётов без учёта инфраструктурных ограничений.'
+    description: 'Подготовить сравнительный анализ кустовых расчётов без учёта инфраструктурных ограничений.',
+    schedule: { type: 'after-task', predecessorId: 'team-task-5', durationDays: 7 },
+    relation: { type: 'methodology' }
   },
   {
     id: 'team-task-7',
     name: 'Формирование сценариев отсечения КП',
     priority: 'medium',
-    dueDate: '2024-03-29',
     status: 'new',
     assigneeId: null,
-    description: 'Разработать сценарии отсечения КП и согласовать с командой архитекторов.'
+    description: 'Разработать сценарии отсечения КП и согласовать с командой архитекторов.',
+    schedule: { type: 'date-range', startDate: '2024-03-04', endDate: '2024-03-22' },
+    relation: { type: 'system', targetId: 'system-digital-twin' }
   },
   {
     id: 'team-task-8',
     name: 'Расчёт экономики',
     priority: 'high',
-    dueDate: '2024-04-12',
     status: 'rejected',
     assigneeId: 'emp-2',
-    description: 'Подготовить альтернативный расчёт экономики с учётом новых вводных от финансового блока.'
+    description: 'Подготовить альтернативный расчёт экономики с учётом новых вводных от финансового блока.',
+    schedule: { type: 'due-date', dueDate: '2024-04-12' },
+    relation: { type: 'initiative', targetId: 'initiative-drone-monitoring' }
   },
   {
     id: 'team-task-9',
     name: 'План даты ввода',
     priority: 'medium',
-    dueDate: '2024-03-29',
     status: 'completed',
     assigneeId: 'emp-1',
-    description: 'Согласовать график ввода объектов и передать его в проектный офис.'
+    description: 'Согласовать график ввода объектов и передать его в проектный офис.',
+    schedule: { type: 'start-duration', startDate: '2024-01-15', durationDays: 45 },
+    relation: { type: 'system', targetId: 'system-analytics-lab' }
   }
 ];
+
+const defaultTaskDraft: TaskDraft = {
+  name: '',
+  priority: 'medium',
+  status: 'new',
+  assigneeId: null,
+  description: '',
+  scheduleType: 'due-date',
+  dueDate: '',
+  startDate: '',
+  endDate: '',
+  durationDays: '',
+  predecessorId: null,
+  relationType: 'system',
+  relatedSystemId: systemOptions[0]?.value ?? null,
+  relatedInitiativeId: initiativeOptions[0]?.value ?? null
+};
+
+const parseDateValue = (value: string): Date | null => {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const getScheduleDueDate = (schedule: TaskSchedule): Date | null => {
+  switch (schedule.type) {
+    case 'due-date':
+      return parseDateValue(schedule.dueDate);
+    case 'start-duration': {
+      const start = parseDateValue(schedule.startDate);
+      if (!start) {
+        return null;
+      }
+      return addDays(start, schedule.durationDays);
+    }
+    case 'date-range':
+      return parseDateValue(schedule.endDate);
+    case 'after-task':
+      return null;
+    default:
+      return null;
+  }
+};
+
+const formatDateDisplay = (value: string): string => {
+  const date = parseDateValue(value);
+  if (!date) {
+    return 'Не указана';
+  }
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(date);
+};
+
+const formatScheduleSummary = (
+  task: TaskListItem,
+  taskNameLookup: Map<string, string>
+): string => {
+  const { schedule } = task;
+  switch (schedule.type) {
+    case 'due-date':
+      return `До ${formatDateDisplay(schedule.dueDate)}`;
+    case 'start-duration':
+      return `${formatDateDisplay(schedule.startDate)} · ${schedule.durationDays} дн.`;
+    case 'date-range':
+      return `${formatDateDisplay(schedule.startDate)} — ${formatDateDisplay(schedule.endDate)}`;
+    case 'after-task': {
+      const predecessorName = taskNameLookup.get(schedule.predecessorId) ?? 'другой задачи';
+      return `После «${predecessorName}» · ${schedule.durationDays} дн.`;
+    }
+    default:
+      return 'План не задан';
+  }
+};
+
+const formatScheduleDetails = (
+  task: TaskListItem,
+  taskNameLookup: Map<string, string>
+): string => {
+  const { schedule } = task;
+  switch (schedule.type) {
+    case 'due-date':
+      return `Выполнить до ${formatDateDisplay(schedule.dueDate)}`;
+    case 'start-duration':
+      return `Старт ${formatDateDisplay(schedule.startDate)}, длительность ${schedule.durationDays} дн.`;
+    case 'date-range':
+      return `Выполняется с ${formatDateDisplay(schedule.startDate)} по ${formatDateDisplay(schedule.endDate)}`;
+    case 'after-task': {
+      const predecessorName = taskNameLookup.get(schedule.predecessorId) ?? 'связанной задачи';
+      return `После завершения «${predecessorName}», длительность ${schedule.durationDays} дн.`;
+    }
+    default:
+      return 'Планирование не задано';
+  }
+};
+
+const getRelationSummary = (
+  relation: TaskRelation,
+  maps: { systems: Record<string, string>; initiatives: Record<string, string> }
+): string => {
+  switch (relation.type) {
+    case 'system':
+      return relation.targetId
+        ? `${relationLabels.system}: ${maps.systems[relation.targetId] ?? 'Не выбрана'}`
+        : `${relationLabels.system}: Не выбрана`;
+    case 'initiative':
+      return relation.targetId
+        ? `${relationLabels.initiative}: ${maps.initiatives[relation.targetId] ?? 'Не выбрана'}`
+        : `${relationLabels.initiative}: Не выбрана`;
+    case 'external':
+      return relationLabels.external;
+    case 'methodology':
+      return relationLabels.methodology;
+    default:
+      return 'Контекст не задан';
+  }
+};
+
+const parsePositiveInt = (value: string): number | null => {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
+const buildScheduleFromDraft = (draft: TaskDraft): TaskSchedule | null => {
+  switch (draft.scheduleType) {
+    case 'due-date':
+      return draft.dueDate ? { type: 'due-date', dueDate: draft.dueDate } : null;
+    case 'start-duration': {
+      const duration = parsePositiveInt(draft.durationDays);
+      if (!draft.startDate || duration === null) {
+        return null;
+      }
+      return { type: 'start-duration', startDate: draft.startDate, durationDays: duration };
+    }
+    case 'date-range': {
+      if (!draft.startDate || !draft.endDate) {
+        return null;
+      }
+      const startDateValue = parseDateValue(draft.startDate);
+      const endDateValue = parseDateValue(draft.endDate);
+      if (!startDateValue || !endDateValue) {
+        return null;
+      }
+      if (endDateValue.getTime() < startDateValue.getTime()) {
+        return null;
+      }
+      return { type: 'date-range', startDate: draft.startDate, endDate: draft.endDate };
+    }
+    case 'after-task': {
+      const duration = parsePositiveInt(draft.durationDays);
+      if (!draft.predecessorId || duration === null) {
+        return null;
+      }
+      return { type: 'after-task', predecessorId: draft.predecessorId, durationDays: duration };
+    }
+    default:
+      return null;
+  }
+};
+
+const buildRelationFromDraft = (draft: TaskDraft): TaskRelation => {
+  switch (draft.relationType) {
+    case 'system':
+      return { type: 'system', targetId: draft.relatedSystemId ?? null };
+    case 'initiative':
+      return { type: 'initiative', targetId: draft.relatedInitiativeId ?? null };
+    case 'external':
+      return { type: 'external' };
+    case 'methodology':
+      return { type: 'methodology' };
+    default:
+      return { type: 'external' };
+  }
+};
+
+const createPreviewTaskFromDraft = (draft: TaskDraft, id = 'draft'): TaskListItem | null => {
+  const schedule = buildScheduleFromDraft(draft);
+  if (!schedule) {
+    return null;
+  }
+  return {
+    id,
+    name: draft.name || 'Новая задача',
+    priority: draft.priority,
+    status: draft.status,
+    assigneeId: draft.assigneeId,
+    description: draft.description,
+    schedule,
+    relation: buildRelationFromDraft(draft)
+  };
+};
+
+const mapTaskToDraft = (task: TaskListItem): TaskDraft => {
+  const draft: TaskDraft = {
+    name: task.name,
+    priority: task.priority,
+    status: task.status,
+    assigneeId: task.assigneeId,
+    description: task.description,
+    scheduleType: task.schedule.type,
+    dueDate: '',
+    startDate: '',
+    endDate: '',
+    durationDays: '',
+    predecessorId: null,
+    relationType: task.relation.type,
+    relatedSystemId:
+      task.relation.type === 'system'
+        ? task.relation.targetId ?? systemOptions[0]?.value ?? null
+        : systemOptions[0]?.value ?? null,
+    relatedInitiativeId:
+      task.relation.type === 'initiative'
+        ? task.relation.targetId ?? initiativeOptions[0]?.value ?? null
+        : initiativeOptions[0]?.value ?? null
+  };
+
+  switch (task.schedule.type) {
+    case 'due-date':
+      draft.dueDate = task.schedule.dueDate;
+      break;
+    case 'start-duration':
+      draft.startDate = task.schedule.startDate;
+      draft.durationDays = String(task.schedule.durationDays);
+      break;
+    case 'date-range':
+      draft.startDate = task.schedule.startDate;
+      draft.endDate = task.schedule.endDate;
+      break;
+    case 'after-task':
+      draft.predecessorId = task.schedule.predecessorId;
+      draft.durationDays = String(task.schedule.durationDays);
+      break;
+    default:
+      break;
+  }
+
+  return draft;
+};
 
 const viewTabs = [
   { label: 'Дорожка загрузки', value: 'timeline' },
@@ -327,21 +661,8 @@ const EmployeeWorkloadTrack: React.FC = () => {
     initialTaskList[0]?.id ?? null
   );
   const [activeView, setActiveView] = useState<ViewTab>(viewTabs[0]);
-  const [taskDraft, setTaskDraft] = useState<{
-    name: string;
-    priority: TaskPriority;
-    dueDate: string;
-    status: TaskStatus;
-    assigneeId: string | null;
-    description: string;
-  }>({
-    name: '',
-    priority: 'medium',
-    dueDate: '',
-    status: 'new',
-    assigneeId: null,
-    description: ''
-  });
+  const [taskDraft, setTaskDraft] = useState<TaskDraft>(defaultTaskDraft);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const timelineRows = useMemo<GanttTimelineRow[]>(() => {
@@ -413,32 +734,83 @@ const EmployeeWorkloadTrack: React.FC = () => {
     }, {});
   }, []);
 
+  const systemNameMap = useMemo<Record<string, string>>(() => {
+    return systemOptions.reduce<Record<string, string>>((acc, option) => {
+      acc[option.value] = option.label;
+      return acc;
+    }, {});
+  }, []);
+
+  const initiativeNameMap = useMemo<Record<string, string>>(() => {
+    return initiativeOptions.reduce<Record<string, string>>((acc, option) => {
+      acc[option.value] = option.label;
+      return acc;
+    }, {});
+  }, []);
+
   const selectedTask = useMemo(() => {
     return tasks.find((task) => task.id === selectedTaskId) ?? null;
   }, [selectedTaskId, tasks]);
 
-  const formatDate = useCallback((value: string) => {
-    if (!value) {
-      return 'Не указана';
-    }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return 'Не указана';
-    }
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).format(date);
-  }, []);
+  const taskNameLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    tasks.forEach((task) => {
+      map.set(task.id, task.name);
+    });
+    return map;
+  }, [tasks]);
+
+  const draftPreviewTask = useMemo(() => {
+    return createPreviewTaskFromDraft(taskDraft, editingTaskId ?? 'draft-task');
+  }, [editingTaskId, taskDraft]);
+
+  const predecessorOptions = useMemo<SelectOption<string>[]>(() => {
+    return tasks
+      .filter((task) => task.id !== editingTaskId)
+      .map((task) => ({ label: task.name, value: task.id }));
+  }, [editingTaskId, tasks]);
+
+  const getAssigneeRenderItem = useCallback(
+    (
+      contextTask: TaskListItem | null,
+      previewTask: TaskListItem | null
+    ): SelectProps<SelectOption<string>>['renderItem'] => {
+      // eslint-disable-next-line react/display-name
+      return ({ item, active, hovered, onMouseEnter, onClick, ref }) => {
+        const referenceTask = contextTask ?? previewTask;
+        const loadLevel = referenceTask
+          ? getAssigneeLoadLevel(item.value, referenceTask)
+          : 'free';
+
+        return (
+          <div
+            ref={ref}
+            className={styles.assigneeOption}
+            data-active={active ? 'true' : 'false'}
+            data-hovered={hovered ? 'true' : 'false'}
+            onMouseEnter={onMouseEnter}
+            onClick={(event) => {
+              onClick(event);
+            }}
+          >
+            <div className={styles.assigneeOptionContent}>
+              <span className={styles.assigneeIndicator} data-level={loadLevel ?? 'free'} />
+              <Text size="xs" weight="semibold">{item.label}</Text>
+            </div>
+          </div>
+        );
+      };
+    },
+    [getAssigneeLoadLevel]
+  );
 
   const calculateParallelTasks = useCallback(
     (assigneeId: string, referenceTask: TaskListItem) => {
-      const dueDate = referenceTask.dueDate ? new Date(referenceTask.dueDate) : null;
+      const dueDate = getScheduleDueDate(referenceTask.schedule);
       const employee = mockEmployees.find((item) => item.id === assigneeId);
 
       const overlappingProjectTasks = (() => {
-        if (!employee || !dueDate || Number.isNaN(dueDate.getTime())) {
+        if (!employee || !dueDate) {
           return 0;
         }
 
@@ -459,11 +831,8 @@ const EmployeeWorkloadTrack: React.FC = () => {
         if (task.assigneeId !== assigneeId) {
           return false;
         }
-        if (!dueDate || !task.dueDate) {
-          return true;
-        }
-        const compareDate = new Date(task.dueDate);
-        if (Number.isNaN(compareDate.getTime())) {
+        const compareDate = getScheduleDueDate(task.schedule);
+        if (!dueDate || !compareDate) {
           return true;
         }
         return compareDate.getTime() === dueDate.getTime();
@@ -502,33 +871,92 @@ const EmployeeWorkloadTrack: React.FC = () => {
   }, []);
 
   const handleSubmitTask = useCallback(() => {
-    if (!taskDraft.name.trim() || !taskDraft.dueDate) {
-      setFormError('Укажите наименование задачи и дату реализации.');
+    const trimmedName = taskDraft.name.trim();
+    if (!trimmedName) {
+      setFormError('Укажите наименование задачи.');
       return;
     }
 
-    const newTask: TaskListItem = {
-      id: `team-task-${Date.now()}`,
-      name: taskDraft.name.trim(),
+    const schedule = buildScheduleFromDraft(taskDraft);
+    if (!schedule) {
+      switch (taskDraft.scheduleType) {
+        case 'due-date':
+          setFormError('Укажите дату, к которой нужно выполнить задачу.');
+          break;
+        case 'start-duration':
+          setFormError('Укажите дату начала и корректный срок реализации.');
+          break;
+        case 'date-range':
+          setFormError('Укажите корректный период выполнения задачи.');
+          break;
+        case 'after-task':
+          setFormError('Выберите связанную задачу и срок реализации после неё.');
+          break;
+        default:
+          setFormError('Заполните параметры планирования задачи.');
+      }
+      return;
+    }
+
+    if (schedule.type === 'after-task' && editingTaskId && schedule.predecessorId === editingTaskId) {
+      setFormError('Связанная задача не может совпадать с редактируемой.');
+      return;
+    }
+
+    if (taskDraft.relationType === 'system' && !taskDraft.relatedSystemId) {
+      setFormError('Выберите систему, к которой относится задача.');
+      return;
+    }
+
+    if (taskDraft.relationType === 'initiative' && !taskDraft.relatedInitiativeId) {
+      setFormError('Выберите инициативу, к которой относится задача.');
+      return;
+    }
+
+    const relation = buildRelationFromDraft(taskDraft);
+    const taskId = editingTaskId ?? `team-task-${Date.now()}`;
+    const normalizedDescription =
+      taskDraft.description.trim() || 'Описание будет добавлено позже.';
+
+    const nextTask: TaskListItem = {
+      id: taskId,
+      name: trimmedName,
       priority: taskDraft.priority,
-      dueDate: taskDraft.dueDate,
       status: taskDraft.status,
       assigneeId: taskDraft.assigneeId,
-      description: taskDraft.description.trim() || 'Описание будет добавлено позже.'
+      description: normalizedDescription,
+      schedule,
+      relation
     };
 
-    setTasks((prev) => [newTask, ...prev]);
-    setTaskDraft({
-      name: '',
-      priority: 'medium',
-      dueDate: '',
-      status: 'new',
-      assigneeId: null,
-      description: ''
-    });
+    setTasks((prev) =>
+      editingTaskId
+        ? prev.map((task) => (task.id === editingTaskId ? nextTask : task))
+        : [nextTask, ...prev]
+    );
+    setTaskDraft(() => ({ ...defaultTaskDraft }));
+    setEditingTaskId(null);
     setFormError(null);
-    setSelectedTaskId(newTask.id);
-  }, [taskDraft]);
+    setSelectedTaskId(taskId);
+  }, [editingTaskId, taskDraft]);
+
+  const handleEditTask = useCallback(
+    (task: TaskListItem) => {
+      setTaskDraft(mapTaskToDraft(task));
+      setEditingTaskId(task.id);
+      setFormError(null);
+      if (activeView.value !== 'planner') {
+        setActiveView(viewTabs[1]);
+      }
+    },
+    [activeView.value, setActiveView]
+  );
+
+  const handleCancelEdit = useCallback(() => {
+    setTaskDraft(() => ({ ...defaultTaskDraft }));
+    setEditingTaskId(null);
+    setFormError(null);
+  }, []);
 
   return (
     <div className={styles.wrapper}>
@@ -576,6 +1004,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
               size="s"
               label="Наименование"
               placeholder="Например, подготовить паспорт проекта"
+              className={styles.fullWidthField}
               value={taskDraft.name}
               onChange={({ value }) => {
                 setTaskDraft((prev) => ({
@@ -584,6 +1013,141 @@ const EmployeeWorkloadTrack: React.FC = () => {
                 }));
               }}
             />
+            <Select<SelectOption<TaskScheduleType>>
+              size="s"
+              className={styles.fullWidthField}
+              label="Планирование"
+              items={scheduleTypeOptions}
+              value={
+                scheduleTypeOptions.find((item) => item.value === taskDraft.scheduleType) ?? null
+              }
+              getItemLabel={(item) => item.label}
+              getItemKey={(item) => item.value}
+              onChange={(option) => {
+                setTaskDraft((prev) => {
+                  const nextType = option?.value ?? prev.scheduleType;
+                  if (nextType === prev.scheduleType) {
+                    return prev;
+                  }
+                  return {
+                    ...prev,
+                    scheduleType: nextType,
+                    dueDate: '',
+                    startDate: '',
+                    endDate: '',
+                    durationDays: '',
+                    predecessorId: null
+                  };
+                });
+              }}
+            />
+            {taskDraft.scheduleType === 'due-date' && (
+              <TextField
+                size="s"
+                type="date"
+                label="Срок до"
+                value={taskDraft.dueDate}
+                onChange={({ value }) => {
+                  setTaskDraft((prev) => ({
+                    ...prev,
+                    dueDate: value ?? ''
+                  }));
+                }}
+              />
+            )}
+            {taskDraft.scheduleType === 'start-duration' && (
+              <>
+                <TextField
+                  size="s"
+                  type="date"
+                  label="Дата начала"
+                  value={taskDraft.startDate}
+                  onChange={({ value }) => {
+                    setTaskDraft((prev) => ({
+                      ...prev,
+                      startDate: value ?? ''
+                    }));
+                  }}
+                />
+                <TextField
+                  size="s"
+                  type="number"
+                  label="Срок, дни"
+                  value={taskDraft.durationDays}
+                  min={1}
+                  onChange={({ value }) => {
+                    setTaskDraft((prev) => ({
+                      ...prev,
+                      durationDays: value ?? ''
+                    }));
+                  }}
+                />
+              </>
+            )}
+            {taskDraft.scheduleType === 'date-range' && (
+              <>
+                <TextField
+                  size="s"
+                  type="date"
+                  label="Дата начала"
+                  value={taskDraft.startDate}
+                  onChange={({ value }) => {
+                    setTaskDraft((prev) => ({
+                      ...prev,
+                      startDate: value ?? ''
+                    }));
+                  }}
+                />
+                <TextField
+                  size="s"
+                  type="date"
+                  label="Дата окончания"
+                  value={taskDraft.endDate}
+                  onChange={({ value }) => {
+                    setTaskDraft((prev) => ({
+                      ...prev,
+                      endDate: value ?? ''
+                    }));
+                  }}
+                />
+              </>
+            )}
+            {taskDraft.scheduleType === 'after-task' && (
+              <>
+                <Select<SelectOption<string>>
+                  size="s"
+                  label="Связанная задача"
+                  placeholder="Выберите задачу"
+                  items={predecessorOptions}
+                  value={
+                    taskDraft.predecessorId
+                      ? predecessorOptions.find((option) => option.value === taskDraft.predecessorId) ?? null
+                      : null
+                  }
+                  getItemLabel={(item) => item.label}
+                  getItemKey={(item) => item.value}
+                  onChange={(option) => {
+                    setTaskDraft((prev) => ({
+                      ...prev,
+                      predecessorId: option?.value ?? null
+                    }));
+                  }}
+                />
+                <TextField
+                  size="s"
+                  type="number"
+                  label="Срок после, дни"
+                  value={taskDraft.durationDays}
+                  min={1}
+                  onChange={({ value }) => {
+                    setTaskDraft((prev) => ({
+                      ...prev,
+                      durationDays: value ?? ''
+                    }));
+                  }}
+                />
+              </>
+            )}
             <Select<SelectOption<TaskPriority>>
               size="s"
               label="Приоритет"
@@ -595,18 +1159,6 @@ const EmployeeWorkloadTrack: React.FC = () => {
                 setTaskDraft((prev) => ({
                   ...prev,
                   priority: option?.value ?? prev.priority
-                }));
-              }}
-            />
-            <TextField
-              size="s"
-              type="date"
-              label="Дата реализации"
-              value={taskDraft.dueDate}
-              onChange={({ value }) => {
-                setTaskDraft((prev) => ({
-                  ...prev,
-                  dueDate: value ?? ''
                 }));
               }}
             />
@@ -628,6 +1180,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
               size="s"
               label="Исполнитель"
               placeholder="Назначьте исполнителя"
+              className={styles.fullWidthField}
               items={assigneeOptions}
               value={
                 taskDraft.assigneeId
@@ -636,6 +1189,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
               }
               getItemLabel={(item) => item.label}
               getItemKey={(item) => item.value}
+              renderItem={getAssigneeRenderItem(draftPreviewTask, draftPreviewTask)}
               onChange={(option) => {
                 setTaskDraft((prev) => ({
                   ...prev,
@@ -643,6 +1197,74 @@ const EmployeeWorkloadTrack: React.FC = () => {
                 }));
               }}
             />
+            <Select<SelectOption<TaskRelationType>>
+              size="s"
+              label="Контекст задачи"
+              className={styles.fullWidthField}
+              items={relationTypeOptions}
+              value={
+                relationTypeOptions.find((item) => item.value === taskDraft.relationType) ?? null
+              }
+              getItemLabel={(item) => item.label}
+              getItemKey={(item) => item.value}
+              onChange={(option) => {
+                setTaskDraft((prev) => {
+                  const nextType = option?.value ?? prev.relationType;
+                  return {
+                    ...prev,
+                    relationType: nextType,
+                    relatedSystemId:
+                      nextType === 'system'
+                        ? prev.relatedSystemId ?? systemOptions[0]?.value ?? null
+                        : prev.relatedSystemId,
+                    relatedInitiativeId:
+                      nextType === 'initiative'
+                        ? prev.relatedInitiativeId ?? initiativeOptions[0]?.value ?? null
+                        : prev.relatedInitiativeId
+                  };
+                });
+              }}
+            />
+            {taskDraft.relationType === 'system' && (
+              <Select<SelectOption<string>>
+                size="s"
+                label="Система"
+                items={systemOptions}
+                value={
+                  taskDraft.relatedSystemId
+                    ? systemOptions.find((option) => option.value === taskDraft.relatedSystemId) ?? null
+                    : null
+                }
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.value}
+                onChange={(option) => {
+                  setTaskDraft((prev) => ({
+                    ...prev,
+                    relatedSystemId: option?.value ?? null
+                  }));
+                }}
+              />
+            )}
+            {taskDraft.relationType === 'initiative' && (
+              <Select<SelectOption<string>>
+                size="s"
+                label="Инициатива"
+                items={initiativeOptions}
+                value={
+                  taskDraft.relatedInitiativeId
+                    ? initiativeOptions.find((option) => option.value === taskDraft.relatedInitiativeId) ?? null
+                    : null
+                }
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.value}
+                onChange={(option) => {
+                  setTaskDraft((prev) => ({
+                    ...prev,
+                    relatedInitiativeId: option?.value ?? null
+                  }));
+                }}
+              />
+            )}
           </div>
           <TextField
             size="s"
@@ -664,7 +1286,21 @@ const EmployeeWorkloadTrack: React.FC = () => {
             </Text>
           )}
           <div className={styles.taskFormActions}>
-            <Button type="submit" size="s" view="primary" label="Сохранить задачу" />
+            {editingTaskId && (
+              <Button
+                type="button"
+                size="s"
+                view="secondary"
+                label="Отменить"
+                onClick={handleCancelEdit}
+              />
+            )}
+            <Button
+              type="submit"
+              size="s"
+              view="primary"
+              label={editingTaskId ? 'Сохранить изменения' : 'Добавить задачу'}
+            />
           </div>
         </form>
         <div className={styles.taskTable}>
@@ -676,7 +1312,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
               Приоритет
             </Text>
             <Text size="2xs" view="secondary">
-              Дата реализации
+              Планирование
             </Text>
             <Text size="2xs" view="secondary">
               Статус
@@ -684,12 +1320,20 @@ const EmployeeWorkloadTrack: React.FC = () => {
             <Text size="2xs" view="secondary">
               Исполнители
             </Text>
+            <Text size="2xs" view="secondary">
+              Контекст
+            </Text>
           </div>
           {tasks.map((task) => {
             const priorityBadge = priorityBadges[task.priority];
             const statusBadge = statusBadges[task.status];
             const assigneeName = task.assigneeId ? employeeNameMap[task.assigneeId] : null;
             const loadLevel = task.assigneeId ? getAssigneeLoadLevel(task.assigneeId, task) : null;
+            const scheduleSummary = formatScheduleSummary(task, taskNameLookup);
+            const relationSummary = getRelationSummary(task.relation, {
+              systems: systemNameMap,
+              initiatives: initiativeNameMap
+            });
 
             return (
               <div
@@ -716,7 +1360,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                   label={priorityBadge.label}
                 />
                 <Text size="xs" view="secondary">
-                  {formatDate(task.dueDate)}
+                  {scheduleSummary}
                 </Text>
                 <Badge
                   size="xs"
@@ -739,11 +1383,15 @@ const EmployeeWorkloadTrack: React.FC = () => {
                     value={null}
                     getItemLabel={(item) => item.label}
                     getItemKey={(item) => item.value}
+                    renderItem={getAssigneeRenderItem(task, null)}
                     onChange={(option) => {
                       handleAssignTask(task.id, option?.value ?? null);
                     }}
                   />
                 )}
+                <Text size="xs" view="secondary" className={styles.taskContextCell}>
+                  {relationSummary}
+                </Text>
               </div>
             );
           })}
@@ -767,7 +1415,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
                 label={statusBadges[selectedTask.status].label}
               />
               <Text size="xs" view="secondary">
-                Срок: {formatDate(selectedTask.dueDate)}
+                {formatScheduleDetails(selectedTask, taskNameLookup)}
               </Text>
               {selectedTask.assigneeId && (
                 <div className={styles.taskDetailsAssignee}>
@@ -782,8 +1430,25 @@ const EmployeeWorkloadTrack: React.FC = () => {
               )}
             </div>
             <Text size="xs" view="secondary">
+              {getRelationSummary(selectedTask.relation, {
+                systems: systemNameMap,
+                initiatives: initiativeNameMap
+              })}
+            </Text>
+            <Text size="xs" view="secondary">
               {selectedTask.description}
             </Text>
+            <div className={styles.taskDetailsActions}>
+              <Button
+                size="xs"
+                view="secondary"
+                label={editingTaskId === selectedTask.id ? 'Редактирование открыто' : 'Редактировать'}
+                disabled={editingTaskId === selectedTask.id}
+                onClick={() => {
+                  handleEditTask(selectedTask);
+                }}
+              />
+            </div>
           </div>
         )}
         </Card>

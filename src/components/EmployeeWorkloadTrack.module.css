@@ -72,9 +72,14 @@
   gap: 12px 16px;
 }
 
+.fullWidthField {
+  grid-column: 1 / -1;
+}
+
 .taskFormActions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .taskTable {
@@ -85,7 +90,13 @@
 
 .taskRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(90px, 0.6fr)
+    minmax(140px, 0.9fr)
+    minmax(110px, 0.7fr)
+    minmax(0, 1fr)
+    minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 12px 16px;
@@ -148,6 +159,33 @@
   background: #ff5f5f;
 }
 
+.assigneeOption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.assigneeOption[data-hovered='true'] {
+  background: var(--color-bg-ghost);
+}
+
+.assigneeOption[data-active='true'] {
+  background: var(--color-bg-ghost-hover);
+}
+
+.assigneeOptionContent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.taskContextCell {
+  min-width: 0;
+  word-break: break-word;
+}
+
 .taskDetails {
   display: flex;
   flex-direction: column;
@@ -169,6 +207,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.taskDetailsActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .legend {
@@ -235,6 +279,10 @@
 @media (max-width: 1024px) {
   .taskFormFields {
     grid-template-columns: 1fr;
+  }
+
+  .fullWidthField {
+    grid-column: auto;
   }
 
   .taskRow {
