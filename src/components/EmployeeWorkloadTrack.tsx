@@ -7,7 +7,7 @@ import type { SelectProps } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import GanttTimeline, {
   type GanttTimelineRow,
   type GanttTimelineTaskKind,
@@ -98,30 +98,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'UX-исследователь',
     rank: 1,
     workload: 0.78,
-    availability: 'Свободна с 12 июня',
+    availability: 'Свободна с 8 июля',
     focus: 'Приоритет — пользовательские исследования',
     tasks: [
       {
         id: 'task-1',
         name: 'Расчёт юнит-экономики',
-        start: '2022-11-07',
-        end: '2023-01-24',
+        start: '2024-01-08',
+        end: '2024-02-23',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-2',
         name: 'Аналитика маршрутов клиента',
-        start: '2023-02-03',
-        end: '2023-04-18',
+        start: '2024-03-04',
+        end: '2024-04-26',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-3',
         name: 'Интервью по продукту Сервис X',
-        start: '2023-05-02',
-        end: '2023-06-30',
+        start: '2024-05-06',
+        end: '2024-07-05',
         kind: 'out-of-project',
         badge: 'Вне проекта',
         description: 'Оценка экспертизы для нового направления'
@@ -134,30 +134,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'Продуктовый аналитик',
     rank: 2,
     workload: 0.64,
-    availability: 'Свободен с 3 июля',
+    availability: 'Свободен с 15 июля',
     focus: 'Фокус — аналитика продуктовых метрик',
     tasks: [
       {
         id: 'task-4',
         name: 'Актуализация проекта «Цифровой профиль»',
-        start: '2022-12-05',
-        end: '2023-02-28',
+        start: '2024-01-15',
+        end: '2024-03-01',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-5',
         name: 'Поддержка витрины показателей',
-        start: '2023-03-06',
-        end: '2023-05-26',
+        start: '2024-03-11',
+        end: '2024-05-17',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-6',
         name: 'Концепция расчёта LTV',
-        start: '2023-06-05',
-        end: '2023-07-21',
+        start: '2024-05-27',
+        end: '2024-07-12',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -169,30 +169,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'Менеджер проекта',
     rank: 3,
     workload: 0.88,
-    availability: 'Свободна с 1 августа',
+    availability: 'Свободна с 19 августа',
     focus: 'Работает с кросс-командными поставками',
     tasks: [
       {
         id: 'task-7',
         name: 'Расширение экосистемы партнёров',
-        start: '2023-01-16',
-        end: '2023-03-31',
+        start: '2024-01-22',
+        end: '2024-03-29',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-8',
         name: 'Интеграция API поставщиков',
-        start: '2023-04-10',
-        end: '2023-06-23',
+        start: '2024-04-08',
+        end: '2024-06-21',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-9',
         name: 'Запуск пилота «Экспресс-логистика»',
-        start: '2023-07-03',
-        end: '2023-08-18',
+        start: '2024-07-01',
+        end: '2024-08-16',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -204,30 +204,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'Аналитик данных',
     rank: 4,
     workload: 0.54,
-    availability: 'Свободен с 15 мая',
+    availability: 'Свободен с 29 июля',
     focus: 'Подходит на задачи по ML и BI',
     tasks: [
       {
         id: 'task-10',
         name: 'Миграция отчётности',
-        start: '2022-11-14',
-        end: '2023-01-27',
+        start: '2024-01-29',
+        end: '2024-03-15',
         kind: 'training',
         badge: 'Развитие'
       },
       {
         id: 'task-11',
         name: 'Подготовка витрин ML',
-        start: '2023-02-06',
-        end: '2023-04-21',
+        start: '2024-03-25',
+        end: '2024-05-31',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-12',
         name: 'Разработка модели прогноза спроса',
-        start: '2023-05-08',
-        end: '2023-06-30',
+        start: '2024-06-10',
+        end: '2024-07-26',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -393,6 +393,189 @@ const initialTaskList: TaskListItem[] = [
   }
 ];
 
+const TEAM_TASKS_STORAGE_KEY = 'employee-workload-track:team-tasks';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object';
+};
+
+const isStoredTaskSchedule = (value: unknown): value is TaskSchedule => {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+
+  switch (value.type) {
+    case 'due-date':
+      return typeof value.dueDate === 'string';
+    case 'start-duration':
+      return typeof value.startDate === 'string' && typeof value.durationDays === 'number';
+    case 'date-range':
+      return typeof value.startDate === 'string' && typeof value.endDate === 'string';
+    case 'after-task':
+      return typeof value.predecessorId === 'string' && typeof value.durationDays === 'number';
+    default:
+      return false;
+  }
+};
+
+const isStoredTaskRelation = (value: unknown): value is TaskRelation => {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+
+  switch (value.type) {
+    case 'system':
+    case 'initiative':
+      return value.targetId === null || typeof value.targetId === 'string';
+    case 'external':
+    case 'methodology':
+      return true;
+    default:
+      return false;
+  }
+};
+
+const isStoredTask = (value: unknown): value is TaskListItem => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { id, name, priority, status, assigneeId, description, schedule, relation } = value;
+
+  if (typeof id !== 'string' || typeof name !== 'string' || typeof description !== 'string') {
+    return false;
+  }
+
+  if (assigneeId !== null && typeof assigneeId !== 'string') {
+    return false;
+  }
+
+  if (!['low', 'medium', 'high'].includes(priority as string)) {
+    return false;
+  }
+
+  if (!['new', 'in-progress', 'paused', 'rejected', 'completed'].includes(status as string)) {
+    return false;
+  }
+
+  if (!isStoredTaskSchedule(schedule)) {
+    return false;
+  }
+
+  if (!isStoredTaskRelation(relation)) {
+    return false;
+  }
+
+  return true;
+};
+
+const loadStoredTasks = (): TaskListItem[] | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const rawValue = window.localStorage.getItem(TEAM_TASKS_STORAGE_KEY);
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    const normalized = parsed.filter(isStoredTask).map((task) => ({
+      ...task,
+      assigneeId: task.assigneeId ?? null,
+      schedule: { ...task.schedule },
+      relation: { ...task.relation }
+    }));
+
+    return normalized;
+  } catch {
+    return null;
+  }
+};
+
+const persistStoredTasks = (tasks: TaskListItem[]): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(TEAM_TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+type TaskScheduleWindow = { start: Date; end: Date };
+
+const formatIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const resolveTaskScheduleWindow = (
+  task: TaskListItem,
+  taskMap: Map<string, TaskListItem>,
+  stack: Set<string> = new Set()
+): TaskScheduleWindow | null => {
+  if (stack.has(task.id)) {
+    return null;
+  }
+
+  const nextStack = new Set(stack);
+  nextStack.add(task.id);
+
+  const { schedule } = task;
+
+  switch (schedule.type) {
+    case 'due-date': {
+      const dueDate = parseDateValue(schedule.dueDate);
+      if (!dueDate) {
+        return null;
+      }
+      const day = startOfDay(dueDate);
+      return { start: day, end: day };
+    }
+    case 'start-duration': {
+      const startDate = parseDateValue(schedule.startDate);
+      if (!startDate) {
+        return null;
+      }
+      const dueDate = addDays(startDate, schedule.durationDays);
+      return { start: startOfDay(startDate), end: startOfDay(dueDate) };
+    }
+    case 'date-range': {
+      const startDate = parseDateValue(schedule.startDate);
+      const endDate = parseDateValue(schedule.endDate);
+      if (!startDate || !endDate || endDate.getTime() < startDate.getTime()) {
+        return null;
+      }
+      return { start: startOfDay(startDate), end: startOfDay(endDate) };
+    }
+    case 'after-task': {
+      const predecessor = schedule.predecessorId ? taskMap.get(schedule.predecessorId) : undefined;
+      if (!predecessor) {
+        return null;
+      }
+      const predecessorWindow = resolveTaskScheduleWindow(predecessor, taskMap, nextStack);
+      if (!predecessorWindow) {
+        return null;
+      }
+      const startDate = addDays(predecessorWindow.end, 1);
+      const dueDate = addDays(predecessorWindow.end, schedule.durationDays);
+      return { start: startOfDay(startDate), end: startOfDay(dueDate) };
+    }
+    default:
+      return null;
+  }
+};
+
 const defaultTaskDraft: TaskDraft = {
   name: '',
   priority: 'medium',
@@ -422,6 +605,175 @@ const addDays = (date: Date, days: number): Date => {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+};
+
+const addMonths = (date: Date, months: number): Date => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months, 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const addYears = (date: Date, years: number): Date => {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() + years, 0, 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const startOfDay = (date: Date): Date => {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const startOfWeek = (date: Date): Date => {
+  const result = startOfDay(date);
+  const day = result.getDay();
+  const diff = (day + 6) % 7;
+  result.setDate(result.getDate() - diff);
+  return result;
+};
+
+const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const startOfYear = (date: Date): Date => new Date(date.getFullYear(), 0, 1);
+
+const toDate = (value: Date | string): Date => {
+  if (value instanceof Date) {
+    return value;
+  }
+  return new Date(value);
+};
+
+const capitalize = (value: string): string => {
+  if (!value) {
+    return value;
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const weekFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'short'
+});
+
+const monthLabelFormatter = new Intl.DateTimeFormat('ru-RU', {
+  month: 'long',
+  year: 'numeric'
+});
+
+const yearLabelFormatter = new Intl.DateTimeFormat('ru-RU', {
+  year: 'numeric'
+});
+
+const formatWeekLabel = (start: Date, endInclusive: Date): string => {
+  const startLabel = capitalize(weekFormatter.format(start));
+  const endLabel = capitalize(weekFormatter.format(endInclusive));
+  if (startLabel === endLabel) {
+    return startLabel;
+  }
+  return `${startLabel} – ${endLabel}`;
+};
+
+type PeriodOption = {
+  label: string;
+  value: string;
+  start: Date;
+  end: Date;
+};
+
+const buildWeekOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfWeek(addDays(minDate, -7));
+  const latest = startOfWeek(addDays(maxDate, 7));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 104) {
+    const start = cursor;
+    const end = addDays(start, 7);
+    options.push({
+      label: formatWeekLabel(start, addDays(end, -1)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addDays(cursor, 7);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfWeek(baseStart);
+    const end = addDays(start, 7);
+    options.push({
+      label: formatWeekLabel(start, addDays(end, -1)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
+};
+
+const buildMonthOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfMonth(addMonths(minDate, -1));
+  const latest = startOfMonth(addMonths(maxDate, 1));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 48) {
+    const start = cursor;
+    const end = addMonths(start, 1);
+    options.push({
+      label: capitalize(monthLabelFormatter.format(start)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addMonths(cursor, 1);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfMonth(baseStart);
+    const end = addMonths(start, 1);
+    options.push({
+      label: capitalize(monthLabelFormatter.format(start)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
+};
+
+const buildYearOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfYear(addYears(minDate, -1));
+  const latest = startOfYear(addYears(maxDate, 1));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 12) {
+    const start = cursor;
+    const end = addYears(start, 1);
+    options.push({
+      label: yearLabelFormatter.format(start),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addYears(cursor, 1);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfYear(baseStart);
+    const end = addYears(start, 1);
+    options.push({
+      label: yearLabelFormatter.format(start),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
 };
 
 const getScheduleDueDate = (schedule: TaskSchedule): Date | null => {
@@ -654,16 +1006,161 @@ const viewTabs = [
 
 type ViewTab = (typeof viewTabs)[number];
 
+type TimelineScale = TimelineScaleTab['value'];
+
 const EmployeeWorkloadTrack: React.FC = () => {
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
-  const [tasks, setTasks] = useState<TaskListItem[]>(initialTaskList);
+  const initialStoredTasks = useMemo(() => loadStoredTasks() ?? initialTaskList, []);
+
+  const [tasks, setTasks] = useState<TaskListItem[]>(initialStoredTasks);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
-    initialTaskList[0]?.id ?? null
+    initialStoredTasks[0]?.id ?? null
   );
   const [activeView, setActiveView] = useState<ViewTab>(viewTabs[0]);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(defaultTaskDraft);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const taskMap = useMemo(() => {
+    const map = new Map<string, TaskListItem>();
+    tasks.forEach((task) => {
+      map.set(task.id, task);
+    });
+    return map;
+  }, [tasks]);
+
+  const teamTaskWindows = useMemo(() => {
+    const windows = new Map<string, TaskScheduleWindow>();
+    tasks.forEach((task) => {
+      const window = resolveTaskScheduleWindow(task, taskMap);
+      if (window) {
+        windows.set(task.id, window);
+      }
+    });
+    return windows;
+  }, [taskMap, tasks]);
+
+  useEffect(() => {
+    persistStoredTasks(tasks);
+  }, [tasks]);
+
+  useEffect(() => {
+    if (tasks.length === 0) {
+      if (selectedTaskId !== null) {
+        setSelectedTaskId(null);
+      }
+      return;
+    }
+
+    if (!tasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskId(tasks[0]?.id ?? null);
+    }
+  }, [selectedTaskId, tasks]);
+
+  const teamTimelineTasksByEmployee = useMemo(() => {
+    const map = new Map<string, WorkloadTask[]>();
+    tasks.forEach((task) => {
+      if (!task.assigneeId) {
+        return;
+      }
+      const window = teamTaskWindows.get(task.id);
+      if (!window) {
+        return;
+      }
+      const entry = map.get(task.assigneeId) ?? [];
+      entry.push({
+        id: task.id,
+        name: task.name,
+        start: formatIsoDate(window.start),
+        end: formatIsoDate(window.end),
+        kind: 'project',
+        badge: 'Команда',
+        description: task.description
+      });
+      map.set(task.assigneeId, entry);
+    });
+
+    map.forEach((list) => {
+      list.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    });
+
+    return map;
+  }, [tasks, teamTaskWindows]);
+
+  const baseStart = useMemo(() => {
+    const now = new Date();
+    return startOfDay(new Date(now.getFullYear(), 0, 1));
+  }, []);
+
+  const timelineDateTasks = useMemo(() => {
+    const projectTasks = mockEmployees.flatMap((employee) =>
+      employee.tasks.map((task) => ({
+        start: startOfDay(toDate(task.start)),
+        end: startOfDay(toDate(task.end))
+      }))
+    );
+
+    const teamTasks = Array.from(teamTaskWindows.values()).map((window) => ({
+      start: startOfDay(window.start),
+      end: startOfDay(window.end)
+    }));
+
+    return [...projectTasks, ...teamTasks];
+  }, [teamTaskWindows]);
+
+  const minTaskStart = useMemo(() => {
+    if (timelineDateTasks.length === 0) {
+      return baseStart;
+    }
+    return timelineDateTasks.reduce((min, task) => (task.start < min ? task.start : min), timelineDateTasks[0].start);
+  }, [baseStart, timelineDateTasks]);
+
+  const maxTaskEnd = useMemo(() => {
+    if (timelineDateTasks.length === 0) {
+      return baseStart;
+    }
+    return timelineDateTasks.reduce((max, task) => (task.end > max ? task.end : max), timelineDateTasks[0].end);
+  }, [baseStart, timelineDateTasks]);
+
+  const periodOptions = useMemo(
+    () => ({
+      week: buildWeekOptions(baseStart, minTaskStart, maxTaskEnd),
+      month: buildMonthOptions(baseStart, minTaskStart, maxTaskEnd),
+      year: buildYearOptions(baseStart, minTaskStart, maxTaskEnd)
+    }),
+    [baseStart, maxTaskEnd, minTaskStart]
+  );
+
+  const [selectedPeriods, setSelectedPeriods] = useState<Record<TimelineScale, string | null>>(() => ({
+    week: periodOptions.week[0]?.value ?? null,
+    month: periodOptions.month[0]?.value ?? null,
+    year: periodOptions.year[0]?.value ?? null
+  }));
+
+  useEffect(() => {
+    setSelectedPeriods((prev) => ({
+      week:
+        prev.week && periodOptions.week.some((option) => option.value === prev.week)
+          ? prev.week
+          : periodOptions.week[0]?.value ?? null,
+      month:
+        prev.month && periodOptions.month.some((option) => option.value === prev.month)
+          ? prev.month
+          : periodOptions.month[0]?.value ?? null,
+      year:
+        prev.year && periodOptions.year.some((option) => option.value === prev.year)
+          ? prev.year
+          : periodOptions.year[0]?.value ?? null
+    }));
+  }, [periodOptions]);
+
+  const currentPeriodOptions = periodOptions[scale.value];
+  const selectedPeriodValue = selectedPeriods[scale.value];
+  const activePeriod = currentPeriodOptions.find((option) => option.value === selectedPeriodValue) ?? null;
+  const displayedPeriod = activePeriod ?? currentPeriodOptions[0] ?? null;
+  const resolvedViewRange = displayedPeriod
+    ? { start: displayedPeriod.start, end: displayedPeriod.end }
+    : undefined;
 
   const timelineRows = useMemo<GanttTimelineRow[]>(() => {
     return mockEmployees.map((employee) => {
@@ -671,7 +1168,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
         .slice()
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-      const tasks = sortedTasks.map((task) => ({
+      const baseTasks = sortedTasks.map((task) => ({
         id: task.id,
         name: task.name,
         start: task.start,
@@ -680,6 +1177,12 @@ const EmployeeWorkloadTrack: React.FC = () => {
         badge: task.badge,
         description: task.description
       }));
+
+      const teamTasks = teamTimelineTasksByEmployee.get(employee.id) ?? [];
+
+      const tasks = [...baseTasks, ...teamTasks].sort(
+        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+      );
 
       const sidebar = (
         <div className={styles.employeeCell}>
@@ -718,7 +1221,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
       return { id: employee.id, sidebar, tasks };
     });
-  }, []);
+  }, [teamTimelineTasksByEmployee]);
 
   const assigneeOptions = useMemo<SelectOption<string>[]>(() => {
     return mockEmployees.map((employee) => ({
@@ -772,7 +1275,8 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
   const calculateParallelTasks = useCallback(
     (assigneeId: string, referenceTask: TaskListItem) => {
-      const dueDate = getScheduleDueDate(referenceTask.schedule);
+      const dueDate =
+        teamTaskWindows.get(referenceTask.id)?.end ?? getScheduleDueDate(referenceTask.schedule);
       const employee = mockEmployees.find((item) => item.id === assigneeId);
 
       const overlappingProjectTasks = (() => {
@@ -797,7 +1301,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
         if (task.assigneeId !== assigneeId) {
           return false;
         }
-        const compareDate = getScheduleDueDate(task.schedule);
+        const compareDate = teamTaskWindows.get(task.id)?.end ?? getScheduleDueDate(task.schedule);
         if (!dueDate || !compareDate) {
           return true;
         }
@@ -806,7 +1310,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
       return overlappingProjectTasks + overlappingTeamTasks;
     },
-    [tasks]
+    [tasks, teamTaskWindows]
   );
 
   const getAssigneeLoadLevel = useCallback(
@@ -1472,14 +1976,33 @@ const EmployeeWorkloadTrack: React.FC = () => {
             </Text>
           </div>
         </div>
-        <Tabs<TimelineScaleTab>
-          size="s"
-          items={timelineScaleTabs}
-          value={scale}
-          getItemLabel={(item) => item.label}
-          getItemKey={(item) => item.value}
-          onChange={setScale}
-        />
+        <div className={styles.headerControls}>
+          <Tabs<TimelineScaleTab>
+            size="s"
+            items={timelineScaleTabs}
+            value={scale}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={setScale}
+          />
+          <Select<PeriodOption>
+            size="s"
+            className={styles.periodSelect}
+            label="Период"
+            placeholder="Выберите период"
+            items={currentPeriodOptions}
+            value={displayedPeriod ?? null}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={(option) =>
+              setSelectedPeriods((prev) => ({
+                ...prev,
+                [scale.value]: option?.value ?? null
+              }))
+            }
+            disabled={currentPeriodOptions.length === 0}
+          />
+        </div>
       </header>
       <div className={styles.legend} aria-hidden={true}>
         <div className={styles.legendItem}>
@@ -1501,7 +2024,12 @@ const EmployeeWorkloadTrack: React.FC = () => {
           </Text>
         </div>
       </div>
-      <GanttTimeline axisLabel="Сотрудник" scale={scale.value} rows={timelineRows} />
+      <GanttTimeline
+        axisLabel="Сотрудник"
+        scale={scale.value}
+        rows={timelineRows}
+        viewRange={resolvedViewRange}
+      />
         </Card>
       )}
     </div>

@@ -39,11 +39,22 @@
   gap: 4px;
 }
 
+.headerControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .summary {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+}
+
+.periodSelect {
+  min-width: 200px;
 }
 
 .taskHeader {
