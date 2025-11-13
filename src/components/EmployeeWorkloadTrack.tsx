@@ -7,7 +7,7 @@ import type { SelectProps } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import GanttTimeline, {
   type GanttTimelineRow,
   type GanttTimelineTaskKind,
@@ -98,30 +98,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'UX-исследователь',
     rank: 1,
     workload: 0.78,
-    availability: 'Свободна с 12 июня',
+    availability: 'Свободна с 8 июля',
     focus: 'Приоритет — пользовательские исследования',
     tasks: [
       {
         id: 'task-1',
         name: 'Расчёт юнит-экономики',
-        start: '2022-11-07',
-        end: '2023-01-24',
+        start: '2024-01-08',
+        end: '2024-02-23',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-2',
         name: 'Аналитика маршрутов клиента',
-        start: '2023-02-03',
-        end: '2023-04-18',
+        start: '2024-03-04',
+        end: '2024-04-26',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-3',
         name: 'Интервью по продукту Сервис X',
-        start: '2023-05-02',
-        end: '2023-06-30',
+        start: '2024-05-06',
+        end: '2024-07-05',
         kind: 'out-of-project',
         badge: 'Вне проекта',
         description: 'Оценка экспертизы для нового направления'
@@ -134,30 +134,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'Продуктовый аналитик',
     rank: 2,
     workload: 0.64,
-    availability: 'Свободен с 3 июля',
+    availability: 'Свободен с 15 июля',
     focus: 'Фокус — аналитика продуктовых метрик',
     tasks: [
       {
         id: 'task-4',
         name: 'Актуализация проекта «Цифровой профиль»',
-        start: '2022-12-05',
-        end: '2023-02-28',
+        start: '2024-01-15',
+        end: '2024-03-01',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-5',
         name: 'Поддержка витрины показателей',
-        start: '2023-03-06',
-        end: '2023-05-26',
+        start: '2024-03-11',
+        end: '2024-05-17',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-6',
         name: 'Концепция расчёта LTV',
-        start: '2023-06-05',
-        end: '2023-07-21',
+        start: '2024-05-27',
+        end: '2024-07-12',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -169,30 +169,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'Менеджер проекта',
     rank: 3,
     workload: 0.88,
-    availability: 'Свободна с 1 августа',
+    availability: 'Свободна с 19 августа',
     focus: 'Работает с кросс-командными поставками',
     tasks: [
       {
         id: 'task-7',
         name: 'Расширение экосистемы партнёров',
-        start: '2023-01-16',
-        end: '2023-03-31',
+        start: '2024-01-22',
+        end: '2024-03-29',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-8',
         name: 'Интеграция API поставщиков',
-        start: '2023-04-10',
-        end: '2023-06-23',
+        start: '2024-04-08',
+        end: '2024-06-21',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-9',
         name: 'Запуск пилота «Экспресс-логистика»',
-        start: '2023-07-03',
-        end: '2023-08-18',
+        start: '2024-07-01',
+        end: '2024-08-16',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -204,30 +204,30 @@ const mockEmployees: EmployeeWorkload[] = [
     position: 'Аналитик данных',
     rank: 4,
     workload: 0.54,
-    availability: 'Свободен с 15 мая',
+    availability: 'Свободен с 29 июля',
     focus: 'Подходит на задачи по ML и BI',
     tasks: [
       {
         id: 'task-10',
         name: 'Миграция отчётности',
-        start: '2022-11-14',
-        end: '2023-01-27',
+        start: '2024-01-29',
+        end: '2024-03-15',
         kind: 'training',
         badge: 'Развитие'
       },
       {
         id: 'task-11',
         name: 'Подготовка витрин ML',
-        start: '2023-02-06',
-        end: '2023-04-21',
+        start: '2024-03-25',
+        end: '2024-05-31',
         kind: 'project',
         badge: 'Проект'
       },
       {
         id: 'task-12',
         name: 'Разработка модели прогноза спроса',
-        start: '2023-05-08',
-        end: '2023-06-30',
+        start: '2024-06-10',
+        end: '2024-07-26',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -422,6 +422,175 @@ const addDays = (date: Date, days: number): Date => {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+};
+
+const addMonths = (date: Date, months: number): Date => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months, 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const addYears = (date: Date, years: number): Date => {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() + years, 0, 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const startOfDay = (date: Date): Date => {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const startOfWeek = (date: Date): Date => {
+  const result = startOfDay(date);
+  const day = result.getDay();
+  const diff = (day + 6) % 7;
+  result.setDate(result.getDate() - diff);
+  return result;
+};
+
+const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const startOfYear = (date: Date): Date => new Date(date.getFullYear(), 0, 1);
+
+const toDate = (value: Date | string): Date => {
+  if (value instanceof Date) {
+    return value;
+  }
+  return new Date(value);
+};
+
+const capitalize = (value: string): string => {
+  if (!value) {
+    return value;
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const weekFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'short'
+});
+
+const monthLabelFormatter = new Intl.DateTimeFormat('ru-RU', {
+  month: 'long',
+  year: 'numeric'
+});
+
+const yearLabelFormatter = new Intl.DateTimeFormat('ru-RU', {
+  year: 'numeric'
+});
+
+const formatWeekLabel = (start: Date, endInclusive: Date): string => {
+  const startLabel = capitalize(weekFormatter.format(start));
+  const endLabel = capitalize(weekFormatter.format(endInclusive));
+  if (startLabel === endLabel) {
+    return startLabel;
+  }
+  return `${startLabel} – ${endLabel}`;
+};
+
+type PeriodOption = {
+  label: string;
+  value: string;
+  start: Date;
+  end: Date;
+};
+
+const buildWeekOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfWeek(addDays(minDate, -7));
+  const latest = startOfWeek(addDays(maxDate, 7));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 104) {
+    const start = cursor;
+    const end = addDays(start, 7);
+    options.push({
+      label: formatWeekLabel(start, addDays(end, -1)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addDays(cursor, 7);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfWeek(baseStart);
+    const end = addDays(start, 7);
+    options.push({
+      label: formatWeekLabel(start, addDays(end, -1)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
+};
+
+const buildMonthOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfMonth(addMonths(minDate, -1));
+  const latest = startOfMonth(addMonths(maxDate, 1));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 48) {
+    const start = cursor;
+    const end = addMonths(start, 1);
+    options.push({
+      label: capitalize(monthLabelFormatter.format(start)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addMonths(cursor, 1);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfMonth(baseStart);
+    const end = addMonths(start, 1);
+    options.push({
+      label: capitalize(monthLabelFormatter.format(start)),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
+};
+
+const buildYearOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
+  const earliest = startOfYear(addYears(minDate, -1));
+  const latest = startOfYear(addYears(maxDate, 1));
+  const options: PeriodOption[] = [];
+  let cursor = earliest;
+  let guard = 0;
+  while (cursor <= latest && guard < 12) {
+    const start = cursor;
+    const end = addYears(start, 1);
+    options.push({
+      label: yearLabelFormatter.format(start),
+      value: start.toISOString(),
+      start,
+      end
+    });
+    cursor = addYears(cursor, 1);
+    guard += 1;
+  }
+  if (options.length === 0) {
+    const start = startOfYear(baseStart);
+    const end = addYears(start, 1);
+    options.push({
+      label: yearLabelFormatter.format(start),
+      value: start.toISOString(),
+      start,
+      end
+    });
+  }
+  return options;
 };
 
 const getScheduleDueDate = (schedule: TaskSchedule): Date | null => {
@@ -654,6 +823,8 @@ const viewTabs = [
 
 type ViewTab = (typeof viewTabs)[number];
 
+type TimelineScale = TimelineScaleTab['value'];
+
 const EmployeeWorkloadTrack: React.FC = () => {
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
   const [tasks, setTasks] = useState<TaskListItem[]>(initialTaskList);
@@ -664,6 +835,74 @@ const EmployeeWorkloadTrack: React.FC = () => {
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(defaultTaskDraft);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const baseStart = useMemo(() => {
+    const now = new Date();
+    return startOfDay(new Date(now.getFullYear(), 0, 1));
+  }, []);
+
+  const timelineDateTasks = useMemo(() => {
+    return mockEmployees.flatMap((employee) =>
+      employee.tasks.map((task) => ({
+        start: startOfDay(toDate(task.start)),
+        end: startOfDay(toDate(task.end))
+      }))
+    );
+  }, []);
+
+  const minTaskStart = useMemo(() => {
+    if (timelineDateTasks.length === 0) {
+      return baseStart;
+    }
+    return timelineDateTasks.reduce((min, task) => (task.start < min ? task.start : min), timelineDateTasks[0].start);
+  }, [baseStart, timelineDateTasks]);
+
+  const maxTaskEnd = useMemo(() => {
+    if (timelineDateTasks.length === 0) {
+      return baseStart;
+    }
+    return timelineDateTasks.reduce((max, task) => (task.end > max ? task.end : max), timelineDateTasks[0].end);
+  }, [baseStart, timelineDateTasks]);
+
+  const periodOptions = useMemo(
+    () => ({
+      week: buildWeekOptions(baseStart, minTaskStart, maxTaskEnd),
+      month: buildMonthOptions(baseStart, minTaskStart, maxTaskEnd),
+      year: buildYearOptions(baseStart, minTaskStart, maxTaskEnd)
+    }),
+    [baseStart, maxTaskEnd, minTaskStart]
+  );
+
+  const [selectedPeriods, setSelectedPeriods] = useState<Record<TimelineScale, string | null>>(() => ({
+    week: periodOptions.week[0]?.value ?? null,
+    month: periodOptions.month[0]?.value ?? null,
+    year: periodOptions.year[0]?.value ?? null
+  }));
+
+  useEffect(() => {
+    setSelectedPeriods((prev) => ({
+      week:
+        prev.week && periodOptions.week.some((option) => option.value === prev.week)
+          ? prev.week
+          : periodOptions.week[0]?.value ?? null,
+      month:
+        prev.month && periodOptions.month.some((option) => option.value === prev.month)
+          ? prev.month
+          : periodOptions.month[0]?.value ?? null,
+      year:
+        prev.year && periodOptions.year.some((option) => option.value === prev.year)
+          ? prev.year
+          : periodOptions.year[0]?.value ?? null
+    }));
+  }, [periodOptions]);
+
+  const currentPeriodOptions = periodOptions[scale.value];
+  const selectedPeriodValue = selectedPeriods[scale.value];
+  const activePeriod = currentPeriodOptions.find((option) => option.value === selectedPeriodValue) ?? null;
+  const displayedPeriod = activePeriod ?? currentPeriodOptions[0] ?? null;
+  const resolvedViewRange = displayedPeriod
+    ? { start: displayedPeriod.start, end: displayedPeriod.end }
+    : undefined;
 
   const timelineRows = useMemo<GanttTimelineRow[]>(() => {
     return mockEmployees.map((employee) => {
@@ -1472,14 +1711,33 @@ const EmployeeWorkloadTrack: React.FC = () => {
             </Text>
           </div>
         </div>
-        <Tabs<TimelineScaleTab>
-          size="s"
-          items={timelineScaleTabs}
-          value={scale}
-          getItemLabel={(item) => item.label}
-          getItemKey={(item) => item.value}
-          onChange={setScale}
-        />
+        <div className={styles.headerControls}>
+          <Tabs<TimelineScaleTab>
+            size="s"
+            items={timelineScaleTabs}
+            value={scale}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={setScale}
+          />
+          <Select<PeriodOption>
+            size="s"
+            className={styles.periodSelect}
+            label="Период"
+            placeholder="Выберите период"
+            items={currentPeriodOptions}
+            value={displayedPeriod ?? null}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={(option) =>
+              setSelectedPeriods((prev) => ({
+                ...prev,
+                [scale.value]: option?.value ?? null
+              }))
+            }
+            disabled={currentPeriodOptions.length === 0}
+          />
+        </div>
       </header>
       <div className={styles.legend} aria-hidden={true}>
         <div className={styles.legendItem}>
@@ -1501,7 +1759,12 @@ const EmployeeWorkloadTrack: React.FC = () => {
           </Text>
         </div>
       </div>
-      <GanttTimeline axisLabel="Сотрудник" scale={scale.value} rows={timelineRows} />
+      <GanttTimeline
+        axisLabel="Сотрудник"
+        scale={scale.value}
+        rows={timelineRows}
+        viewRange={resolvedViewRange}
+      />
         </Card>
       )}
     </div>

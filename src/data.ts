@@ -1643,7 +1643,7 @@ export const experts: ExpertProfile[] = [
           }
         ],
         usage: {
-          from: '2023-01-15',
+          from: '2024-01-15',
           to: '2024-04-01',
           description: 'Стандартизация инженерных датасетов для DataHub на месторождениях «Северный купол» и «Арктика»'
         },
@@ -1684,7 +1684,7 @@ export const experts: ExpertProfile[] = [
           }
         ],
         usage: {
-          from: '2023-05-01',
+          from: '2024-05-01',
           description: 'Разработка матрицы владения инженерными данными и процессов каталогизации'
         },
         artifacts: [],
@@ -1756,7 +1756,7 @@ export const experts: ExpertProfile[] = [
         evidence: [],
         usage: {
           from: '2021-07-01',
-          to: '2023-12-10',
+          to: '2024-12-10',
           description: 'Проектирование API для геосервисов и интеграции с подрядчиками ЛИДАР'
         },
         artifacts: ['artifact-infraplan-layout'],
@@ -1769,7 +1769,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'screened',
         evidence: [],
         usage: {
-          from: '2023-06-01',
+          from: '2024-06-01',
           description: 'Совместные расчёты экономических эффектов для сценариев размещения'
         },
         artifacts: ['artifact-infraplan-economic-report'],
@@ -1840,7 +1840,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'validated',
         evidence: [],
         usage: {
-          from: '2023-03-01',
+          from: '2024-03-01',
           to: '2024-01-30',
           description: 'Сценарный анализ инвестиционных программ для портфеля месторождений'
         },
@@ -1927,7 +1927,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'screened',
         evidence: [],
         usage: {
-          from: '2023-02-01',
+          from: '2024-02-01',
           description: 'Интеграция промышленного IoT с ситуационными центрами и Digital Twin'
         },
         artifacts: ['artifact-dtwin-telemetry-cube'],
@@ -1941,7 +1941,7 @@ export const experts: ExpertProfile[] = [
         evidence: [],
         usage: {
           from: '2021-11-01',
-          to: '2023-10-01',
+          to: '2024-10-01',
           description: 'Настройка SLO/SLI для событийных систем мониторинга'
         },
         artifacts: [],
@@ -2013,7 +2013,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'validated',
         evidence: [],
         usage: {
-          from: '2023-01-10',
+          from: '2024-01-10',
           to: '2024-03-10',
           description: 'Организация конвейера MLOps для Digital Twin'
         },
@@ -2027,7 +2027,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'screened',
         evidence: [],
         usage: {
-          from: '2023-06-01',
+          from: '2024-06-01',
           description: 'Фасилитация discovery-сессий с производством по выбору сценариев'
         },
         artifacts: [],
@@ -2111,7 +2111,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'claimed',
         evidence: [],
         usage: {
-          from: '2023-04-01',
+          from: '2024-04-01',
           to: '2024-01-10',
           description: 'Организация change management при внедрении Remote Ops'
         },
@@ -2198,7 +2198,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'screened',
         evidence: [],
         usage: {
-          from: '2023-09-01',
+          from: '2024-09-01',
           description: 'Перевод регламентов WWO в цифровые шаблоны'
         },
         artifacts: ['artifact-wwo-operations-log'],
@@ -2269,7 +2269,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'screened',
         evidence: [],
         usage: {
-          from: '2023-01-01',
+          from: '2024-01-01',
           description: 'Внедрение мобильных приложений для полевых сотрудников'
         },
         artifacts: [],
@@ -2289,7 +2289,7 @@ export const experts: ExpertProfile[] = [
         ],
         usage: {
           from: '2022-09-01',
-          to: '2023-12-01',
+          to: '2024-12-01',
           description: 'Контроль соблюдения HSE требований во время ремонтов'
         },
         artifacts: [],
@@ -2360,7 +2360,7 @@ export const experts: ExpertProfile[] = [
         proofStatus: 'screened',
         evidence: [],
         usage: {
-          from: '2023-02-01',
+          from: '2024-02-01',
           to: '2024-01-15',
           description: 'Прогнозирование производственных эффектов от ремонтов'
         },
@@ -2971,8 +2971,8 @@ export type ReuseTrendPoint = {
 };
 
 export const reuseIndexHistory: ReuseTrendPoint[] = [
-  { period: '2023-11', averageScore: 0.42 },
-  { period: '2023-12', averageScore: 0.44 },
+  { period: '2024-11', averageScore: 0.42 },
+  { period: '2024-12', averageScore: 0.44 },
   { period: '2024-01', averageScore: 0.45 },
   { period: '2024-02', averageScore: 0.47 },
   { period: '2024-03', averageScore: 0.5 },
