@@ -10,6 +10,7 @@ import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import GanttTimeline, {
   type GanttTimelineRow,
+  type GanttTimelineTask,
   type GanttTimelineTaskKind,
   timelineScaleTabs,
   type TimelineScaleTab
@@ -26,6 +27,12 @@ type WorkloadTask = {
   kind: WorkloadKind;
   badge: string;
   description?: string;
+};
+
+const workloadBadgeStatuses: Record<WorkloadKind, 'system' | 'warning' | 'success'> = {
+  project: 'system',
+  'out-of-project': 'warning',
+  training: 'success'
 };
 
 type EmployeeWorkload = {
@@ -234,6 +241,10 @@ const mockEmployees: EmployeeWorkload[] = [
     ]
   }
 ];
+
+const employeeById = new Map<string, EmployeeWorkload>(
+  mockEmployees.map((employee) => [employee.id, employee] as const)
+);
 
 const priorityOptions: SelectOption<TaskPriority>[] = [
   { label: 'Низкий', value: 'low' },
@@ -639,6 +650,24 @@ const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.get
 
 const startOfYear = (date: Date): Date => new Date(date.getFullYear(), 0, 1);
 
+const detailDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: 'long',
+  year: 'numeric'
+});
+
+const formatTimelineTaskPeriod = (start: string, end: string): string => {
+  const startDate = parseDateValue(start);
+  const endDate = parseDateValue(end);
+  if (!startDate || !endDate) {
+    return 'Период не задан';
+  }
+  if (startDate.getTime() === endDate.getTime()) {
+    return detailDateFormatter.format(startDate);
+  }
+  return `${detailDateFormatter.format(startDate)} — ${detailDateFormatter.format(endDate)}`;
+};
+
 const toDate = (value: Date | string): Date => {
   if (value instanceof Date) {
     return value;
@@ -774,6 +803,10 @@ const buildYearOptions = (baseStart: Date, minDate: Date, maxDate: Date): Period
     });
   }
   return options;
+};
+
+const findPeriodContainingDate = (options: PeriodOption[], target: Date): PeriodOption | null => {
+  return options.find((option) => target >= option.start && target < option.end) ?? null;
 };
 
 const getScheduleDueDate = (schedule: TaskSchedule): Date | null => {
@@ -1131,26 +1164,32 @@ const EmployeeWorkloadTrack: React.FC = () => {
     [baseStart, maxTaskEnd, minTaskStart]
   );
 
-  const [selectedPeriods, setSelectedPeriods] = useState<Record<TimelineScale, string | null>>(() => ({
-    week: periodOptions.week[0]?.value ?? null,
-    month: periodOptions.month[0]?.value ?? null,
-    year: periodOptions.year[0]?.value ?? null
-  }));
+  const [selectedPeriods, setSelectedPeriods] = useState<Record<TimelineScale, string | null>>(() => {
+    const now = new Date();
+    return {
+      week: findPeriodContainingDate(periodOptions.week, now)?.value ?? periodOptions.week[0]?.value ?? null,
+      month:
+        findPeriodContainingDate(periodOptions.month, now)?.value ?? periodOptions.month[0]?.value ?? null,
+      year: findPeriodContainingDate(periodOptions.year, now)?.value ?? periodOptions.year[0]?.value ?? null
+    };
+  });
+  const [activeTimelineTaskId, setActiveTimelineTaskId] = useState<string | null>(null);
 
   useEffect(() => {
+    const now = new Date();
     setSelectedPeriods((prev) => ({
       week:
         prev.week && periodOptions.week.some((option) => option.value === prev.week)
           ? prev.week
-          : periodOptions.week[0]?.value ?? null,
+          : findPeriodContainingDate(periodOptions.week, now)?.value ?? periodOptions.week[0]?.value ?? null,
       month:
         prev.month && periodOptions.month.some((option) => option.value === prev.month)
           ? prev.month
-          : periodOptions.month[0]?.value ?? null,
+          : findPeriodContainingDate(periodOptions.month, now)?.value ?? periodOptions.month[0]?.value ?? null,
       year:
         prev.year && periodOptions.year.some((option) => option.value === prev.year)
           ? prev.year
-          : periodOptions.year[0]?.value ?? null
+          : findPeriodContainingDate(periodOptions.year, now)?.value ?? periodOptions.year[0]?.value ?? null
     }));
   }, [periodOptions]);
 
@@ -1161,6 +1200,38 @@ const EmployeeWorkloadTrack: React.FC = () => {
   const resolvedViewRange = displayedPeriod
     ? { start: displayedPeriod.start, end: displayedPeriod.end }
     : undefined;
+
+  const timelineTaskLookup = useMemo(() => {
+    const map = new Map<string, { task: WorkloadTask; employee: EmployeeWorkload }>();
+
+    mockEmployees.forEach((employee) => {
+      employee.tasks.forEach((task) => {
+        map.set(task.id, { task, employee });
+      });
+    });
+
+    teamTimelineTasksByEmployee.forEach((employeeTasks, employeeId) => {
+      const employee = employeeById.get(employeeId);
+      if (!employee) {
+        return;
+      }
+      employeeTasks.forEach((task) => {
+        map.set(task.id, { task, employee });
+      });
+    });
+
+    return map;
+  }, [teamTimelineTasksByEmployee]);
+
+  useEffect(() => {
+    if (activeTimelineTaskId && !timelineTaskLookup.has(activeTimelineTaskId)) {
+      setActiveTimelineTaskId(null);
+    }
+  }, [activeTimelineTaskId, timelineTaskLookup]);
+
+  const activeTimelineTask = activeTimelineTaskId
+    ? timelineTaskLookup.get(activeTimelineTaskId) ?? null
+    : null;
 
   const timelineRows = useMemo<GanttTimelineRow[]>(() => {
     return mockEmployees.map((employee) => {
@@ -1222,6 +1293,17 @@ const EmployeeWorkloadTrack: React.FC = () => {
       return { id: employee.id, sidebar, tasks };
     });
   }, [teamTimelineTasksByEmployee]);
+
+  const handleTimelineTaskClick = useCallback(
+    ({ task }: { rowId: string; task: GanttTimelineTask }) => {
+      setActiveTimelineTaskId(task.id);
+    },
+    []
+  );
+
+  const handleClearTimelineTask = useCallback(() => {
+    setActiveTimelineTaskId(null);
+  }, []);
 
   const assigneeOptions = useMemo<SelectOption<string>[]>(() => {
     return mockEmployees.map((employee) => ({
@@ -2024,12 +2106,76 @@ const EmployeeWorkloadTrack: React.FC = () => {
           </Text>
         </div>
       </div>
-      <GanttTimeline
-        axisLabel="Сотрудник"
-        scale={scale.value}
-        rows={timelineRows}
-        viewRange={resolvedViewRange}
-      />
+      <div className={styles.timelineLayout}>
+        <div className={styles.timelineChart}>
+          <GanttTimeline
+            axisLabel="Сотрудник"
+            scale={scale.value}
+            rows={timelineRows}
+            viewRange={resolvedViewRange}
+            onTaskClick={handleTimelineTaskClick}
+            selectedTaskId={activeTimelineTaskId}
+          />
+        </div>
+        <aside className={styles.timelineDetails}>
+          {activeTimelineTask ? (
+            <>
+              <div className={styles.timelineDetailsHeader}>
+                <Text size="s" weight="semibold">
+                  {activeTimelineTask.task.name}
+                </Text>
+                <Button
+                  size="xs"
+                  view="ghost"
+                  label="Очистить"
+                  onClick={handleClearTimelineTask}
+                />
+              </div>
+              <div className={styles.timelineDetailsMeta}>
+                <Badge
+                  size="xs"
+                  status={workloadBadgeStatuses[activeTimelineTask.task.kind]}
+                  label={activeTimelineTask.task.badge}
+                />
+                <Text size="xs" view="secondary">
+                  {formatTimelineTaskPeriod(activeTimelineTask.task.start, activeTimelineTask.task.end)}
+                </Text>
+              </div>
+              <div className={styles.timelineDetailsEmployee}>
+                <Text size="2xs" view="secondary">
+                  Сотрудник
+                </Text>
+                <Text size="s" weight="semibold">
+                  {activeTimelineTask.employee.fullName}
+                </Text>
+                <Text size="xs" view="secondary">
+                  {activeTimelineTask.employee.position}
+                </Text>
+              </div>
+              <div className={styles.timelineDetailsStats}>
+                <Text size="2xs" view="secondary">
+                  Загруженность: {Math.round(activeTimelineTask.employee.workload * 100)}%
+                </Text>
+                <Text size="2xs" view="secondary">
+                  {activeTimelineTask.employee.availability}
+                </Text>
+              </div>
+              <Text size="xs" view="secondary">
+                {activeTimelineTask.employee.focus}
+              </Text>
+              <Text size="xs">
+                {activeTimelineTask.task.description ?? 'Описание не добавлено'}
+              </Text>
+            </>
+          ) : (
+            <div className={styles.timelineDetailsEmpty}>
+              <Text size="s" view="secondary">
+                Выберите задачу на дорожной карте, чтобы увидеть подробности
+              </Text>
+            </div>
+          )}
+        </aside>
+      </div>
         </Card>
       )}
     </div>

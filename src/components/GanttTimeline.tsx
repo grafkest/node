@@ -50,6 +50,10 @@ const monthFormatter = new Intl.DateTimeFormat('ru-RU', {
 
 const kindPriority: GanttTimelineTaskKind[] = ['project', 'out-of-project', 'training'];
 
+const TIMELINE_INSET = 12;
+const LANE_HEIGHT = 72;
+const TASK_VERTICAL_OFFSET = 8;
+
 const capitalize = (value: string): string => {
   if (!value) {
     return value;
@@ -104,9 +108,15 @@ type NormalizedRow = {
   tasks: (NormalizedTask & { original: GanttTimelineTask })[];
 };
 
+type LaneGroupLayout = {
+  offset: number;
+  lanes: number;
+};
+
 type LaneLayout = {
   assignments: Map<string, number>;
   laneCount: number;
+  groups: Record<GanttTimelineTaskKind, LaneGroupLayout>;
 };
 
 const formatPeriod = (start: Date, end: Date): string => {
@@ -150,22 +160,28 @@ const assignLanesWithinGroup = (tasks: NormalizedTask[]): LaneLayout => {
 
 const buildLaneLayout = (tasks: NormalizedTask[]): LaneLayout => {
   const assignments = new Map<string, number>();
+  const groups = Object.fromEntries(
+    kindPriority.map((kind) => [kind, { offset: 0, lanes: 1 } satisfies LaneGroupLayout])
+  ) as Record<GanttTimelineTaskKind, LaneGroupLayout>;
   let laneOffset = 0;
 
   kindPriority.forEach((kind) => {
     const kindTasks = tasks.filter((task) => task.kind === kind);
-    if (kindTasks.length === 0) {
-      return;
-    }
     const { assignments: kindAssignments, laneCount } = assignLanesWithinGroup(kindTasks);
+    const lanes = Math.max(1, laneCount);
+    groups[kind] = { offset: laneOffset, lanes };
+
     kindTasks.forEach((task) => {
       const laneIndex = kindAssignments.get(task.id) ?? 0;
-      assignments.set(task.id, laneIndex + laneOffset);
+      assignments.set(task.id, laneOffset + laneIndex);
     });
-    laneOffset += laneCount;
+
+    laneOffset += lanes;
   });
 
-  return { assignments, laneCount: Math.max(laneOffset, tasks.length > 0 ? 1 : 0) };
+  const laneCount = Math.max(laneOffset, kindPriority.length);
+
+  return { assignments, laneCount, groups };
 };
 
 const computeViewRange = (allTasks: NormalizedTask[], scale: TimelineScale): { viewStart: Date; viewEnd: Date } => {
@@ -267,9 +283,18 @@ type GanttTimelineProps = {
   rows: GanttTimelineRow[];
   scale: TimelineScale;
   viewRange?: { start: Date | string; end: Date | string };
+  onTaskClick?: (payload: { rowId: string; task: GanttTimelineTask }) => void;
+  selectedTaskId?: string | null;
 };
 
-const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale, viewRange }) => {
+const GanttTimeline: React.FC<GanttTimelineProps> = ({
+  axisLabel,
+  rows,
+  scale,
+  viewRange,
+  onTaskClick,
+  selectedTaskId
+}) => {
   const normalizedRows = useMemo<NormalizedRow[]>(() => {
     return rows.map((row) => {
       const normalizedTasks = row.tasks.map((task) => {
@@ -333,6 +358,11 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale, v
     return template;
   }, [segments]);
 
+  const today = startOfDay(new Date());
+  const todayOffset = today.getTime() >= viewStart.getTime() && today.getTime() <= viewEnd.getTime()
+    ? ((Math.min(today.getTime(), viewEnd.getTime()) - viewStart.getTime()) / totalDuration) * 100
+    : null;
+
   return (
     <div className={timelineStyles.timeline}>
       <div className={timelineStyles.axisRow}>
@@ -345,6 +375,13 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale, v
           className={timelineStyles.axis}
           style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
         >
+          {todayOffset !== null && (
+            <div
+              className={timelineStyles.todayIndicator}
+              style={{ left: `${todayOffset}%` }}
+              aria-hidden={true}
+            />
+          )}
           {segments.map((segment) => (
             <div key={`${segment.label}-${segment.start.getTime()}`} className={timelineStyles.axisCell}>
               <Text size="2xs" view="secondary">
@@ -359,13 +396,32 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale, v
           const laneLayout = buildLaneLayout(
             row.tasks.map((task) => ({ id: task.id, kind: task.kind, startTime: task.startTime, endTime: task.endTime }))
           );
-          const minHeight = Math.max(112, laneLayout.laneCount * 68 + 28);
+          const minHeight = TIMELINE_INSET * 2 + laneLayout.laneCount * LANE_HEIGHT;
 
           return (
             <div key={row.id} className={timelineStyles.row}>
               {row.sidebar}
               <div className={timelineStyles.timelineCell} style={{ minHeight }}>
-                <div className={timelineStyles.timelineLane} />
+                <div className={timelineStyles.timelineLane}>
+                  {kindPriority.map((kind) => {
+                    const group = laneLayout.groups[kind];
+                    return (
+                      <div
+                        key={`${row.id}-${kind}`}
+                        className={timelineStyles.laneSection}
+                        data-kind={kind}
+                        style={{ height: `${group.lanes * LANE_HEIGHT}px` }}
+                      />
+                    );
+                  })}
+                </div>
+                {todayOffset !== null && (
+                  <div
+                    className={timelineStyles.timelineTodayIndicator}
+                    style={{ left: `${todayOffset}%` }}
+                    aria-hidden={true}
+                  />
+                )}
                 {row.tasks.map((task) => {
                   const laneIndex = laneLayout.assignments.get(task.id) ?? 0;
                   const clampedStart = Math.max(task.startTime, viewStart.getTime());
@@ -375,17 +431,40 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ axisLabel, rows, scale, v
                   }
                   const offset = ((clampedStart - viewStart.getTime()) / totalDuration) * 100;
                   const width = Math.max(((clampedEnd - clampedStart) / totalDuration) * 100, 2);
-                  const top = 8 + laneIndex * 68;
+                  const top = TIMELINE_INSET + TASK_VERTICAL_OFFSET + laneIndex * LANE_HEIGHT;
                   const startDate = new Date(task.startTime);
                   const endDate = new Date(task.endTime - MS_IN_DAY);
                   const periodLabel = formatPeriod(startDate, endDate);
+                  const isSelected = selectedTaskId === task.id;
+                  const isInteractive = typeof onTaskClick === 'function';
 
                   return (
                     <div
                       key={task.id}
                       className={timelineStyles.task}
                       data-kind={task.kind}
+                      data-selected={isSelected ? 'true' : 'false'}
+                      data-clickable={isInteractive ? 'true' : 'false'}
                       style={{ left: `${offset}%`, width: `${width}%`, top }}
+                      role={isInteractive ? 'button' : undefined}
+                      tabIndex={isInteractive ? 0 : undefined}
+                      onClick={
+                        isInteractive
+                          ? () => {
+                              onTaskClick?.({ rowId: row.id, task: task.original });
+                            }
+                          : undefined
+                      }
+                      onKeyDown={
+                        isInteractive
+                          ? (event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                onTaskClick?.({ rowId: row.id, task: task.original });
+                              }
+                            }
+                          : undefined
+                      }
                     >
                       <Text size="xs" weight="semibold" className={timelineStyles.taskName} truncate>
                         {task.original.name}
