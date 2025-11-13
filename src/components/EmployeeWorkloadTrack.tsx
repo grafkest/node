@@ -393,6 +393,189 @@ const initialTaskList: TaskListItem[] = [
   }
 ];
 
+const TEAM_TASKS_STORAGE_KEY = 'employee-workload-track:team-tasks';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object';
+};
+
+const isStoredTaskSchedule = (value: unknown): value is TaskSchedule => {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+
+  switch (value.type) {
+    case 'due-date':
+      return typeof value.dueDate === 'string';
+    case 'start-duration':
+      return typeof value.startDate === 'string' && typeof value.durationDays === 'number';
+    case 'date-range':
+      return typeof value.startDate === 'string' && typeof value.endDate === 'string';
+    case 'after-task':
+      return typeof value.predecessorId === 'string' && typeof value.durationDays === 'number';
+    default:
+      return false;
+  }
+};
+
+const isStoredTaskRelation = (value: unknown): value is TaskRelation => {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+
+  switch (value.type) {
+    case 'system':
+    case 'initiative':
+      return value.targetId === null || typeof value.targetId === 'string';
+    case 'external':
+    case 'methodology':
+      return true;
+    default:
+      return false;
+  }
+};
+
+const isStoredTask = (value: unknown): value is TaskListItem => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { id, name, priority, status, assigneeId, description, schedule, relation } = value;
+
+  if (typeof id !== 'string' || typeof name !== 'string' || typeof description !== 'string') {
+    return false;
+  }
+
+  if (assigneeId !== null && typeof assigneeId !== 'string') {
+    return false;
+  }
+
+  if (!['low', 'medium', 'high'].includes(priority as string)) {
+    return false;
+  }
+
+  if (!['new', 'in-progress', 'paused', 'rejected', 'completed'].includes(status as string)) {
+    return false;
+  }
+
+  if (!isStoredTaskSchedule(schedule)) {
+    return false;
+  }
+
+  if (!isStoredTaskRelation(relation)) {
+    return false;
+  }
+
+  return true;
+};
+
+const loadStoredTasks = (): TaskListItem[] | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const rawValue = window.localStorage.getItem(TEAM_TASKS_STORAGE_KEY);
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    const normalized = parsed.filter(isStoredTask).map((task) => ({
+      ...task,
+      assigneeId: task.assigneeId ?? null,
+      schedule: { ...task.schedule },
+      relation: { ...task.relation }
+    }));
+
+    return normalized;
+  } catch {
+    return null;
+  }
+};
+
+const persistStoredTasks = (tasks: TaskListItem[]): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(TEAM_TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+type TaskScheduleWindow = { start: Date; end: Date };
+
+const formatIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const resolveTaskScheduleWindow = (
+  task: TaskListItem,
+  taskMap: Map<string, TaskListItem>,
+  stack: Set<string> = new Set()
+): TaskScheduleWindow | null => {
+  if (stack.has(task.id)) {
+    return null;
+  }
+
+  const nextStack = new Set(stack);
+  nextStack.add(task.id);
+
+  const { schedule } = task;
+
+  switch (schedule.type) {
+    case 'due-date': {
+      const dueDate = parseDateValue(schedule.dueDate);
+      if (!dueDate) {
+        return null;
+      }
+      const day = startOfDay(dueDate);
+      return { start: day, end: day };
+    }
+    case 'start-duration': {
+      const startDate = parseDateValue(schedule.startDate);
+      if (!startDate) {
+        return null;
+      }
+      const dueDate = addDays(startDate, schedule.durationDays);
+      return { start: startOfDay(startDate), end: startOfDay(dueDate) };
+    }
+    case 'date-range': {
+      const startDate = parseDateValue(schedule.startDate);
+      const endDate = parseDateValue(schedule.endDate);
+      if (!startDate || !endDate || endDate.getTime() < startDate.getTime()) {
+        return null;
+      }
+      return { start: startOfDay(startDate), end: startOfDay(endDate) };
+    }
+    case 'after-task': {
+      const predecessor = schedule.predecessorId ? taskMap.get(schedule.predecessorId) : undefined;
+      if (!predecessor) {
+        return null;
+      }
+      const predecessorWindow = resolveTaskScheduleWindow(predecessor, taskMap, nextStack);
+      if (!predecessorWindow) {
+        return null;
+      }
+      const startDate = addDays(predecessorWindow.end, 1);
+      const dueDate = addDays(predecessorWindow.end, schedule.durationDays);
+      return { start: startOfDay(startDate), end: startOfDay(dueDate) };
+    }
+    default:
+      return null;
+  }
+};
+
 const defaultTaskDraft: TaskDraft = {
   name: '',
   priority: 'medium',
@@ -827,14 +1010,82 @@ type TimelineScale = TimelineScaleTab['value'];
 
 const EmployeeWorkloadTrack: React.FC = () => {
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
-  const [tasks, setTasks] = useState<TaskListItem[]>(initialTaskList);
+  const initialStoredTasks = useMemo(() => loadStoredTasks() ?? initialTaskList, []);
+
+  const [tasks, setTasks] = useState<TaskListItem[]>(initialStoredTasks);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
-    initialTaskList[0]?.id ?? null
+    initialStoredTasks[0]?.id ?? null
   );
   const [activeView, setActiveView] = useState<ViewTab>(viewTabs[0]);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(defaultTaskDraft);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const taskMap = useMemo(() => {
+    const map = new Map<string, TaskListItem>();
+    tasks.forEach((task) => {
+      map.set(task.id, task);
+    });
+    return map;
+  }, [tasks]);
+
+  const teamTaskWindows = useMemo(() => {
+    const windows = new Map<string, TaskScheduleWindow>();
+    tasks.forEach((task) => {
+      const window = resolveTaskScheduleWindow(task, taskMap);
+      if (window) {
+        windows.set(task.id, window);
+      }
+    });
+    return windows;
+  }, [taskMap, tasks]);
+
+  useEffect(() => {
+    persistStoredTasks(tasks);
+  }, [tasks]);
+
+  useEffect(() => {
+    if (tasks.length === 0) {
+      if (selectedTaskId !== null) {
+        setSelectedTaskId(null);
+      }
+      return;
+    }
+
+    if (!tasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskId(tasks[0]?.id ?? null);
+    }
+  }, [selectedTaskId, tasks]);
+
+  const teamTimelineTasksByEmployee = useMemo(() => {
+    const map = new Map<string, WorkloadTask[]>();
+    tasks.forEach((task) => {
+      if (!task.assigneeId) {
+        return;
+      }
+      const window = teamTaskWindows.get(task.id);
+      if (!window) {
+        return;
+      }
+      const entry = map.get(task.assigneeId) ?? [];
+      entry.push({
+        id: task.id,
+        name: task.name,
+        start: formatIsoDate(window.start),
+        end: formatIsoDate(window.end),
+        kind: 'project',
+        badge: 'Команда',
+        description: task.description
+      });
+      map.set(task.assigneeId, entry);
+    });
+
+    map.forEach((list) => {
+      list.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    });
+
+    return map;
+  }, [tasks, teamTaskWindows]);
 
   const baseStart = useMemo(() => {
     const now = new Date();
@@ -842,13 +1093,20 @@ const EmployeeWorkloadTrack: React.FC = () => {
   }, []);
 
   const timelineDateTasks = useMemo(() => {
-    return mockEmployees.flatMap((employee) =>
+    const projectTasks = mockEmployees.flatMap((employee) =>
       employee.tasks.map((task) => ({
         start: startOfDay(toDate(task.start)),
         end: startOfDay(toDate(task.end))
       }))
     );
-  }, []);
+
+    const teamTasks = Array.from(teamTaskWindows.values()).map((window) => ({
+      start: startOfDay(window.start),
+      end: startOfDay(window.end)
+    }));
+
+    return [...projectTasks, ...teamTasks];
+  }, [teamTaskWindows]);
 
   const minTaskStart = useMemo(() => {
     if (timelineDateTasks.length === 0) {
@@ -910,7 +1168,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
         .slice()
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-      const tasks = sortedTasks.map((task) => ({
+      const baseTasks = sortedTasks.map((task) => ({
         id: task.id,
         name: task.name,
         start: task.start,
@@ -919,6 +1177,12 @@ const EmployeeWorkloadTrack: React.FC = () => {
         badge: task.badge,
         description: task.description
       }));
+
+      const teamTasks = teamTimelineTasksByEmployee.get(employee.id) ?? [];
+
+      const tasks = [...baseTasks, ...teamTasks].sort(
+        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+      );
 
       const sidebar = (
         <div className={styles.employeeCell}>
@@ -957,7 +1221,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
       return { id: employee.id, sidebar, tasks };
     });
-  }, []);
+  }, [teamTimelineTasksByEmployee]);
 
   const assigneeOptions = useMemo<SelectOption<string>[]>(() => {
     return mockEmployees.map((employee) => ({
@@ -1011,7 +1275,8 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
   const calculateParallelTasks = useCallback(
     (assigneeId: string, referenceTask: TaskListItem) => {
-      const dueDate = getScheduleDueDate(referenceTask.schedule);
+      const dueDate =
+        teamTaskWindows.get(referenceTask.id)?.end ?? getScheduleDueDate(referenceTask.schedule);
       const employee = mockEmployees.find((item) => item.id === assigneeId);
 
       const overlappingProjectTasks = (() => {
@@ -1036,7 +1301,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
         if (task.assigneeId !== assigneeId) {
           return false;
         }
-        const compareDate = getScheduleDueDate(task.schedule);
+        const compareDate = teamTaskWindows.get(task.id)?.end ?? getScheduleDueDate(task.schedule);
         if (!dueDate || !compareDate) {
           return true;
         }
@@ -1045,7 +1310,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
       return overlappingProjectTasks + overlappingTeamTasks;
     },
-    [tasks]
+    [tasks, teamTaskWindows]
   );
 
   const getAssigneeLoadLevel = useCallback(
