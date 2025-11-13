@@ -351,12 +351,17 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
     if (segments.length === 0) {
       return undefined;
     }
-    const template = segments
-      .map((segment) => Math.max(1, Math.round((segment.end.getTime() - segment.start.getTime()) / MS_IN_DAY)))
-      .map((size) => `${size}fr`)
+    const durations = segments.map((segment) => {
+      const durationInDays = (segment.end.getTime() - segment.start.getTime()) / MS_IN_DAY;
+      return Math.max(1, durationInDays);
+    });
+    const totalDuration = durations.reduce((sum, value) => sum + value, 0);
+    const targetTotalUnits = scale === 'year' ? segments.length : 12;
+    const unitScale = totalDuration > 0 ? targetTotalUnits / totalDuration : 1;
+    return durations
+      .map((duration) => `${duration * unitScale}fr`)
       .join(' ');
-    return template;
-  }, [segments]);
+  }, [scale, segments]);
 
   const today = startOfDay(new Date());
   const todayOffset = today.getTime() >= viewStart.getTime() && today.getTime() <= viewEnd.getTime()
