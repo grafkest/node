@@ -238,9 +238,10 @@
   gap: 8px;
 }
 
+
 .timelineLayout {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px;
   align-items: stretch;
 }
@@ -258,6 +259,8 @@
   background: var(--color-bg-secondary);
   padding: 16px;
   min-height: 240px;
+  width: 320px;
+  max-width: 320px;
 }
 
 .timelineDetailsHeader {
@@ -352,6 +355,8 @@
 
   .timelineDetails {
     min-height: 200px;
+    width: 100%;
+    max-width: none;
   }
 }
 
