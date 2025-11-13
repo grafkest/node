@@ -345,27 +345,37 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
     }
     return computeViewRange(allTasks, scale);
   }, [allTasks, explicitRange, scale]);
-  const totalDuration = Math.max(viewEnd.getTime() - viewStart.getTime(), MS_IN_DAY);
+  const viewStartTime = viewStart.getTime();
+  const viewEndTime = viewEnd.getTime();
+  const totalDurationMs = Math.max(viewEndTime - viewStartTime, MS_IN_DAY);
+  const totalDurationDays = totalDurationMs / MS_IN_DAY;
   const segments = useMemo(() => buildSegments(viewStart, viewEnd, scale), [viewEnd, viewStart, scale]);
+  const targetTotalUnits = scale === 'year' ? segments.length : 12;
+  const timelineUnitScale = totalDurationDays > 0 ? targetTotalUnits / totalDurationDays : 1;
+  const scaledTimelineDuration = Math.max(totalDurationDays * timelineUnitScale, 1);
   const gridTemplateColumns = useMemo(() => {
     if (segments.length === 0) {
       return undefined;
     }
-    const durations = segments.map((segment) => {
-      const durationInDays = (segment.end.getTime() - segment.start.getTime()) / MS_IN_DAY;
-      return Math.max(1, durationInDays);
-    });
-    const totalDuration = durations.reduce((sum, value) => sum + value, 0);
-    const targetTotalUnits = scale === 'year' ? segments.length : 12;
-    const unitScale = totalDuration > 0 ? targetTotalUnits / totalDuration : 1;
-    return durations
-      .map((duration) => `${duration * unitScale}fr`)
+    return segments
+      .map((segment) => {
+        const durationInDays = Math.max(
+          1 / 24,
+          (segment.end.getTime() - segment.start.getTime()) / MS_IN_DAY
+        );
+        return `${durationInDays * timelineUnitScale}fr`;
+      })
       .join(' ');
-  }, [scale, segments]);
+  }, [segments, timelineUnitScale]);
 
   const today = startOfDay(new Date());
-  const todayOffset = today.getTime() >= viewStart.getTime() && today.getTime() <= viewEnd.getTime()
-    ? ((Math.min(today.getTime(), viewEnd.getTime()) - viewStart.getTime()) / totalDuration) * 100
+  const todayOffset = today.getTime() >= viewStartTime && today.getTime() <= viewEndTime
+    ? ((
+        (Math.min(today.getTime(), viewEndTime) - viewStartTime) / MS_IN_DAY
+      ) * timelineUnitScale)
+        /
+        scaledTimelineDuration *
+        100
     : null;
 
   return (
@@ -429,13 +439,16 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
                 )}
                 {row.tasks.map((task) => {
                   const laneIndex = laneLayout.assignments.get(task.id) ?? 0;
-                  const clampedStart = Math.max(task.startTime, viewStart.getTime());
-                  const clampedEnd = Math.min(task.endTime, viewEnd.getTime());
-                  if (clampedEnd <= viewStart.getTime() || clampedStart >= viewEnd.getTime()) {
+                  const clampedStart = Math.max(task.startTime, viewStartTime);
+                  const clampedEnd = Math.min(task.endTime, viewEndTime);
+                  if (clampedEnd <= viewStartTime || clampedStart >= viewEndTime) {
                     return null;
                   }
-                  const offset = ((clampedStart - viewStart.getTime()) / totalDuration) * 100;
-                  const width = Math.max(((clampedEnd - clampedStart) / totalDuration) * 100, 2);
+                  const offsetUnits = ((clampedStart - viewStartTime) / MS_IN_DAY) * timelineUnitScale;
+                  const endUnits = ((clampedEnd - viewStartTime) / MS_IN_DAY) * timelineUnitScale;
+                  const segmentUnits = Math.max(endUnits - offsetUnits, 0);
+                  const offset = (offsetUnits / scaledTimelineDuration) * 100;
+                  const width = Math.max((segmentUnits / scaledTimelineDuration) * 100, 2);
                   const top = TIMELINE_INSET + TASK_VERTICAL_OFFSET + laneIndex * LANE_HEIGHT;
                   const startDate = new Date(task.startTime);
                   const endDate = new Date(task.endTime - MS_IN_DAY);
