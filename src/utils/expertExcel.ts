@@ -170,13 +170,23 @@ const splitMultiline = (value: string): string[] =>
 
 const joinMultivalue = (values: string[]): string => values.join('; ');
 
+const normalizeLabel = (label: string): string => label.trim().toLowerCase().replace(/\s+/g, ' ');
+
 const buildNameMap = (record: Record<string, string>): Map<string, string> => {
   const map = new Map<string, string>();
   Object.entries(record).forEach(([id, label]) => {
     if (!label) {
       return;
     }
-    map.set(label.trim().toLowerCase(), id);
+    const normalized = normalizeLabel(label);
+    if (!normalized) {
+      return;
+    }
+    map.set(normalized, id);
+    const withoutPrefix = normalized.replace(/^[-—\s]+/, '').trim();
+    if (withoutPrefix && !map.has(withoutPrefix)) {
+      map.set(withoutPrefix, id);
+    }
   });
   return map;
 };
@@ -833,6 +843,7 @@ export const parseExpertWorkbook = ({
   const skillRows = skillsSheet ? utils.sheet_to_json<SkillSheetRow>(skillsSheet, { defval: '' }) : [];
 
   const skillMap = new Map<string, ExpertSkill>();
+  const skillNameRegistry = new Map<string, string>();
 
   skillRows.forEach((row, index) => {
     const rawCategory = String(row.Category ?? '');
@@ -879,6 +890,7 @@ export const parseExpertWorkbook = ({
     }
 
     const resolvedSkillName = skillName || definition?.name || skillId;
+    skillNameRegistry.set(skillId, resolvedSkillName);
 
     if (!category) {
       errors.push(`Строка ${index + 2}: не удалось определить категорию навыка «${resolvedSkillName}».`);
@@ -977,6 +989,48 @@ export const parseExpertWorkbook = ({
   }
 
   draft.skills = Array.from(skillMap.values());
+
+  if (draft.skills.length > 0) {
+    const derivedNames: string[] = [];
+    const derivedRecords = new Map<string, ExpertCompetencyRecord>();
+
+    draft.skills.forEach((skill) => {
+      const resolvedName = getSkillNameById(skill.id) ?? skillNameRegistry.get(skill.id) ?? skill.id;
+      if (!resolvedName) {
+        return;
+      }
+      derivedNames.push(resolvedName);
+      derivedRecords.set(resolvedName, {
+        name: resolvedName,
+        level: skill.level,
+        proofStatus: skill.proofStatus
+      });
+    });
+
+    const existingNames = [...draft.competencies];
+    derivedNames.forEach((name) => {
+      if (!existingNames.includes(name)) {
+        existingNames.push(name);
+      }
+    });
+
+    const existingRecordMap = new Map<string, ExpertCompetencyRecord>();
+    (draft.competencyRecords ?? []).forEach((record) => {
+      if (!existingRecordMap.has(record.name)) {
+        existingRecordMap.set(record.name, { ...record });
+      }
+    });
+
+    draft.competencies = existingNames;
+    draft.competencyRecords = existingNames.map((name) => {
+      const derived = derivedRecords.get(name);
+      if (derived) {
+        return derived;
+      }
+      const existing = existingRecordMap.get(name);
+      return existing ? { ...existing } : { name };
+    });
+  }
 
   if (competencyCandidates.length > 0) {
     const roleTitle = draft.title.trim();
