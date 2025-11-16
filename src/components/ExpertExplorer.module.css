@@ -58,7 +58,7 @@
 
 .content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  grid-template-columns: minmax(0, 0.65fr) minmax(320px, 1fr);
   gap: 16px;
   min-height: 0;
   flex: 1;
