@@ -258,6 +258,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [roleFilter, setRoleFilter] = useState<TeamRole[]>([]);
   const [skillFilterMode, setSkillFilterMode] = useState<'inclusive' | 'strict'>('inclusive');
   const [graphDensity, setGraphDensity] = useState<GraphDensityOption['value']>('all');
+  const [includeSoftSkills, setIncludeSoftSkills] = useState(true);
   const [selectedExpertId, setSelectedExpertId] = useState<string | null>(null);
   const [isSkillEditorOpen, setIsSkillEditorOpen] = useState(false);
   const [skillEditorExpert, setSkillEditorExpert] = useState<ExpertProfile | null>(null);
@@ -278,6 +279,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const roleGraphZoomAppliedRef = useRef(false);
   const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
   const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    if (!includeSoftSkills && focusedSkill?.type === 'soft') {
+      setFocusedSkill(null);
+    }
+  }, [focusedSkill, includeSoftSkills]);
   const activeGraphDensity = useMemo(() => {
     return graphDensityOptions.find((option) => option.value === graphDensity) ?? graphDensityOptions[0];
   }, [graphDensity]);
@@ -1035,21 +1041,23 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         });
       });
 
-      resolveSoftSkills(expert).forEach((skill) => {
-        const nodeId = `soft:${skill}`;
-        ensureNode({
-          id: nodeId,
-          originId: skill,
-          type: 'soft',
-          label: skill
+      if (includeSoftSkills) {
+        resolveSoftSkills(expert).forEach((skill) => {
+          const nodeId = `soft:${skill}`;
+          ensureNode({
+            id: nodeId,
+            originId: skill,
+            type: 'soft',
+            label: skill
+          });
+          appendLink({
+            id: `${expertNodeId}->${nodeId}`,
+            source: expertNodeId,
+            target: nodeId,
+            type: 'soft'
+          });
         });
-        appendLink({
-          id: `${expertNodeId}->${nodeId}`,
-          source: expertNodeId,
-          target: nodeId,
-          type: 'soft'
-        });
-      });
+      }
     });
 
     nodes.forEach((node) => {
@@ -1058,7 +1066,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     });
 
     return { nodes, links };
-  }, [filteredExperts, resolveDomainName]);
+  }, [filteredExperts, includeSoftSkills, resolveDomainName]);
 
   const {
     nodes: assignmentGraphNodes,
@@ -1613,7 +1621,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         selectedExpert.consultingSkills.forEach((skill) =>
           set.add(`consulting:${skill}`)
         );
-        resolveSoftSkills(selectedExpert).forEach((skill) => set.add(`soft:${skill}`));
+        if (includeSoftSkills) {
+          resolveSoftSkills(selectedExpert).forEach((skill) => set.add(`soft:${skill}`));
+        }
       }
 
       if (viewMode === 'assignments') {
@@ -1668,6 +1678,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     moduleInitiatives,
     selectedExpert,
     selectedRoleAggregate,
+    includeSoftSkills,
     viewMode
   ]);
 
@@ -1684,9 +1695,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         selectedExpert.consultingSkills.forEach((skill) =>
           set.add(`expert:${selectedExpert.id}->consulting:${skill}`)
         );
-        resolveSoftSkills(selectedExpert).forEach((skill) =>
-          set.add(`expert:${selectedExpert.id}->soft:${skill}`)
-        );
+        if (includeSoftSkills) {
+          resolveSoftSkills(selectedExpert).forEach((skill) =>
+            set.add(`expert:${selectedExpert.id}->soft:${skill}`)
+          );
+        }
       }
 
       if (viewMode === 'assignments') {
@@ -1754,6 +1767,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     moduleInitiatives,
     selectedExpert,
     selectedRoleAggregate,
+    includeSoftSkills,
     viewMode
   ]);
 
@@ -2419,6 +2433,19 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                     : ''}
                 </Text>
                 <Text size="xs" view="secondary">{activeGraphDensity.description}</Text>
+              </div>
+              <div className={styles.graphSoftToggle}>
+                <Switch
+                  size="s"
+                  checked={includeSoftSkills}
+                  label="Учитывать soft skills"
+                  onChange={({ target }) => setIncludeSoftSkills(target.checked)}
+                />
+                <Text size="2xs" view="ghost" className={styles.graphSoftToggleDescription}>
+                  {includeSoftSkills
+                    ? 'Показываются связи и узлы soft skills'
+                    : 'Связи через soft skills скрыты из графа'}
+                </Text>
               </div>
             </div>
             <div ref={graphContainerRef} className={styles.graphContainer}>

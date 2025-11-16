@@ -191,6 +191,28 @@ const buildNameMap = (record: Record<string, string>): Map<string, string> => {
   return map;
 };
 
+const resolveLabelToId = (map: Map<string, string>, label: string): string | null => {
+  if (!label) {
+    return null;
+  }
+  const normalized = normalizeLabel(label);
+  if (!normalized) {
+    return null;
+  }
+  const direct = map.get(normalized);
+  if (direct) {
+    return direct;
+  }
+  const withoutPrefix = normalized.replace(/^[-—\s]+/, '').trim();
+  if (withoutPrefix) {
+    const fallback = map.get(withoutPrefix);
+    if (fallback) {
+      return fallback;
+    }
+  }
+  return null;
+};
+
 const slugifySkillId = (name: string): string =>
   name
     .trim()
@@ -699,7 +721,7 @@ export const parseExpertWorkbook = ({
     }
   });
   domainNames.forEach((name) => {
-    const id = domainNameMap.get(name.toLowerCase());
+    const id = resolveLabelToId(domainNameMap, name);
     if (id) {
       normalizedDomains.add(id);
     }
@@ -716,7 +738,7 @@ export const parseExpertWorkbook = ({
     }
   });
   moduleNames.forEach((name) => {
-    const id = moduleNameMap.get(name.toLowerCase());
+    const id = resolveLabelToId(moduleNameMap, name);
     if (id) {
       normalizedModules.add(id);
     }
