@@ -501,27 +501,6 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     ]
   );
 
-  const competencySelectionSummary = useMemo(() => {
-    if (competencyFilter.length === 0) {
-      return null;
-    }
-    const total = competencyOptions.length;
-    return `Выбрано ${competencyFilter.length} из ${total}`;
-  }, [competencyFilter.length, competencyOptions.length]);
-
-  const renderCompetencyValue = useCallback<ComboboxPropRenderValue<string>>(
-    ({ item }) => {
-      if (!competencySelectionSummary) {
-        return null;
-      }
-      if (competencyFilter[0] !== item) {
-        return null;
-      }
-      return <span className={styles.comboboxValueSummary}>{competencySelectionSummary}</span>;
-    },
-    [competencyFilter, competencySelectionSummary]
-  );
-
   const domainOptions = useMemo(() => {
     const set = new Set<string>();
     experts.forEach((expert) => {
@@ -547,6 +526,27 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [experts, matchesFilters]);
+
+  const competencySelectionSummary = useMemo(() => {
+    if (competencyFilter.length === 0) {
+      return null;
+    }
+    const total = competencyOptions.length;
+    return `Выбрано ${competencyFilter.length} из ${total}`;
+  }, [competencyFilter.length, competencyOptions.length]);
+
+  const renderCompetencyValue = useCallback<ComboboxPropRenderValue<string>>(
+    ({ item }) => {
+      if (!competencySelectionSummary) {
+        return null;
+      }
+      if (competencyFilter[0] !== item) {
+        return null;
+      }
+      return <span className={styles.comboboxValueSummary}>{competencySelectionSummary}</span>;
+    },
+    [competencyFilter, competencySelectionSummary]
+  );
 
   const consultingOptions = useMemo(() => {
     const set = new Set<string>();
