@@ -85,6 +85,7 @@ export type ExpertSkill = {
   proofStatus: SkillEvidenceStatus;
   evidence: SkillEvidenceRecord[];
   usage?: SkillUsage;
+  createdAt?: string;
   artifacts: string[];
   interest: SkillInterestLevel;
   availableFte: number;

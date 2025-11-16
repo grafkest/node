@@ -617,6 +617,14 @@ export const skills = skillRegistry;
 
 export { roleToSkillsMap };
 
+export const getKnownRoles = (): TeamRole[] => {
+  const roles = new Set<TeamRole>();
+  Object.keys(roleToSkillsMap).forEach((role) => {
+    roles.add(role as TeamRole);
+  });
+  return Array.from(roles).sort((a, b) => a.localeCompare(b, 'ru'));
+};
+
 export const getSkillRegistryVersion = (): number => registryVersion;
 
 export const subscribeToSkillRegistry = (listener: SkillListener): (() => void) => {

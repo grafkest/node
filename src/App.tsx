@@ -3634,7 +3634,8 @@ function buildExpertFromDraft(
   const skills = draft.skills.map((skill) => ({
     ...skill,
     artifacts: [...skill.artifacts],
-    usage: skill.usage ? { ...skill.usage } : undefined
+    usage: skill.usage ? { ...skill.usage } : undefined,
+    createdAt: skill.createdAt ?? new Date().toISOString()
   }));
 
   return {
