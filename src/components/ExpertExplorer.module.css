@@ -184,6 +184,17 @@
   gap: 2px;
 }
 
+.graphSoftToggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.graphSoftToggleDescription {
+  margin-left: 4px;
+}
+
 .list {
   display: flex;
   flex-direction: column;
