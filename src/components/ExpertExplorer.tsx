@@ -1997,7 +1997,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         </div>
       </section>
 
-      <section className={styles.content}>
+      <section
+        className={clsx(styles.content, {
+          [styles.listLayout]: viewMode === 'list'
+        })}
+      >
         {viewMode === 'list' ? (
           <div className={styles.listPane}>
             {filteredExperts.length === 0 ? (

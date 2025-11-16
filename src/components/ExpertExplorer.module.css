@@ -58,10 +58,14 @@
 
 .content {
   display: grid;
-  grid-template-columns: minmax(0, 0.65fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
   gap: 16px;
   min-height: 0;
   flex: 1;
+}
+
+.listLayout {
+  grid-template-columns: minmax(0, 0.65fr) minmax(320px, 1fr);
 }
 
 .rolePane {
