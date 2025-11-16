@@ -6,6 +6,7 @@ import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import { useTheme } from '@consta/uikit/Theme';
+import { forceCollide } from 'd3-force';
 import clsx from 'clsx';
 import React, {
   useCallback,
@@ -129,6 +130,13 @@ type AvailabilityMeta = {
 
 type RGBColor = { r: number; g: number; b: number };
 
+type GraphDensityOption = {
+  label: string;
+  value: 'all' | 'shared' | 'core';
+  minConnections: number;
+  description: string;
+};
+
 const viewOptions: ViewOption[] = [
   { label: 'Список', value: 'list' },
   { label: 'Граф навыков', value: 'graph' },
@@ -161,6 +169,52 @@ const DEFAULT_PALETTE: ExpertPalette = {
   moduleEdge: 'rgba(46, 139, 192, 0.45)',
   initiativeEdge: 'rgba(255, 111, 167, 0.45)',
   planEdge: 'rgba(255, 111, 167, 0.32)'
+};
+
+const graphDensityOptions: GraphDensityOption[] = [
+  {
+    label: 'Все навыки',
+    value: 'all',
+    minConnections: 1,
+    description: 'Полная детализация с сохранением всех редких навыков'
+  },
+  {
+    label: 'Совпадения 2+',
+    value: 'shared',
+    minConnections: 2,
+    description: 'Скрывать навыки, которые есть только у одного эксперта'
+  },
+  {
+    label: 'Ядро 3+',
+    value: 'core',
+    minConnections: 3,
+    description: 'Показывать только навыки, которыми делятся как минимум три эксперта'
+  }
+];
+
+const isSkillNode = (node: ForceNode) =>
+  node.type === 'domain' ||
+  node.type === 'competency' ||
+  node.type === 'consulting' ||
+  node.type === 'soft';
+
+const getNodeBaseRadius = (node: ForceNode): number =>
+  node.type === 'expert'
+    ? 14
+    : node.type === 'initiative'
+      ? 13
+      : node.type === 'role'
+        ? 12
+        : node.type === 'module' || node.type === 'domain'
+          ? 11
+          : node.type === 'competency' || node.type === 'soft'
+            ? 10
+            : 9;
+
+const getNodeRenderRadius = (node: ForceNode): number => {
+  const baseRadius = getNodeBaseRadius(node);
+  const connectionIntensity = Math.sqrt(Math.max(node.connectionCount ?? 0, 0));
+  return baseRadius + Math.min(8, connectionIntensity * 2);
 };
 
 const skillTypeLabel: Record<SkillFocus['type'], string> = {
@@ -202,6 +256,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [consultingFilter, setConsultingFilter] = useState<string[]>([]);
   const [softSkillFilter, setSoftSkillFilter] = useState<string[]>([]);
   const [roleFilter, setRoleFilter] = useState<TeamRole[]>([]);
+  const [graphDensity, setGraphDensity] = useState<GraphDensityOption['value']>('all');
   const [selectedExpertId, setSelectedExpertId] = useState<string | null>(null);
   const [isSkillEditorOpen, setIsSkillEditorOpen] = useState(false);
   const [skillEditorExpert, setSkillEditorExpert] = useState<ExpertProfile | null>(null);
@@ -222,6 +277,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const roleGraphZoomAppliedRef = useRef(false);
   const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
   const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
+  const activeGraphDensity = useMemo(() => {
+    return graphDensityOptions.find((option) => option.value === graphDensity) ?? graphDensityOptions[0];
+  }, [graphDensity]);
 
   const resolveDomainName = useCallback(
     (domainId: string) => domainNameMap[domainId] ?? domainNameById[domainId] ?? domainId,
@@ -1175,13 +1233,56 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     };
   }, [filteredExperts, initiatives, moduleNameMap]);
 
+  const displayedSkillGraphData = useMemo(() => {
+    if (activeGraphDensity.minConnections <= 1) {
+      return { nodes: skillGraphData.nodes, links: skillGraphData.links };
+    }
+
+    const allowedNodeIds = new Set<string>();
+    const filteredNodes = skillGraphData.nodes.filter((node) => {
+      if (!isSkillNode(node)) {
+        allowedNodeIds.add(node.id);
+        return true;
+      }
+      if ((node.connectionCount ?? 0) >= activeGraphDensity.minConnections) {
+        allowedNodeIds.add(node.id);
+        return true;
+      }
+      return false;
+    });
+
+    const filteredLinks = skillGraphData.links.filter((link) => {
+      const sourceId =
+        typeof link.source === 'string'
+          ? link.source
+          : (link.source as ForceNode).id;
+      const targetId =
+        typeof link.target === 'string'
+          ? link.target
+          : (link.target as ForceNode).id;
+      return allowedNodeIds.has(sourceId) && allowedNodeIds.has(targetId);
+    });
+
+    return { nodes: filteredNodes, links: filteredLinks };
+  }, [activeGraphDensity, skillGraphData]);
+
+  const graphVisibilityStats = useMemo(() => {
+    const totalSkills = skillGraphData.nodes.filter(isSkillNode).length;
+    const visibleSkills = displayedSkillGraphData.nodes.filter(isSkillNode).length;
+    return {
+      totalSkills,
+      visibleSkills,
+      hiddenSkills: Math.max(0, totalSkills - visibleSkills)
+    };
+  }, [displayedSkillGraphData.nodes, skillGraphData.nodes]);
+
   const assignmentGraphData = useMemo(
     () => ({ nodes: assignmentGraphNodes, links: assignmentGraphLinks }),
     [assignmentGraphLinks, assignmentGraphNodes]
   );
 
-  const skillGraphNodes = skillGraphData.nodes;
-  const skillGraphLinks = skillGraphData.links;
+  const skillGraphNodes = displayedSkillGraphData.nodes;
+  const skillGraphLinks = displayedSkillGraphData.links;
 
   useEffect(() => {
     if (viewMode === 'graph' || viewMode === 'assignments') {
@@ -1260,6 +1361,17 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       setFocusedAssignment(null);
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!focusedSkill || activeGraphDensity.minConnections <= 1) {
+      return;
+    }
+    const skillNodeId = `${focusedSkill.type}:${focusedSkill.originId}`;
+    const exists = displayedSkillGraphData.nodes.some((node) => node.id === skillNodeId);
+    if (!exists) {
+      setFocusedSkill(null);
+    }
+  }, [activeGraphDensity.minConnections, displayedSkillGraphData.nodes, focusedSkill]);
 
   useEffect(() => {
     if (!focusedAssignment) {
@@ -1408,14 +1520,15 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     const chargeForce = graph.d3Force('charge');
     if (chargeForce && typeof (chargeForce as { strength?: unknown }).strength === 'function') {
-      const charge = viewMode === 'assignments' ? -220 : -160;
+      const extraRepulsion =
+        viewMode === 'graph' ? Math.min(260, skillGraphNodes.length * 0.85) : 0;
+      const charge = viewMode === 'assignments' ? -220 : -160 - extraRepulsion;
       (chargeForce as { strength: (value: number) => void }).strength(charge);
     }
 
     const linkForce = graph.d3Force('link');
-    if (linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
-      const distance = viewMode === 'assignments' ? 110 : 90;
-      (linkForce as { distance: (value: number) => void }).distance(distance);
+    if (viewMode === 'assignments' && linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
+      (linkForce as { distance: (value: number) => void }).distance(110);
     }
     if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
       const strength = viewMode === 'assignments' ? 0.55 : 0.6;
@@ -1428,6 +1541,24 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     skillGraphNodes,
     viewMode
   ]);
+
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    if (viewMode !== 'graph') {
+      graph.d3Force('collision', null);
+      return;
+    }
+
+    const collisionForce = forceCollide<ForceNode>()
+      .radius((node) => getNodeRenderRadius(node) + 6)
+      .strength(0.9);
+    graph.d3Force('collision', collisionForce);
+    graph.d3ReheatSimulation();
+  }, [skillGraphNodes, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'roles') {
@@ -1773,21 +1904,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     (node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const typed = node as ForceNode;
 
-      const baseRadius =
-        typed.type === 'expert'
-          ? 14
-          : typed.type === 'initiative'
-            ? 13
-            : typed.type === 'role'
-              ? 12
-              : typed.type === 'module' || typed.type === 'domain'
-                ? 11
-                : typed.type === 'competency' || typed.type === 'soft'
-                  ? 10
-                  : 9;
-
       const connectionIntensity = Math.sqrt(Math.max(typed.connectionCount ?? 0, 0));
-      const radius = baseRadius + Math.min(8, connectionIntensity * 2);
+      const radius = getNodeRenderRadius(typed);
 
       const baseColor =
         typed.type === 'expert'
@@ -2246,32 +2364,57 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                 </div>
               </Card>
               )}
-              <div ref={graphContainerRef} className={styles.graphContainer}>
-                {filteredExperts.length === 0 ? (
-                  <div className={styles.graphPlaceholder}>
-                    <Text size="s" view="secondary">
-                      Нет данных для построения графа с выбранными фильтрами.
-                    </Text>
-                  </div>
-                ) : (
-                  <ForceGraph2D
-                    ref={graphRef}
-                    width={graphDimensions.width}
-                    height={graphDimensions.height}
-                    graphData={skillGraphData}
-                    backgroundColor={palette.background}
-                    nodeRelSize={4}
-                    cooldownTicks={80}
-                    onNodeClick={handleNodeClick}
-                    nodeCanvasObject={nodeCanvasObject}
-                    nodeCanvasObjectMode={() => 'replace'}
-                    linkColor={linkColor}
-                    linkWidth={linkWidth}
-                    enableZoomInteraction
-                    enablePanInteraction
+            <div className={styles.graphControls}>
+              <div className={styles.graphFilterButtons}>
+                {graphDensityOptions.map((option) => (
+                  <Button
+                    key={option.value}
+                    size="xs"
+                    view={option.value === activeGraphDensity.value ? 'primary' : 'ghost'}
+                    label={option.label}
+                    onClick={() => setGraphDensity(option.value)}
+                    className={styles.graphFilterButton}
                   />
-                )}
+                ))}
               </div>
+              <div className={styles.graphFilterMeta}>
+                <Text size="xs" view="ghost">
+                  {graphVisibilityStats.totalSkills > 0
+                    ? `Показано ${graphVisibilityStats.visibleSkills} из ${graphVisibilityStats.totalSkills} навыков`
+                    : 'Нет навыков для отображения'}
+                  {graphVisibilityStats.hiddenSkills > 0
+                    ? `, скрыто ${graphVisibilityStats.hiddenSkills}`
+                    : ''}
+                </Text>
+                <Text size="xs" view="secondary">{activeGraphDensity.description}</Text>
+              </div>
+            </div>
+            <div ref={graphContainerRef} className={styles.graphContainer}>
+              {filteredExperts.length === 0 ? (
+                <div className={styles.graphPlaceholder}>
+                  <Text size="s" view="secondary">
+                    Нет данных для построения графа с выбранными фильтрами.
+                  </Text>
+                </div>
+              ) : (
+                <ForceGraph2D
+                  ref={graphRef}
+                  width={graphDimensions.width}
+                  height={graphDimensions.height}
+                  graphData={displayedSkillGraphData}
+                  backgroundColor={palette.background}
+                  nodeRelSize={4}
+                  cooldownTicks={80}
+                  onNodeClick={handleNodeClick}
+                  nodeCanvasObject={nodeCanvasObject}
+                  nodeCanvasObjectMode={() => 'replace'}
+                  linkColor={linkColor}
+                  linkWidth={linkWidth}
+                  enableZoomInteraction
+                  enablePanInteraction
+                />
+              )}
+            </div>
             </div>
         ) : viewMode === 'assignments' ? (
           <div className={styles.graphPane}>
