@@ -64,6 +64,10 @@
   flex: 1;
 }
 
+.listLayout {
+  grid-template-columns: minmax(0, 0.65fr) minmax(320px, 1fr);
+}
+
 .rolePane {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);

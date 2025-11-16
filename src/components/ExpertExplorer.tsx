@@ -293,32 +293,6 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return Array.from(roleAssignments.keys()).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [roleAssignments]);
 
-  const domainOptions = useMemo(() => {
-    const set = new Set<string>();
-    experts.forEach((expert) => {
-      expert.domains.forEach((domainId) => set.add(domainId));
-    });
-    return Array.from(set).sort((a, b) =>
-      resolveDomainName(a).localeCompare(resolveDomainName(b), 'ru')
-    );
-  }, [experts, resolveDomainName]);
-
-  const competencyOptions = useMemo(() => {
-    const set = new Set<string>();
-    experts.forEach((expert) => {
-      expert.competencies.forEach((competency) => set.add(competency));
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [experts]);
-
-  const consultingOptions = useMemo(() => {
-    const set = new Set<string>();
-    experts.forEach((expert) => {
-      expert.consultingSkills.forEach((skill) => set.add(skill));
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [experts]);
-
   const softSkillOptions = useMemo(() => {
     const set = new Set<string>();
     experts.forEach((expert) => {
@@ -343,65 +317,177 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const selectedSoftSkillSet = useMemo(() => new Set(softSkillFilter), [softSkillFilter]);
   const selectedRoleSet = useMemo(() => new Set(roleFilter), [roleFilter]);
 
-  const filteredExperts = useMemo(() => {
-    return experts
-      .filter((expert) => {
-        if (
-          selectedDomainSet.size > 0 &&
-          !expert.domains.some((domainId) => selectedDomainSet.has(domainId))
-        ) {
-          return false;
-        }
+  const matchesFilters = useCallback(
+    (
+      expert: ExpertProfile,
+      options?: Partial<{
+        applyDomain: boolean;
+        applyCompetency: boolean;
+        applyConsulting: boolean;
+        applySoft: boolean;
+        applyRole: boolean;
+      }>
+    ) => {
+      const {
+        applyDomain = true,
+        applyCompetency = true,
+        applyConsulting = true,
+        applySoft = true,
+        applyRole = true
+      } = options ?? {};
 
-        if (
-          selectedCompetencySet.size > 0 &&
-          !Array.from(selectedCompetencySet).every((competency) =>
-            expert.competencies.includes(competency)
-          )
-        ) {
-          return false;
-        }
+      const domainMatches = selectedDomainSet.size
+        ? expert.domains.filter((domainId) => selectedDomainSet.has(domainId)).length
+        : 0;
+      if (applyDomain && selectedDomainSet.size > 0 && domainMatches === 0) {
+        return {
+          passes: false,
+          domainMatches,
+          competencyMatches: 0,
+          consultingMatches: 0
+        } as const;
+      }
 
-        if (
-          selectedConsultingSet.size > 0 &&
-          !Array.from(selectedConsultingSet).every((skill) =>
-            expert.consultingSkills.includes(skill)
-          )
-        ) {
-          return false;
-        }
+      const competencyMatches = selectedCompetencySet.size
+        ? expert.competencies.filter((competency) => selectedCompetencySet.has(competency))
+            .length
+        : 0;
+      if (applyCompetency && selectedCompetencySet.size > 0 && competencyMatches === 0) {
+        return {
+          passes: false,
+          domainMatches,
+          competencyMatches,
+          consultingMatches: 0
+        } as const;
+      }
 
-        if (
-          selectedSoftSkillSet.size > 0 &&
-          !Array.from(selectedSoftSkillSet).every((skill) =>
-            resolveSoftSkills(expert).includes(skill)
-          )
-        ) {
-          return false;
-        }
+      const consultingMatches = selectedConsultingSet.size
+        ? expert.consultingSkills.filter((skill) => selectedConsultingSet.has(skill)).length
+        : 0;
+      if (applyConsulting && selectedConsultingSet.size > 0 && consultingMatches === 0) {
+        return {
+          passes: false,
+          domainMatches,
+          competencyMatches,
+          consultingMatches
+        } as const;
+      }
 
+      if (applySoft && selectedSoftSkillSet.size > 0) {
+        const hasAllSoftSkills = Array.from(selectedSoftSkillSet).every((skill) =>
+          resolveSoftSkills(expert).includes(skill)
+        );
+        if (!hasAllSoftSkills) {
+          return {
+            passes: false,
+            domainMatches,
+            competencyMatches,
+            consultingMatches
+          } as const;
+        }
+      }
+
+      if (applyRole && selectedRoleSet.size > 0) {
         const expertRoles = expertRolesMap.get(expert.id);
-        if (selectedRoleSet.size > 0) {
-          if (!expertRoles) {
-            return false;
-          }
-
-          const hasSelectedRole = Array.from(expertRoles.keys()).some((role) =>
-            selectedRoleSet.has(role)
-          );
-          if (!hasSelectedRole) {
-            return false;
-          }
+        if (!expertRoles) {
+          return {
+            passes: false,
+            domainMatches,
+            competencyMatches,
+            consultingMatches
+          } as const;
         }
 
-        if (!normalizedSearch) {
-          return true;
+        const hasSelectedRole = Array.from(expertRoles.keys()).some((role) =>
+          selectedRoleSet.has(role)
+        );
+        if (!hasSelectedRole) {
+          return {
+            passes: false,
+            domainMatches,
+            competencyMatches,
+            consultingMatches
+          } as const;
         }
+      }
 
+      return {
+        passes: true,
+        domainMatches,
+        competencyMatches,
+        consultingMatches
+      } as const;
+    },
+    [
+      expertRolesMap,
+      selectedCompetencySet,
+      selectedConsultingSet,
+      selectedDomainSet,
+      selectedRoleSet,
+      selectedSoftSkillSet
+    ]
+  );
+
+  const domainOptions = useMemo(() => {
+    const set = new Set<string>();
+    experts.forEach((expert) => {
+      const result = matchesFilters(expert, { applyDomain: false });
+      if (!result.passes) {
+        return;
+      }
+      expert.domains.forEach((domainId) => set.add(domainId));
+    });
+    return Array.from(set).sort((a, b) =>
+      resolveDomainName(a).localeCompare(resolveDomainName(b), 'ru')
+    );
+  }, [experts, matchesFilters, resolveDomainName]);
+
+  const competencyOptions = useMemo(() => {
+    const set = new Set<string>();
+    experts.forEach((expert) => {
+      const result = matchesFilters(expert, { applyCompetency: false });
+      if (!result.passes) {
+        return;
+      }
+      expert.competencies.forEach((competency) => set.add(competency));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [experts, matchesFilters]);
+
+  const consultingOptions = useMemo(() => {
+    const set = new Set<string>();
+    experts.forEach((expert) => {
+      const result = matchesFilters(expert, { applyConsulting: false });
+      if (!result.passes) {
+        return;
+      }
+      expert.consultingSkills.forEach((skill) => set.add(skill));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [experts, matchesFilters]);
+
+  const filteredExperts = useMemo(() => {
+    const hasMatchSort =
+      selectedDomainSet.size > 0 ||
+      selectedCompetencySet.size > 0 ||
+      selectedConsultingSet.size > 0;
+
+    const entries: { expert: ExpertProfile; score: number }[] = [];
+
+    experts.forEach((expert) => {
+      const { passes, domainMatches, competencyMatches, consultingMatches } =
+        matchesFilters(expert);
+
+      if (!passes) {
+        return;
+      }
+
+      if (normalizedSearch) {
         const moduleNames = expert.modules.map(
           (moduleId) => moduleNameMap[moduleId] ?? moduleId
         );
         const domainNames = expert.domains.map((domainId) => resolveDomainName(domainId));
+        const expertRoles = expertRolesMap.get(expert.id);
         const roleLabels = expertRoles ? Array.from(expertRoles.keys()) : [];
         const haystack = [
           expert.fullName,
@@ -422,20 +508,40 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           .join(' ')
           .toLowerCase();
 
-        return haystack.includes(normalizedSearch);
+        if (!haystack.includes(normalizedSearch)) {
+          return;
+        }
+      }
+
+      const matchScore =
+        (selectedDomainSet.size > 0 ? domainMatches : 0) +
+        (selectedCompetencySet.size > 0 ? competencyMatches : 0) +
+        (selectedConsultingSet.size > 0 ? consultingMatches : 0);
+
+      entries.push({ expert, score: matchScore });
+    });
+
+    return entries
+      .sort((a, b) => {
+        if (hasMatchSort) {
+          return (
+            b.score - a.score ||
+            a.expert.fullName.localeCompare(b.expert.fullName, 'ru')
+          );
+        }
+        return a.expert.fullName.localeCompare(b.expert.fullName, 'ru');
       })
-      .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'));
+      .map((entry) => entry.expert);
   }, [
     experts,
+    expertRolesMap,
+    matchesFilters,
     moduleNameMap,
     normalizedSearch,
-    expertRolesMap,
+    resolveDomainName,
     selectedCompetencySet,
     selectedConsultingSet,
-    selectedDomainSet,
-    selectedRoleSet,
-    selectedSoftSkillSet,
-    resolveDomainName
+    selectedDomainSet
   ]);
 
   const selectedExpert = useMemo(
@@ -1891,7 +1997,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         </div>
       </section>
 
-      <section className={styles.content}>
+      <section
+        className={clsx(styles.content, {
+          [styles.listLayout]: viewMode === 'list'
+        })}
+      >
         {viewMode === 'list' ? (
           <div className={styles.listPane}>
             {filteredExperts.length === 0 ? (
