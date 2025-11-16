@@ -70,11 +70,13 @@ type ForceNode = NodeObject & {
   type: SkillFocus['type'] | 'expert' | 'role' | 'module' | 'initiative';
   originId: string;
   label: string;
+  connectionCount?: number;
 };
 
 type ForceLink = LinkObject & {
   id: string;
   type: SkillFocus['type'] | 'role' | 'module' | 'initiative' | 'plan';
+  preferredDistance?: number;
 };
 
 type ExpertPalette = {
@@ -837,13 +839,51 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (seenNodes.has(node.id)) {
         return seenNodes.get(node.id)!;
       }
-      seenNodes.set(node.id, node);
-      nodes.push(node);
-      return node;
+      const enrichedNode: ForceNode = {
+        ...node,
+        connectionCount: node.connectionCount ?? 0
+      };
+      seenNodes.set(node.id, enrichedNode);
+      nodes.push(enrichedNode);
+      return enrichedNode;
     };
 
     const appendLink = (link: ForceLink) => {
+      const sourceId =
+        typeof link.source === 'string'
+          ? link.source
+          : (link.source as ForceNode).id;
+      const targetId =
+        typeof link.target === 'string'
+          ? link.target
+          : (link.target as ForceNode).id;
+
+      const sourceNode = seenNodes.get(sourceId);
+      const targetNode = seenNodes.get(targetId);
+      const sourceLabelLength = sourceNode?.label.length ?? 0;
+      const targetLabelLength = targetNode?.label.length ?? 0;
+      const projectedConnections =
+        (sourceNode?.connectionCount ?? 0) +
+        (targetNode?.connectionCount ?? 0) +
+        2;
+
+      const baseDistance = 50;
+      const labelFactor = 4.5;
+      const densityFactor = 6;
+
+      link.preferredDistance =
+        baseDistance +
+        labelFactor * Math.max(sourceLabelLength, targetLabelLength) +
+        densityFactor * Math.sqrt(projectedConnections);
+
       links.push(link);
+
+      if (sourceNode) {
+        sourceNode.connectionCount = (sourceNode.connectionCount ?? 0) + 1;
+      }
+      if (targetNode) {
+        targetNode.connectionCount = (targetNode.connectionCount ?? 0) + 1;
+      }
     };
 
     filteredExperts.forEach((expert) => {
@@ -920,6 +960,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       });
     });
 
+    nodes.forEach((node) => {
+      const connections = node.connectionCount ?? 0;
+      node.val = 1 + Math.sqrt(connections);
+    });
+
     return { nodes, links };
   }, [filteredExperts, resolveDomainName]);
 
@@ -947,9 +992,20 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (seenNodes.has(node.id)) {
         return seenNodes.get(node.id)!;
       }
-      seenNodes.set(node.id, node);
-      nodes.push(node);
-      return node;
+      const enrichedNode: ForceNode = {
+        ...node,
+        connectionCount: node.connectionCount ?? 0
+      };
+      seenNodes.set(node.id, enrichedNode);
+      nodes.push(enrichedNode);
+      return enrichedNode;
+    };
+
+    const registerConnection = (nodeId: string) => {
+      const targetNode = seenNodes.get(nodeId);
+      if (targetNode) {
+        targetNode.connectionCount = (targetNode.connectionCount ?? 0) + 1;
+      }
     };
 
     const appendLink = (link: ForceLink) => {
@@ -958,6 +1014,16 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       }
       seenLinks.add(link.id);
       links.push(link);
+      const sourceId =
+        typeof link.source === 'string'
+          ? link.source
+          : (link.source as ForceNode).id;
+      const targetId =
+        typeof link.target === 'string'
+          ? link.target
+          : (link.target as ForceNode).id;
+      registerConnection(sourceId);
+      registerConnection(targetId);
     };
 
     const ensureAssignmentRecord = (expertId: string) => {
@@ -1093,6 +1159,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       }
     });
 
+    nodes.forEach((node) => {
+      const connections = node.connectionCount ?? 0;
+      node.val = 1 + Math.sqrt(connections);
+    });
+
     return {
       nodes,
       links,
@@ -1155,6 +1226,33 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   ]);
 
   useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) {
+      return;
+    }
+
+    const linkForce = graph.d3Force('link') as {
+      distance?: (distance: (link: LinkObject) => number) => void;
+    };
+
+    if (!linkForce || typeof linkForce.distance !== 'function') {
+      return;
+    }
+
+    const defaultDistance = 80;
+    if (viewMode === 'graph') {
+      linkForce.distance((link: LinkObject) => {
+        const typed = link as ForceLink;
+        return typed.preferredDistance ?? defaultDistance;
+      });
+    } else {
+      linkForce.distance(() => defaultDistance);
+    }
+
+    graph.d3ReheatSimulation();
+  }, [assignmentGraphLinks, skillGraphLinks, viewMode]);
+
+  useEffect(() => {
     if (viewMode !== 'graph') {
       setFocusedSkill(null);
     }
@@ -1195,13 +1293,33 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (seenNodes.has(node.id)) {
         return seenNodes.get(node.id)!;
       }
-      seenNodes.set(node.id, node);
-      nodes.push(node);
-      return node;
+      const enrichedNode: ForceNode = {
+        ...node,
+        connectionCount: node.connectionCount ?? 0
+      };
+      seenNodes.set(node.id, enrichedNode);
+      nodes.push(enrichedNode);
+      return enrichedNode;
     };
 
     const appendLink = (link: ForceLink) => {
       links.push(link);
+      const sourceId =
+        typeof link.source === 'string'
+          ? link.source
+          : (link.source as ForceNode).id;
+      const targetId =
+        typeof link.target === 'string'
+          ? link.target
+          : (link.target as ForceNode).id;
+      const sourceNode = seenNodes.get(sourceId);
+      const targetNode = seenNodes.get(targetId);
+      if (sourceNode) {
+        sourceNode.connectionCount = (sourceNode.connectionCount ?? 0) + 1;
+      }
+      if (targetNode) {
+        targetNode.connectionCount = (targetNode.connectionCount ?? 0) + 1;
+      }
     };
 
     const roleNodeId = `role:${selectedRoleAggregate.role}`;
@@ -1249,6 +1367,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           type: 'competency'
         });
       });
+    });
+
+    nodes.forEach((node) => {
+      const connections = node.connectionCount ?? 0;
+      node.val = 1 + Math.sqrt(connections);
     });
 
     return { nodes, links };
@@ -1650,7 +1773,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     (node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const typed = node as ForceNode;
 
-      const radius =
+      const baseRadius =
         typed.type === 'expert'
           ? 14
           : typed.type === 'initiative'
@@ -1662,6 +1785,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                 : typed.type === 'competency' || typed.type === 'soft'
                   ? 10
                   : 9;
+
+      const connectionIntensity = Math.sqrt(Math.max(typed.connectionCount ?? 0, 0));
+      const radius = baseRadius + Math.min(8, connectionIntensity * 2);
 
       const baseColor =
         typed.type === 'expert'
@@ -1698,7 +1824,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
               : typed.type === 'module' || typed.type === 'domain'
                 ? 14
                 : 12;
-      const fontSize = fontSizeBase / Math.sqrt(Math.max(globalScale, 0.6));
+      const fontSize =
+        (fontSizeBase + Math.min(4, connectionIntensity)) /
+        Math.sqrt(Math.max(globalScale, 0.6));
       const textY = (node.y ?? 0) + radius + 4;
 
       ctx.save();
