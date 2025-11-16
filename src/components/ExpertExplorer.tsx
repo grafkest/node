@@ -7,7 +7,6 @@ import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import { useTheme } from '@consta/uikit/Theme';
-import { forceCollide } from 'd3-force';
 import clsx from 'clsx';
 import React, {
   useCallback,
@@ -1576,24 +1575,6 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     skillGraphNodes,
     viewMode
   ]);
-
-  useEffect(() => {
-    const graph = graphRef.current;
-    if (!graph) {
-      return;
-    }
-
-    if (viewMode !== 'graph') {
-      graph.d3Force('collision', null);
-      return;
-    }
-
-    const collisionForce = forceCollide<ForceNode>()
-      .radius((node) => getNodeRenderRadius(node) + 6)
-      .strength(0.9);
-    graph.d3Force('collision', collisionForce);
-    graph.d3ReheatSimulation();
-  }, [skillGraphNodes, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'roles') {
