@@ -144,6 +144,29 @@
   min-height: 0;
 }
 
+.graphControls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.graphFilterButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.graphFilterButton {
+  white-space: nowrap;
+}
+
+.graphFilterMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .list {
   display: flex;
   flex-direction: column;
