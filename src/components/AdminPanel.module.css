@@ -238,6 +238,16 @@
   gap: 12px;
 }
 
+.importRoleHint {
+  line-height: 16px;
+}
+
+.importRoleFields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .importWarningList {
   margin: 0;
   padding-left: 20px;

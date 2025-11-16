@@ -1,7 +1,8 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Card } from '@consta/uikit/Card';
-import { Combobox } from '@consta/uikit/Combobox';
+import { Combobox, type ComboboxPropRenderValue } from '@consta/uikit/Combobox';
+import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
@@ -256,6 +257,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [consultingFilter, setConsultingFilter] = useState<string[]>([]);
   const [softSkillFilter, setSoftSkillFilter] = useState<string[]>([]);
   const [roleFilter, setRoleFilter] = useState<TeamRole[]>([]);
+  const [skillFilterMode, setSkillFilterMode] = useState<'inclusive' | 'strict'>('inclusive');
   const [graphDensity, setGraphDensity] = useState<GraphDensityOption['value']>('all');
   const [selectedExpertId, setSelectedExpertId] = useState<string | null>(null);
   const [isSkillEditorOpen, setIsSkillEditorOpen] = useState(false);
@@ -396,10 +398,15 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         applyRole = true
       } = options ?? {};
 
+      const requiresCompleteMatch = skillFilterMode === 'strict';
+
       const domainMatches = selectedDomainSet.size
         ? expert.domains.filter((domainId) => selectedDomainSet.has(domainId)).length
         : 0;
-      if (applyDomain && selectedDomainSet.size > 0 && domainMatches === 0) {
+      const domainSatisfied = requiresCompleteMatch
+        ? domainMatches === selectedDomainSet.size
+        : domainMatches > 0;
+      if (applyDomain && selectedDomainSet.size > 0 && !domainSatisfied) {
         return {
           passes: false,
           domainMatches,
@@ -412,7 +419,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         ? expert.competencies.filter((competency) => selectedCompetencySet.has(competency))
             .length
         : 0;
-      if (applyCompetency && selectedCompetencySet.size > 0 && competencyMatches === 0) {
+      const competencySatisfied = requiresCompleteMatch
+        ? competencyMatches === selectedCompetencySet.size
+        : competencyMatches > 0;
+      if (applyCompetency && selectedCompetencySet.size > 0 && !competencySatisfied) {
         return {
           passes: false,
           domainMatches,
@@ -424,7 +434,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const consultingMatches = selectedConsultingSet.size
         ? expert.consultingSkills.filter((skill) => selectedConsultingSet.has(skill)).length
         : 0;
-      if (applyConsulting && selectedConsultingSet.size > 0 && consultingMatches === 0) {
+      const consultingSatisfied = requiresCompleteMatch
+        ? consultingMatches === selectedConsultingSet.size
+        : consultingMatches > 0;
+      if (applyConsulting && selectedConsultingSet.size > 0 && !consultingSatisfied) {
         return {
           passes: false,
           domainMatches,
@@ -484,8 +497,30 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       selectedConsultingSet,
       selectedDomainSet,
       selectedRoleSet,
-      selectedSoftSkillSet
+      selectedSoftSkillSet,
+      skillFilterMode
     ]
+  );
+
+  const competencySelectionSummary = useMemo(() => {
+    if (competencyFilter.length === 0) {
+      return null;
+    }
+    const total = competencyOptions.length;
+    return `Выбрано ${competencyFilter.length} из ${total}`;
+  }, [competencyFilter.length, competencyOptions.length]);
+
+  const renderCompetencyValue = useCallback<ComboboxPropRenderValue<string>>(
+    ({ item }) => {
+      if (!competencySelectionSummary) {
+        return null;
+      }
+      if (competencyFilter[0] !== item) {
+        return null;
+      }
+      return <span className={styles.comboboxValueSummary}>{competencySelectionSummary}</span>;
+    },
+    [competencyFilter, competencySelectionSummary]
   );
 
   const domainOptions = useMemo(() => {
@@ -2104,6 +2139,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
             getItemLabel={(item) => item}
             onChange={(value) => setCompetencyFilter(value ?? [])}
             placeholder="Все компетенции"
+            renderValue={competencySelectionSummary ? renderCompetencyValue : undefined}
           />
         </div>
         <div className={styles.field}>
@@ -2150,6 +2186,21 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
             onChange={(value) => setRoleFilter(value ?? [])}
             placeholder="Все роли"
           />
+        </div>
+        <div className={styles.filterModeToggle}>
+          <Switch
+            size="s"
+            checked={skillFilterMode === 'strict'}
+            label="Искать навыки у одного эксперта"
+            onChange={({ target }) =>
+              setSkillFilterMode(target.checked ? 'strict' : 'inclusive')
+            }
+          />
+          <Text size="2xs" view="ghost" className={styles.filterModeDescription}>
+            {skillFilterMode === 'strict'
+              ? 'Показываются эксперты, которые покрывают все выбранные фильтры.'
+              : 'Отображаются эксперты с любым из выбранных навыков, ранжированные по совпадениям.'}
+          </Text>
         </div>
       </section>
 

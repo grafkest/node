@@ -28,6 +28,7 @@ import {
   type TeamRole,
   type UserStats,
   evidenceStatuses,
+  getSkillNameById,
   getSkillsByRole,
   registerRoleCompetency,
   registerSkillDefinition,
@@ -363,6 +364,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const domainParentLabelMap = useMemo(
     () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой каталог', ...domainLabelMap }),
     [domainLabelMap]
+  );
+
+  const availableRoles = useMemo<TeamRole[]>(
+    () => mergeStringCollections(TEAM_ROLES, experts.map((expert) => expert.title)) as TeamRole[],
+    [experts]
   );
 
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
@@ -864,6 +870,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             mode={selectedExpertId === '__new__' ? 'create' : 'edit'}
             draft={expertDraft}
             expertId={selectedExpertId === '__new__' ? null : selectedExpertId}
+            availableRoles={availableRoles}
             domainItems={parentDomainIds}
             domainLabelMap={domainLabelMap}
             moduleLabelMap={moduleLabelMap}
@@ -3029,6 +3036,7 @@ type ExpertFormProps = {
   mode: 'create' | 'edit';
   draft: ExpertDraftPayload;
   expertId: string | null;
+  availableRoles: TeamRole[];
   domainItems: string[];
   domainLabelMap: Record<string, string>;
   moduleLabelMap: Record<string, string>;
@@ -3053,6 +3061,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   mode,
   draft,
   expertId,
+  availableRoles,
   domainItems,
   domainLabelMap,
   moduleLabelMap,
@@ -3157,8 +3166,39 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     setImportError(null);
   };
 
+  const handleImportRoleSelect = (item: SelectItem<string> | null) => {
+    if (!importState || !item) {
+      return;
+    }
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return { ...prev, draft: { ...prev.draft, title: item.value } };
+    });
+  };
+
+  const handleImportRoleInput = (value: string | null) => {
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return { ...prev, draft: { ...prev.draft, title: value ?? '' } };
+    });
+  };
+
   const handleRegisterMissingSkill = (entry: MissingSkillEntry) => {
-    registerSkillDefinition(entry.definition);
+    const importRole = importState?.draft.title.trim();
+    const definitionRoles = entry.definition.roles ?? [];
+    const hasImportRole = importRole
+      ? definitionRoles.includes(importRole as TeamRole)
+      : false;
+    const definitionToRegister = hasImportRole
+      ? entry.definition
+      : importRole
+        ? { ...entry.definition, roles: [...definitionRoles, importRole as TeamRole] }
+        : entry.definition;
+    registerSkillDefinition(definitionToRegister);
     setImportState((prev) => {
       if (!prev) {
         return prev;
@@ -3326,17 +3366,22 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   const { lastName, firstName, middleName } = nameParts;
 
   const roleItems = useMemo<SelectItem<string>[]>(() => {
-    const base = TEAM_ROLES.map<SelectItem<string>>((role) => ({ label: role, value: role }));
+    const base = availableRoles.map<SelectItem<string>>((role) => ({ label: role, value: role }));
     if (draft.title && !base.some((item) => item.value === draft.title)) {
       return [{ label: draft.title, value: draft.title }, ...base];
     }
     return base;
-  }, [draft.title]);
+  }, [availableRoles, draft.title]);
 
-  const selectedRole = useMemo(
-    () => (TEAM_ROLES.includes(draft.title as TeamRole) ? (draft.title as TeamRole) : null),
-    [draft.title]
+  const existingRoleItems = useMemo<SelectItem<string>[]>(
+    () => availableRoles.map((role) => ({ label: role, value: role })),
+    [availableRoles]
   );
+
+  const selectedRole = useMemo(() => {
+    const normalized = draft.title.trim();
+    return normalized ? (normalized as TeamRole) : null;
+  }, [draft.title]);
 
   const hardSkillDefinitions = useMemo(() => {
     void skillRegistryVersion;
@@ -3361,11 +3406,6 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     });
     return map;
   }, [hardSkillDefinitions]);
-
-  const hardSkillNameSet = useMemo(
-    () => new Set(hardSkillDefinitions.map((definition) => definition.name)),
-    [hardSkillDefinitions]
-  );
 
   const hardSkillLevelItems = useMemo<SelectItem<SkillLevel>[]>(
     () =>
@@ -3401,6 +3441,12 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     return [...base, CREATE_LANGUAGE_OPTION];
   }, [draft.languages, languages]);
 
+  const importRoleName = importState?.draft.title.trim() ?? '';
+  const isImportRoleKnown = !importRoleName || availableRoles.includes(importRoleName);
+  const importRoleSelection = importState?.draft.title
+    ? existingRoleItems.find((item) => item.value === importState.draft.title) ?? null
+    : null;
+
   const updateCompetenciesFromSkills = useCallback(
     (
       skills: ExpertSkill[],
@@ -3409,20 +3455,22 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     ): { names: string[]; records: ExpertCompetencyRecord[] } => {
       const activeNames = new Set<string>();
       const derivedRecords = new Map<string, ExpertCompetencyRecord>();
+
       skills.forEach((skill) => {
         const definition = hardSkillMap.get(skill.id);
-        if (!definition) {
+        const resolvedName = definition?.name ?? getSkillNameById(skill.id) ?? skill.id;
+        if (!resolvedName) {
           return;
         }
-        activeNames.add(definition.name);
-        derivedRecords.set(definition.name, {
-          name: definition.name,
+        activeNames.add(resolvedName);
+        derivedRecords.set(resolvedName, {
+          name: resolvedName,
           level: skill.level,
           proofStatus: skill.proofStatus
         });
       });
 
-      const preserved = currentCompetencies.filter((competency) => !hardSkillNameSet.has(competency));
+      const preserved = currentCompetencies.filter((competency) => !activeNames.has(competency));
       const names = mergeStringCollections(preserved, Array.from(activeNames));
 
       const recordMap = new Map<string, ExpertCompetencyRecord>();
@@ -3443,7 +3491,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
 
       return { names, records };
     },
-    [hardSkillMap, hardSkillNameSet]
+    [hardSkillMap]
   );
 
   const areArraysEqual = (first: string[], second: string[]): boolean => {
@@ -4153,6 +4201,34 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {!isImportRoleKnown && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold">
+                  Новая роль
+                </Text>
+                <Text size="xs" view="secondary" className={styles.importRoleHint}>
+                  Роль «{importState.draft.title || 'не указана'}» отсутствует в текущем списке.
+                  Выберите существующую роль или укажите новое название — оно добавится в систему.
+                </Text>
+                <div className={styles.importRoleFields}>
+                  <Select<SelectItem<string>>
+                    size="s"
+                    placeholder="Выберите из существующих"
+                    items={existingRoleItems}
+                    value={importRoleSelection}
+                    getItemLabel={(item) => item.label}
+                    getItemKey={(item) => item.value}
+                    onChange={(item) => handleImportRoleSelect(item)}
+                  />
+                  <TextField
+                    size="s"
+                    value={importState.draft.title}
+                    onChange={(value) => handleImportRoleInput(value)}
+                    placeholder="Или добавьте новую роль"
+                  />
+                </div>
               </div>
             )}
             {importState.pendingSkills.length > 0 && (
