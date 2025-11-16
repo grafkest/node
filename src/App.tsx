@@ -178,8 +178,8 @@ function App() {
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
   const [graphCopyOptions, setGraphCopyOptions] = useState<
-    Set<'domains' | 'modules' | 'artifacts' | 'initiatives'>
-  >(() => new Set(['domains', 'modules', 'artifacts', 'initiatives']));
+    Set<'domains' | 'modules' | 'artifacts' | 'experts' | 'initiatives'>
+  >(() => new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
   const [isGraphActionInProgress, setIsGraphActionInProgress] = useState(false);
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
@@ -1092,6 +1092,7 @@ function App() {
         { id: 'domains' as const, label: 'Домены' },
         { id: 'modules' as const, label: 'Модули' },
         { id: 'artifacts' as const, label: 'Артефакты' },
+        { id: 'experts' as const, label: 'Сотрудники' },
         { id: 'initiatives' as const, label: 'Инициативы' }
       ],
     []
@@ -2913,6 +2914,7 @@ function App() {
       includeDomains: boolean;
       includeModules: boolean;
       includeArtifacts: boolean;
+      includeExperts: boolean;
       includeInitiatives: boolean;
     }) => {
       try {
@@ -2925,6 +2927,7 @@ function App() {
           domains: snapshot.domains.length,
           modules: snapshot.modules.length,
           artifacts: snapshot.artifacts.length,
+          experts: snapshot.experts?.length ?? 0,
           initiatives: snapshot.initiatives?.length ?? 0
         };
       } catch (error) {
@@ -2969,6 +2972,7 @@ function App() {
     const includeDomains = graphCopyOptions.has('domains');
     const includeModules = graphCopyOptions.has('modules');
     const includeArtifacts = graphCopyOptions.has('artifacts');
+    const includeExperts = graphCopyOptions.has('experts');
     const includeInitiatives = graphCopyOptions.has('initiatives');
 
     if (
@@ -2976,6 +2980,7 @@ function App() {
       !includeDomains &&
       !includeModules &&
       !includeArtifacts &&
+      !includeExperts &&
       !includeInitiatives
     ) {
       setGraphActionStatus({
@@ -2993,6 +2998,7 @@ function App() {
         includeDomains,
         includeModules,
         includeArtifacts,
+        includeExperts,
         includeInitiatives
       });
       setGraphActionStatus({
@@ -3001,7 +3007,7 @@ function App() {
       });
       setGraphNameDraft('');
       setGraphSourceIdDraft(null);
-      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts', 'initiatives']));
+      setGraphCopyOptions(new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
       setIsCreatePanelOpen(false);
       await refreshGraphs(created.id, { preserveSelection: false });
       showAdminNotice('success', `Граф «${created.name}» создан.`);
@@ -3540,6 +3546,7 @@ function App() {
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
+          experts={expertProfiles}
           initiatives={initiativeData}
           onImport={handleImportGraph}
           onImportFromGraph={handleImportFromExistingGraph}

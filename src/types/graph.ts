@@ -48,5 +48,6 @@ export type GraphCopyRequest = {
   includeDomains: boolean;
   includeModules: boolean;
   includeArtifacts: boolean;
+  includeExperts: boolean;
   includeInitiatives: boolean;
 };

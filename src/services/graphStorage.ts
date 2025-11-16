@@ -32,6 +32,7 @@ export async function createGraph(
     includeDomains: boolean;
     includeModules: boolean;
     includeArtifacts: boolean;
+    includeExperts: boolean;
     includeInitiatives: boolean;
   },
   signal?: AbortSignal
@@ -163,7 +164,7 @@ export async function importGraphFromSource(
     domains: request.includeDomains ? snapshot.domains : [],
     modules: request.includeModules ? snapshot.modules : [],
     artifacts: request.includeArtifacts ? snapshot.artifacts : [],
-    experts: snapshot.experts ?? [],
+    experts: request.includeExperts ? snapshot.experts ?? [] : [],
     initiatives: request.includeInitiatives ? snapshot.initiatives ?? [] : [],
     layout:
       request.includeModules && snapshot.layout
