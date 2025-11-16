@@ -15,10 +15,10 @@ const collectSkillStatuses = (skill: ExpertSkill): SkillEvidenceStatus[] => {
  */
 export const getSkillLastUsedDate = (skill: ExpertSkill): string | undefined => {
   if (!skill.usage) {
-    return undefined;
+    return skill.createdAt;
   }
 
-  const candidates = [skill.usage.to, skill.usage.from].filter(
+  const candidates = [skill.usage.to, skill.usage.from, skill.createdAt].filter(
     (value): value is string => Boolean(value)
   );
 

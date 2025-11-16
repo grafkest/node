@@ -545,10 +545,20 @@ const parseRoles = (raw: string): TeamRole[] => {
   if (!raw) {
     return [];
   }
-  const knownRoles = new Set(Object.keys(roleToSkillsMap) as TeamRole[]);
+  const seen = new Set<string>();
   return splitMultiline(raw)
     .map((value) => value.trim())
-    .filter((value): value is TeamRole => knownRoles.has(value as TeamRole));
+    .filter((value): value is TeamRole => {
+      if (!value) {
+        return false;
+      }
+      const normalized = value.toLowerCase();
+      if (seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
 };
 
 const coerceNumber = (value: string | number): number => {
@@ -579,6 +589,7 @@ export const parseExpertWorkbook = ({
 
   const profileValues = new Map<string, string>();
   const competencyRows: Array<{ name: string; level: string; proof: string; rowNumber: number }> = [];
+  const skillCreationTimestamp = new Date().toISOString();
   if (profileSheet) {
     const rows = utils.sheet_to_json<(string | number)[]>(profileSheet, {
       header: 1,
@@ -955,6 +966,7 @@ export const parseExpertWorkbook = ({
       level,
       proofStatus,
       evidence: [],
+      createdAt: skillCreationTimestamp,
       artifacts,
       interest,
       availableFte,
@@ -977,6 +989,7 @@ export const parseExpertWorkbook = ({
       level: override.level,
       proofStatus: override.proofStatus,
       evidence: [],
+      createdAt: skillCreationTimestamp,
       artifacts: [],
       interest: 'medium',
       availableFte: 0

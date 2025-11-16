@@ -3530,6 +3530,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
               level: definition.recommendedLevel as SkillLevel,
               proofStatus: 'claimed' as SkillEvidenceStatus,
               evidence: [],
+              createdAt: new Date().toISOString(),
               artifacts: [],
               interest: 'medium',
               availableFte: 0

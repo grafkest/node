@@ -16,7 +16,7 @@ import type {
   InitiativeWorkItemStatus,
   TeamRole
 } from '../data';
-import { getSkillNameById, getSkillsByRole } from '../data/skills';
+import { getKnownRoles, getSkillNameById, getSkillsByRole } from '../data/skills';
 import InitiativeGanttChart, {
   type InitiativeGanttBlocker,
   type InitiativeGanttDependency,
@@ -239,17 +239,32 @@ const statusOptions: SelectOption<InitiativeStatus>[] = [
   { label: 'Конвертирована', value: 'converted' }
 ];
 
-const roleOptions: SelectOption<TeamRole>[] = [
-  { label: 'Владелец продукта', value: 'Владелец продукта' },
-  { label: 'Эксперт R&D', value: 'Эксперт R&D' },
-  { label: 'Аналитик', value: 'Аналитик' },
-  { label: 'Backend', value: 'Backend' },
-  { label: 'Frontend', value: 'Frontend' },
-  { label: 'Архитектор', value: 'Архитектор' },
-  { label: 'Тестировщик', value: 'Тестировщик' },
-  { label: 'Руководитель проекта', value: 'Руководитель проекта' },
-  { label: 'UX', value: 'UX' }
+const defaultRoles: TeamRole[] = [
+  'Владелец продукта',
+  'Эксперт R&D',
+  'Аналитик',
+  'Backend',
+  'Frontend',
+  'Архитектор',
+  'Тестировщик',
+  'Руководитель проекта',
+  'UX'
 ];
+
+const mergeRoles = (base: TeamRole[], extra: TeamRole[]): TeamRole[] => {
+  const set = new Set<TeamRole>();
+  base.forEach((role) => set.add(role));
+  extra.forEach((role) => {
+    const normalized = role.trim();
+    if (normalized) {
+      set.add(normalized as TeamRole);
+    }
+  });
+  return Array.from(set);
+};
+
+const buildRoleOptions = (roles: TeamRole[]): SelectOption<TeamRole>[] =>
+  roles.map((role) => ({ label: role, value: role }));
 
 const workItemStatusOptions: SelectOption<InitiativeWorkItemStatus>[] = [
   { label: 'Исследование', value: 'discovery' },
@@ -318,8 +333,10 @@ const startDateFormatter = new Intl.DateTimeFormat('ru-RU', {
   year: 'numeric'
 });
 
+const DEFAULT_ROLE: TeamRole = 'Аналитик';
+
 const createWorkAssignmentDraft = (
-  role: TeamRole = roleOptions[0].value,
+  role: TeamRole = DEFAULT_ROLE,
   startDay = 0,
   durationDays = 5
 ): WorkAssignmentDraft => ({
@@ -335,7 +352,7 @@ const createWorkAssignmentDraft = (
   startDate: null
 });
 
-const createWorkDraft = (offset = 0): WorkDraft => ({
+const createWorkDraft = (role: TeamRole = DEFAULT_ROLE, offset = 0): WorkDraft => ({
   id: createId(),
   title: '',
   description: '',
@@ -343,7 +360,7 @@ const createWorkDraft = (offset = 0): WorkDraft => ({
   owner: '',
   timeframe: '',
   status: 'discovery',
-  assignments: [createWorkAssignmentDraft(roleOptions[0].value, offset)]
+  assignments: [createWorkAssignmentDraft(role, offset)]
 });
 
 const createApprovalStageDraft = (): ApprovalStageDraft => ({
@@ -354,7 +371,10 @@ const createApprovalStageDraft = (): ApprovalStageDraft => ({
   comment: ''
 });
 
-const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraft[] => {
+const buildWorksFromCreationDraft = (
+  draft: InitiativeCreationRequest,
+  defaultRole: TeamRole
+): WorkDraft[] => {
   const workMap = new Map<string, WorkDraft>();
   const baseStartDate = draft.startDate ? startOfDay(new Date(draft.startDate)) : null;
   const workItemMetadata = new Map(
@@ -456,7 +476,7 @@ const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraf
       owner: metadata.owner ?? '',
       timeframe: metadata.timeframe ?? '',
       status: metadata.status ?? 'discovery',
-      assignments: [createWorkAssignmentDraft()]
+      assignments: [createWorkAssignmentDraft(defaultRole)]
     });
   });
 
@@ -467,7 +487,7 @@ const buildWorksFromCreationDraft = (draft: InitiativeCreationRequest): WorkDraf
       work.assignments.length > 0 ? work.assignments : [createWorkAssignmentDraft()]
   }));
 
-  return works.length > 0 ? works : [createWorkDraft()];
+  return works.length > 0 ? works : [createWorkDraft(defaultRole)];
 };
 
 const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
@@ -553,12 +573,21 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerRepresentative, setCustomerRepresentative] = useState('');
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
-  const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft()]);
+  const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft(DEFAULT_ROLE)]);
   const [approvalStages, setApprovalStages] = useState<ApprovalStageDraft[]>([
     createApprovalStageDraft()
   ]);
   const [activeStep, setActiveStep] = useState<CreationStep>('details');
   const skillRegistryVersion = useSkillRegistryVersion();
+  const roleOptions = useMemo<SelectOption<TeamRole>[]>(() => {
+    const registryRoles = getKnownRoles();
+    const mergedRoles = mergeRoles(defaultRoles, registryRoles);
+    return buildRoleOptions(mergedRoles);
+  }, [skillRegistryVersion]);
+  const primaryRole = useMemo<TeamRole>(
+    () => roleOptions[0]?.value ?? DEFAULT_ROLE,
+    [roleOptions]
+  );
   const baseRoleSkillOptions = useMemo<Record<TeamRole, OptionItem[]>>(
     () =>
       roleOptions.reduce((acc, option) => {
@@ -573,7 +602,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         acc[option.value] = skillOptions;
         return acc;
       }, {} as Record<TeamRole, OptionItem[]>),
-    [skillRegistryVersion]
+    [roleOptions, skillRegistryVersion]
   );
   const createRoleSkillState = useCallback(
     () =>
@@ -581,11 +610,33 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         acc[option.value] = [...(baseRoleSkillOptions[option.value] ?? [])];
         return acc;
       }, {} as Record<TeamRole, OptionItem[]>),
-    [baseRoleSkillOptions]
+    [baseRoleSkillOptions, roleOptions]
   );
   const [roleSkillOptions, setRoleSkillOptions] = useState<Record<TeamRole, OptionItem[]>>(
     () => createRoleSkillState()
   );
+
+  useEffect(() => {
+    setRoleSkillOptions((prev) => {
+      const next = createRoleSkillState();
+
+      Object.entries(prev).forEach(([role, options]) => {
+        const roleKey = role as TeamRole;
+        const existing = next[roleKey] ?? [];
+        const merged = [...existing];
+
+        options.forEach((option) => {
+          if (!merged.some((item) => item.value === option.value)) {
+            merged.push(option);
+          }
+        });
+
+        next[roleKey] = merged.sort((a, b) => a.label.localeCompare(b.label, 'ru'));
+      });
+
+      return next;
+    });
+  }, [createRoleSkillState]);
 
   const hydrateFromDraft = useCallback(
     (draft: InitiativeCreationRequest | null) => {
@@ -614,7 +665,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         setCustomerRepresentative('');
         setCustomerContact('');
         setCustomerComment('');
-        setWorks([createWorkDraft()]);
+        setWorks([createWorkDraft(primaryRole)]);
         setApprovalStages([createApprovalStageDraft()]);
         setRoleSkillOptions(createRoleSkillState());
         setActiveStep('details');
@@ -728,7 +779,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       setCustomerContact(draft.customer?.contact ?? '');
       setCustomerComment(draft.customer?.comment ?? '');
 
-      const worksFromDraft = buildWorksFromCreationDraft(draft);
+      const worksFromDraft = buildWorksFromCreationDraft(draft, primaryRole);
       setWorks(worksFromDraft);
 
       const nextRoleSkills = createRoleSkillState();
@@ -771,6 +822,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       companyBaseItems,
       createRoleSkillState,
       domainBaseItems,
+      primaryRole,
       moduleBaseItems,
       unitBaseItems
     ]
@@ -1529,7 +1581,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   };
 
   const handleAddWork = () => {
-    setWorks((prev) => [...prev, createWorkDraft(prev.length * 5)]);
+    setWorks((prev) => [...prev, createWorkDraft(primaryRole, prev.length * 5)]);
   };
 
   const handleApprovalStageChange = (
@@ -1572,7 +1624,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                 Math.round(lastAssignment?.durationDays ?? 5)
               );
               const nextAssignment = createWorkAssignmentDraft(
-                lastAssignment?.role ?? roleOptions[0].value,
+                lastAssignment?.role ?? primaryRole,
                 nextStart,
                 defaultDuration
               );
@@ -2108,7 +2160,10 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                             <div className={styles.assignmentGrid}>
                               {work.assignments.map((assignment, index) => {
                                 const roleOption =
-                                  roleOptions.find((option) => option.value === assignment.role) ?? roleOptions[0];
+                                  roleOptions.find((option) => option.value === assignment.role) ?? {
+                                    label: primaryRole,
+                                    value: primaryRole
+                                  };
                                 const skillOptionsForRole = roleSkillOptions[assignment.role] ?? [];
                                 const selectedTask =
                                   skillOptionsForRole.find((option) => option.value === assignment.task) ?? null;
