@@ -1220,6 +1220,101 @@ const EmployeeWorkloadTrack: React.FC = () => {
     ? { start: displayedPeriod.start, end: displayedPeriod.end }
     : undefined;
 
+  const assigneeOptions = useMemo<SelectOption<string>[]>(() => {
+    return mockEmployees.map((employee) => ({
+      label: employee.fullName,
+      value: employee.id
+    }));
+  }, []);
+
+  const employeeNameMap = useMemo<Record<string, string>>(() => {
+    return mockEmployees.reduce<Record<string, string>>((acc, employee) => {
+      acc[employee.id] = employee.fullName;
+      return acc;
+    }, {});
+  }, []);
+
+  const systemNameMap = useMemo<Record<string, string>>(() => {
+    return systemOptions.reduce<Record<string, string>>((acc, option) => {
+      acc[option.value] = option.label;
+      return acc;
+    }, {});
+  }, []);
+
+  const initiativeNameMap = useMemo<Record<string, string>>(() => {
+    return initiativeOptions.reduce<Record<string, string>>((acc, option) => {
+      acc[option.value] = option.label;
+      return acc;
+    }, {});
+  }, []);
+
+  const mergeInitiativeTasks = useCallback(
+    (tasks: WorkloadTask[]): WorkloadTask[] => {
+      const tasksWithInitiative = tasks.filter((task) => task.initiativeId);
+      const tasksWithoutInitiative = tasks.filter((task) => !task.initiativeId);
+      const groupedTasks = new Map<string, WorkloadTask[]>();
+
+      tasksWithInitiative.forEach((task) => {
+        const list = groupedTasks.get(task.initiativeId ?? '') ?? [];
+        list.push(task);
+        groupedTasks.set(task.initiativeId ?? '', list);
+      });
+
+      const mergedSegments: WorkloadTask[] = [];
+
+      groupedTasks.forEach((list, initiativeId) => {
+        const sorted = list
+          .slice()
+          .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+        let currentStart = startOfDay(toDate(sorted[0].start));
+        let currentEnd = startOfDay(toDate(sorted[0].end));
+        let segmentIndex = 0;
+        let segmentNames = [sorted[0].name];
+
+        const pushSegment = () => {
+          const initiativeLabel = initiativeNameMap[initiativeId] ?? 'Инициатива';
+          mergedSegments.push({
+            id: `${initiativeId}-segment-${segmentIndex}`,
+            name: initiativeLabel,
+            start: formatIsoDate(currentStart),
+            end: formatIsoDate(currentEnd),
+            initiativeId,
+            kind: 'project',
+            badge: initiativeLabel,
+            description: `Задачи: ${segmentNames.join(', ')}`
+          });
+        };
+
+        for (let index = 1; index < sorted.length; index += 1) {
+          const task = sorted[index];
+          const taskStart = startOfDay(toDate(task.start));
+          const taskEnd = startOfDay(toDate(task.end));
+          const isContinuous = taskStart.getTime() <= addDays(currentEnd, 1).getTime();
+
+          if (isContinuous) {
+            if (taskEnd.getTime() > currentEnd.getTime()) {
+              currentEnd = taskEnd;
+            }
+            segmentNames.push(task.name);
+          } else {
+            pushSegment();
+            segmentIndex += 1;
+            currentStart = taskStart;
+            currentEnd = taskEnd;
+            segmentNames = [task.name];
+          }
+        }
+
+        pushSegment();
+      });
+
+      return [...mergedSegments, ...tasksWithoutInitiative].sort(
+        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+      );
+    },
+    [initiativeNameMap]
+  );
+
   const timelineData = useMemo(() => {
     const taskLookup = new Map<string, { task: WorkloadTask; employee: EmployeeWorkload }>();
 
@@ -1316,101 +1411,6 @@ const EmployeeWorkloadTrack: React.FC = () => {
   const handleClearTimelineTask = useCallback(() => {
     setActiveTimelineTaskId(null);
   }, []);
-
-  const assigneeOptions = useMemo<SelectOption<string>[]>(() => {
-    return mockEmployees.map((employee) => ({
-      label: employee.fullName,
-      value: employee.id
-    }));
-  }, []);
-
-  const employeeNameMap = useMemo<Record<string, string>>(() => {
-    return mockEmployees.reduce<Record<string, string>>((acc, employee) => {
-      acc[employee.id] = employee.fullName;
-      return acc;
-    }, {});
-  }, []);
-
-  const systemNameMap = useMemo<Record<string, string>>(() => {
-    return systemOptions.reduce<Record<string, string>>((acc, option) => {
-      acc[option.value] = option.label;
-      return acc;
-    }, {});
-  }, []);
-
-  const initiativeNameMap = useMemo<Record<string, string>>(() => {
-    return initiativeOptions.reduce<Record<string, string>>((acc, option) => {
-      acc[option.value] = option.label;
-      return acc;
-    }, {});
-  }, []);
-
-  const mergeInitiativeTasks = useCallback(
-    (tasks: WorkloadTask[]): WorkloadTask[] => {
-      const tasksWithInitiative = tasks.filter((task) => task.initiativeId);
-      const tasksWithoutInitiative = tasks.filter((task) => !task.initiativeId);
-      const groupedTasks = new Map<string, WorkloadTask[]>();
-
-      tasksWithInitiative.forEach((task) => {
-        const list = groupedTasks.get(task.initiativeId ?? '') ?? [];
-        list.push(task);
-        groupedTasks.set(task.initiativeId ?? '', list);
-      });
-
-      const mergedSegments: WorkloadTask[] = [];
-
-      groupedTasks.forEach((list, initiativeId) => {
-        const sorted = list
-          .slice()
-          .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-        let currentStart = startOfDay(toDate(sorted[0].start));
-        let currentEnd = startOfDay(toDate(sorted[0].end));
-        let segmentIndex = 0;
-        let segmentNames = [sorted[0].name];
-
-        const pushSegment = () => {
-          const initiativeLabel = initiativeNameMap[initiativeId] ?? 'Инициатива';
-          mergedSegments.push({
-            id: `${initiativeId}-segment-${segmentIndex}`,
-            name: initiativeLabel,
-            start: formatIsoDate(currentStart),
-            end: formatIsoDate(currentEnd),
-            initiativeId,
-            kind: 'project',
-            badge: initiativeLabel,
-            description: `Задачи: ${segmentNames.join(', ')}`
-          });
-        };
-
-        for (let index = 1; index < sorted.length; index += 1) {
-          const task = sorted[index];
-          const taskStart = startOfDay(toDate(task.start));
-          const taskEnd = startOfDay(toDate(task.end));
-          const isContinuous = taskStart.getTime() <= addDays(currentEnd, 1).getTime();
-
-          if (isContinuous) {
-            if (taskEnd.getTime() > currentEnd.getTime()) {
-              currentEnd = taskEnd;
-            }
-            segmentNames.push(task.name);
-          } else {
-            pushSegment();
-            segmentIndex += 1;
-            currentStart = taskStart;
-            currentEnd = taskEnd;
-            segmentNames = [task.name];
-          }
-        }
-
-        pushSegment();
-      });
-
-      return [...mergedSegments, ...tasksWithoutInitiative].sort(
-        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-      );
-    },
-    [initiativeNameMap]
-  );
 
   const selectedTask = useMemo(() => {
     return tasks.find((task) => task.id === selectedTaskId) ?? null;
