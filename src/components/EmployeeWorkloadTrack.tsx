@@ -9,7 +9,6 @@ import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import GanttTimeline, {
-  type GanttTimelineRow,
   type GanttTimelineTask,
   type GanttTimelineTaskKind,
   timelineScaleTabs,
@@ -254,10 +253,6 @@ const mockEmployees: EmployeeWorkload[] = [
     ]
   }
 ];
-
-const employeeById = new Map<string, EmployeeWorkload>(
-  mockEmployees.map((employee) => [employee.id, employee] as const)
-);
 
 const priorityOptions: SelectOption<TaskPriority>[] = [
   { label: 'Низкий', value: 'low' },

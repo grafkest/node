@@ -12,7 +12,6 @@ import {
   findSkillByName,
   getSkillNameById,
   isRoleCompetencyKnown,
-  roleToSkillsMap,
   skills,
   skillLevels
 } from '../data';
