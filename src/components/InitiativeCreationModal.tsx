@@ -580,6 +580,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [activeStep, setActiveStep] = useState<CreationStep>('details');
   const skillRegistryVersion = useSkillRegistryVersion();
   const roleOptions = useMemo<SelectOption<TeamRole>[]>(() => {
+    void skillRegistryVersion;
     const registryRoles = getKnownRoles();
     const mergedRoles = mergeRoles(defaultRoles, registryRoles);
     return buildRoleOptions(mergedRoles);

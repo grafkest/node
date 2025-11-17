@@ -35,12 +35,10 @@ import {
   skillLevels
 } from '../data';
 import type { ExpertDraftPayload } from '../types/expert';
-import {
-  exportExpertToExcel,
-  parseExpertWorkbook,
-  type ExpertImportResult,
-  type MissingCompetencyEntry,
-  type MissingSkillEntry
+import type {
+  ExpertImportResult,
+  MissingCompetencyEntry,
+  MissingSkillEntry
 } from '../utils/expertExcel';
 import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
 import styles from './AdminPanel.module.css';
@@ -3079,6 +3077,14 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const skillRegistryVersion = useSkillRegistryVersion();
+  const expertExcelRef = useRef<Promise<typeof import('../utils/expertExcel')> | null>(null);
+
+  const loadExpertExcel = () => {
+    if (!expertExcelRef.current) {
+      expertExcelRef.current = import('../utils/expertExcel');
+    }
+    return expertExcelRef.current;
+  };
 
   const handleDraftChange = <Key extends keyof ExpertDraftPayload>(
     key: Key,
@@ -3122,9 +3128,10 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     setIsImportModalOpen(true);
   };
 
-  const handleExpertExport = () => {
+  const handleExpertExport = async () => {
     try {
-      const buffer = exportExpertToExcel({
+      const { exportExpertToExcel } = await loadExpertExcel();
+      const buffer = await exportExpertToExcel({
         draft,
         expertId,
         domainLabelMap,
@@ -3342,7 +3349,8 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     setIsImporting(true);
     try {
       const buffer = await file.arrayBuffer();
-      const result = parseExpertWorkbook({
+      const { parseExpertWorkbook } = await loadExpertExcel();
+      const result = await parseExpertWorkbook({
         buffer,
         domainLabelMap,
         moduleLabelMap

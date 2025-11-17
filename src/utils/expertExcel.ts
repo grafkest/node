@@ -1,4 +1,13 @@
-import { read, utils, write } from 'xlsx';
+type XlsxModule = typeof import('xlsx');
+
+let xlsxModulePromise: Promise<XlsxModule> | null = null;
+
+const loadXlsxModule = async (): Promise<XlsxModule> => {
+  if (!xlsxModulePromise) {
+    xlsxModulePromise = import('xlsx');
+  }
+  return xlsxModulePromise;
+};
 import {
   type ExpertAvailability,
   type ExpertCompetencyRecord,
@@ -12,13 +21,12 @@ import {
   findSkillByName,
   getSkillNameById,
   isRoleCompetencyKnown,
-  roleToSkillsMap,
   skills,
   skillLevels
 } from '../data';
 import type { ExpertDraftPayload } from '../types/expert';
 
-type Workbook = ReturnType<typeof utils.book_new>;
+type Workbook = ReturnType<typeof import('xlsx').utils.book_new>;
 
 const PROFILE_SHEET = 'Profile';
 const SKILLS_SHEET = 'Skills';
@@ -258,12 +266,13 @@ export type ExpertExcelImportParams = {
   moduleLabelMap: Record<string, string>;
 };
 
-export const createExpertWorkbook = ({
+export const createExpertWorkbook = async ({
   draft,
   expertId,
   domainLabelMap,
   moduleLabelMap
-}: ExpertExcelExportParams): Workbook => {
+}: ExpertExcelExportParams): Promise<Workbook> => {
+  const { utils } = await loadXlsxModule();
   const workbook = utils.book_new();
 
   const profileMatrix: string[][] = [
@@ -453,8 +462,11 @@ export const createExpertWorkbook = ({
   return workbook;
 };
 
-export const exportExpertToExcel = (params: ExpertExcelExportParams): ArrayBuffer =>
-  write(createExpertWorkbook(params), { type: 'array', bookType: 'xlsx' });
+export const exportExpertToExcel = async (params: ExpertExcelExportParams): Promise<ArrayBuffer> => {
+  const { write } = await loadXlsxModule();
+  const workbook = await createExpertWorkbook(params);
+  return write(workbook, { type: 'array', bookType: 'xlsx' });
+};
 
 type SkillSheetRow = Record<SkillHeader, string | number>;
 
@@ -569,11 +581,12 @@ const coerceNumber = (value: string | number): number => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
-export const parseExpertWorkbook = ({
+export const parseExpertWorkbook = async ({
   buffer,
   domainLabelMap,
   moduleLabelMap
-}: ExpertExcelImportParams): ExpertImportResult => {
+}: ExpertExcelImportParams): Promise<ExpertImportResult> => {
+  const { read, utils } = await loadXlsxModule();
   const workbook = read(buffer, { type: 'array' });
 
   const profileSheet = workbook.Sheets[PROFILE_SHEET];
