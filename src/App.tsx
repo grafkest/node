@@ -3534,7 +3534,7 @@ function App() {
         aria-hidden={!isEmployeeTasksActive}
         style={{ display: isEmployeeTasksActive ? undefined : 'none' }}
       >
-        <EmployeeWorkloadTrack />
+        <EmployeeWorkloadTrack experts={expertProfiles} initiatives={initiativeData} />
       </main>
       <main
         className={styles.creationMain}

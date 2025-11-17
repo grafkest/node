@@ -29,6 +29,7 @@ import {
   type UserStats,
   evidenceStatuses,
   getSkillNameById,
+  getRolesForSkill,
   getSkillsByRole,
   registerRoleCompetency,
   registerSkillDefinition,
@@ -3163,10 +3164,39 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     setImportState(null);
   };
 
+  const ensureImportedSkillsRegistered = useCallback(() => {
+    if (!importState) {
+      return;
+    }
+    const importRole = importState.draft.title.trim();
+
+    importState.draft.skills.forEach((skill) => {
+      const existingName = getSkillNameById(skill.id);
+      const currentRoles = getRolesForSkill(skill.id);
+      const shouldAttachRole = importRole
+        ? !currentRoles.includes(importRole as TeamRole)
+        : false;
+
+      if (!existingName || shouldAttachRole) {
+        registerSkillDefinition({
+          id: skill.id,
+          name: existingName ?? skill.id,
+          description: existingName ?? skill.id,
+          category: 'hard',
+          sources: [],
+          recommendedLevel: 'P',
+          evidenceStatus: 'screened',
+          roles: shouldAttachRole ? [...currentRoles, importRole as TeamRole] : currentRoles
+        });
+      }
+    });
+  }, [importState]);
+
   const handleImportApply = () => {
     if (!importState) {
       return;
     }
+    ensureImportedSkillsRegistered();
     onChange(importState.draft);
     setImportState(null);
     setIsImportModalOpen(false);
