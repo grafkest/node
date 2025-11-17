@@ -3131,7 +3131,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   const handleExpertExport = async () => {
     try {
       const { exportExpertToExcel } = await loadExpertExcel();
-      const buffer = exportExpertToExcel({
+      const buffer = await exportExpertToExcel({
         draft,
         expertId,
         domainLabelMap,
@@ -3350,7 +3350,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     try {
       const buffer = await file.arrayBuffer();
       const { parseExpertWorkbook } = await loadExpertExcel();
-      const result = parseExpertWorkbook({
+      const result = await parseExpertWorkbook({
         buffer,
         domainLabelMap,
         moduleLabelMap
