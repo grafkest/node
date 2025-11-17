@@ -24,6 +24,7 @@ type WorkloadTask = {
   name: string;
   start: string;
   end: string;
+  initiativeId?: string;
   kind: WorkloadKind;
   badge: string;
   description?: string;
@@ -113,6 +114,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Расчёт юнит-экономики',
         start: '2024-01-08',
         end: '2024-02-23',
+        initiativeId: 'initiative-digital-2025',
         kind: 'project',
         badge: 'Проект'
       },
@@ -121,6 +123,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Аналитика маршрутов клиента',
         start: '2024-03-04',
         end: '2024-04-26',
+        initiativeId: 'initiative-digital-2025',
         kind: 'project',
         badge: 'Проект'
       },
@@ -129,6 +132,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Интервью по продукту Сервис X',
         start: '2024-05-06',
         end: '2024-07-05',
+        initiativeId: 'initiative-drone-monitoring',
         kind: 'out-of-project',
         badge: 'Вне проекта',
         description: 'Оценка экспертизы для нового направления'
@@ -149,6 +153,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Актуализация проекта «Цифровой профиль»',
         start: '2024-01-15',
         end: '2024-03-01',
+        initiativeId: 'initiative-smart-wells',
         kind: 'project',
         badge: 'Проект'
       },
@@ -157,6 +162,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Поддержка витрины показателей',
         start: '2024-03-11',
         end: '2024-05-17',
+        initiativeId: 'initiative-smart-wells',
         kind: 'project',
         badge: 'Проект'
       },
@@ -165,6 +171,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Концепция расчёта LTV',
         start: '2024-05-27',
         end: '2024-07-12',
+        initiativeId: 'initiative-sustainable-drilling',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -184,6 +191,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Расширение экосистемы партнёров',
         start: '2024-01-22',
         end: '2024-03-29',
+        initiativeId: 'initiative-digital-2025',
         kind: 'project',
         badge: 'Проект'
       },
@@ -192,6 +200,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Интеграция API поставщиков',
         start: '2024-04-08',
         end: '2024-06-21',
+        initiativeId: 'initiative-smart-wells',
         kind: 'project',
         badge: 'Проект'
       },
@@ -200,6 +209,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Запуск пилота «Экспресс-логистика»',
         start: '2024-07-01',
         end: '2024-08-16',
+        initiativeId: 'initiative-drone-monitoring',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -219,6 +229,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Миграция отчётности',
         start: '2024-01-29',
         end: '2024-03-15',
+        initiativeId: 'initiative-smart-wells',
         kind: 'training',
         badge: 'Развитие'
       },
@@ -227,6 +238,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Подготовка витрин ML',
         start: '2024-03-25',
         end: '2024-05-31',
+        initiativeId: 'initiative-digital-2025',
         kind: 'project',
         badge: 'Проект'
       },
@@ -235,6 +247,7 @@ const mockEmployees: EmployeeWorkload[] = [
         name: 'Разработка модели прогноза спроса',
         start: '2024-06-10',
         end: '2024-07-26',
+        initiativeId: 'initiative-sustainable-drilling',
         kind: 'out-of-project',
         badge: 'Вне проекта'
       }
@@ -1041,8 +1054,16 @@ type ViewTab = (typeof viewTabs)[number];
 
 type TimelineScale = TimelineScaleTab['value'];
 
+const timelineModeTabs = [
+  { label: 'Задачи сотрудников', value: 'tasks' },
+  { label: 'Инициативы', value: 'initiatives' }
+] as const;
+
+type TimelineMode = (typeof timelineModeTabs)[number];
+
 const EmployeeWorkloadTrack: React.FC = () => {
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>(timelineModeTabs[0]);
   const initialStoredTasks = useMemo(() => loadStoredTasks() ?? initialTaskList, []);
 
   const [tasks, setTasks] = useState<TaskListItem[]>(initialStoredTasks);
@@ -1100,12 +1121,15 @@ const EmployeeWorkloadTrack: React.FC = () => {
       if (!window) {
         return;
       }
+      const relationInitiativeId =
+        task.relation.type === 'initiative' ? task.relation.targetId ?? undefined : undefined;
       const entry = map.get(task.assigneeId) ?? [];
       entry.push({
         id: task.id,
         name: task.name,
         start: formatIsoDate(window.start),
         end: formatIsoDate(window.end),
+        initiativeId: relationInitiativeId,
         kind: 'project',
         badge: 'Команда',
         description: task.description
@@ -1201,40 +1225,10 @@ const EmployeeWorkloadTrack: React.FC = () => {
     ? { start: displayedPeriod.start, end: displayedPeriod.end }
     : undefined;
 
-  const timelineTaskLookup = useMemo(() => {
-    const map = new Map<string, { task: WorkloadTask; employee: EmployeeWorkload }>();
+  const timelineData = useMemo(() => {
+    const taskLookup = new Map<string, { task: WorkloadTask; employee: EmployeeWorkload }>();
 
-    mockEmployees.forEach((employee) => {
-      employee.tasks.forEach((task) => {
-        map.set(task.id, { task, employee });
-      });
-    });
-
-    teamTimelineTasksByEmployee.forEach((employeeTasks, employeeId) => {
-      const employee = employeeById.get(employeeId);
-      if (!employee) {
-        return;
-      }
-      employeeTasks.forEach((task) => {
-        map.set(task.id, { task, employee });
-      });
-    });
-
-    return map;
-  }, [teamTimelineTasksByEmployee]);
-
-  useEffect(() => {
-    if (activeTimelineTaskId && !timelineTaskLookup.has(activeTimelineTaskId)) {
-      setActiveTimelineTaskId(null);
-    }
-  }, [activeTimelineTaskId, timelineTaskLookup]);
-
-  const activeTimelineTask = activeTimelineTaskId
-    ? timelineTaskLookup.get(activeTimelineTaskId) ?? null
-    : null;
-
-  const timelineRows = useMemo<GanttTimelineRow[]>(() => {
-    return mockEmployees.map((employee) => {
+    const rows = mockEmployees.map((employee) => {
       const sortedTasks = employee.tasks
         .slice()
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
@@ -1244,6 +1238,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
         name: task.name,
         start: task.start,
         end: task.end,
+        initiativeId: task.initiativeId,
         kind: task.kind,
         badge: task.badge,
         description: task.description
@@ -1251,9 +1246,16 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
       const teamTasks = teamTimelineTasksByEmployee.get(employee.id) ?? [];
 
-      const tasks = [...baseTasks, ...teamTasks].sort(
-        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-      );
+      const mergedTasks =
+        timelineMode.value === 'initiatives'
+          ? mergeInitiativeTasks([...baseTasks, ...teamTasks])
+          : [...baseTasks, ...teamTasks].sort(
+              (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+            );
+
+      mergedTasks.forEach((task) => {
+        taskLookup.set(task.id, { task, employee });
+      });
 
       const sidebar = (
         <div className={styles.employeeCell}>
@@ -1290,9 +1292,24 @@ const EmployeeWorkloadTrack: React.FC = () => {
         </div>
       );
 
-      return { id: employee.id, sidebar, tasks };
+      return { id: employee.id, sidebar, tasks: mergedTasks };
     });
-  }, [teamTimelineTasksByEmployee]);
+
+    return { timelineRows: rows, timelineTaskLookup: taskLookup };
+  }, [mergeInitiativeTasks, teamTimelineTasksByEmployee, timelineMode.value]);
+
+  const timelineTaskLookup = timelineData.timelineTaskLookup;
+  const timelineRows = timelineData.timelineRows;
+
+  useEffect(() => {
+    if (activeTimelineTaskId && !timelineTaskLookup.has(activeTimelineTaskId)) {
+      setActiveTimelineTaskId(null);
+    }
+  }, [activeTimelineTaskId, timelineTaskLookup]);
+
+  const activeTimelineTask = activeTimelineTaskId
+    ? timelineTaskLookup.get(activeTimelineTaskId) ?? null
+    : null;
 
   const handleTimelineTaskClick = useCallback(
     ({ task }: { rowId: string; task: GanttTimelineTask }) => {
@@ -1332,6 +1349,73 @@ const EmployeeWorkloadTrack: React.FC = () => {
       return acc;
     }, {});
   }, []);
+
+  const mergeInitiativeTasks = useCallback(
+    (tasks: WorkloadTask[]): WorkloadTask[] => {
+      const tasksWithInitiative = tasks.filter((task) => task.initiativeId);
+      const tasksWithoutInitiative = tasks.filter((task) => !task.initiativeId);
+      const groupedTasks = new Map<string, WorkloadTask[]>();
+
+      tasksWithInitiative.forEach((task) => {
+        const list = groupedTasks.get(task.initiativeId ?? '') ?? [];
+        list.push(task);
+        groupedTasks.set(task.initiativeId ?? '', list);
+      });
+
+      const mergedSegments: WorkloadTask[] = [];
+
+      groupedTasks.forEach((list, initiativeId) => {
+        const sorted = list
+          .slice()
+          .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+        let currentStart = startOfDay(toDate(sorted[0].start));
+        let currentEnd = startOfDay(toDate(sorted[0].end));
+        let segmentIndex = 0;
+        let segmentNames = [sorted[0].name];
+
+        const pushSegment = () => {
+          const initiativeLabel = initiativeNameMap[initiativeId] ?? 'Инициатива';
+          mergedSegments.push({
+            id: `${initiativeId}-segment-${segmentIndex}`,
+            name: initiativeLabel,
+            start: formatIsoDate(currentStart),
+            end: formatIsoDate(currentEnd),
+            initiativeId,
+            kind: 'project',
+            badge: initiativeLabel,
+            description: `Задачи: ${segmentNames.join(', ')}`
+          });
+        };
+
+        for (let index = 1; index < sorted.length; index += 1) {
+          const task = sorted[index];
+          const taskStart = startOfDay(toDate(task.start));
+          const taskEnd = startOfDay(toDate(task.end));
+          const isContinuous = taskStart.getTime() <= addDays(currentEnd, 1).getTime();
+
+          if (isContinuous) {
+            if (taskEnd.getTime() > currentEnd.getTime()) {
+              currentEnd = taskEnd;
+            }
+            segmentNames.push(task.name);
+          } else {
+            pushSegment();
+            segmentIndex += 1;
+            currentStart = taskStart;
+            currentEnd = taskEnd;
+            segmentNames = [task.name];
+          }
+        }
+
+        pushSegment();
+      });
+
+      return [...mergedSegments, ...tasksWithoutInitiative].sort(
+        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+      );
+    },
+    [initiativeNameMap]
+  );
 
   const selectedTask = useMemo(() => {
     return tasks.find((task) => task.id === selectedTaskId) ?? null;
@@ -2059,6 +2143,14 @@ const EmployeeWorkloadTrack: React.FC = () => {
           </div>
         </div>
         <div className={styles.headerControls}>
+          <Tabs<TimelineMode>
+            size="s"
+            items={timelineModeTabs}
+            value={timelineMode}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            onChange={setTimelineMode}
+          />
           <Tabs<TimelineScaleTab>
             size="s"
             items={timelineScaleTabs}
@@ -2076,16 +2168,21 @@ const EmployeeWorkloadTrack: React.FC = () => {
             value={displayedPeriod ?? null}
             getItemLabel={(item) => item.label}
             getItemKey={(item) => item.value}
-            onChange={(option) =>
-              setSelectedPeriods((prev) => ({
-                ...prev,
-                [scale.value]: option?.value ?? null
-              }))
-            }
-            disabled={currentPeriodOptions.length === 0}
-          />
-        </div>
-      </header>
+          onChange={(option) =>
+            setSelectedPeriods((prev) => ({
+              ...prev,
+              [scale.value]: option?.value ?? null
+            }))
+          }
+          disabled={currentPeriodOptions.length === 0}
+        />
+      </div>
+    </header>
+      <Text size="xs" view="secondary">
+        {timelineMode.value === 'initiatives'
+          ? 'Задачи объединены по инициативам и показываются едиными полосами, если периоды идут без разрывов.'
+          : 'Показаны все задачи сотрудников в разрезе проектов и активности команды.'}
+      </Text>
       <div className={styles.legend} aria-hidden={true}>
         <div className={styles.legendItem}>
           <span className={styles.legendMarker} data-kind="project" />
