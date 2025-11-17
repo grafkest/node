@@ -891,6 +891,47 @@ export const parseExpertWorkbook = async ({
   const skillMap = new Map<string, ExpertSkill>();
   const skillNameRegistry = new Map<string, string>();
 
+  const registerCompetencySkill = (
+    record: ExpertCompetencyRecord,
+    rowNumber: number
+  ): { skillId: string; isNewDefinition: boolean } | null => {
+    const name = record.name.trim();
+    if (!name) {
+      return null;
+    }
+
+    const existingDefinition = findSkillByName(name);
+    const skillId = existingDefinition?.id ?? slugifySkillId(name || `competency-${rowNumber}`);
+    if (!skillId) {
+      return null;
+    }
+
+    skillNameRegistry.set(skillId, existingDefinition?.name ?? name);
+
+    const currentSkill = skillMap.get(skillId);
+    const level = record.level ?? currentSkill?.level ?? 'P';
+    const proofStatus = record.proofStatus ?? currentSkill?.proofStatus ?? 'claimed';
+
+    const baseSkill: ExpertSkill = currentSkill ?? {
+      id: skillId,
+      level,
+      proofStatus,
+      evidence: [],
+      createdAt: skillCreationTimestamp,
+      artifacts: [],
+      interest: 'medium',
+      availableFte: 0
+    };
+
+    skillMap.set(skillId, {
+      ...baseSkill,
+      level,
+      proofStatus
+    });
+
+    return { skillId, isNewDefinition: !existingDefinition };
+  };
+
   skillRows.forEach((row, index) => {
     const rawCategory = String(row.Category ?? '');
     const skillName = String(row['Skill Name'] ?? '').trim();
@@ -1007,6 +1048,10 @@ export const parseExpertWorkbook = async ({
       interest: 'medium',
       availableFte: 0
     });
+  });
+
+  competencyCandidates.forEach((candidate) => {
+    registerCompetencySkill(candidate.record, candidate.rowNumber);
   });
 
   if (evidenceSheet) {
