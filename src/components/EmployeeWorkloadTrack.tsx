@@ -8,6 +8,7 @@ import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ExpertProfile, Initiative } from '../data';
 import GanttTimeline, {
   type GanttTimelineTask,
   type GanttTimelineTaskKind,
@@ -296,7 +297,7 @@ const systemOptions: SelectOption<string>[] = [
   { label: 'Лаборатория продвинутой аналитики', value: 'system-analytics-lab' }
 ];
 
-const initiativeOptions: SelectOption<string>[] = [
+const defaultInitiativeOptions: SelectOption<string>[] = [
   { label: 'Цифровизация добычи 2025', value: 'initiative-digital-2025' },
   { label: 'Экосистема интеллектуальных скважин', value: 'initiative-smart-wells' },
   { label: 'Программа беспилотного мониторинга', value: 'initiative-drone-monitoring' },
@@ -609,7 +610,7 @@ const defaultTaskDraft: TaskDraft = {
   predecessorId: null,
   relationType: 'system',
   relatedSystemId: systemOptions[0]?.value ?? null,
-  relatedInitiativeId: initiativeOptions[0]?.value ?? null
+  relatedInitiativeId: defaultInitiativeOptions[0]?.value ?? null
 };
 
 const parseDateValue = (value: string): Date | null => {
@@ -993,7 +994,10 @@ const createPreviewTaskFromDraft = (draft: TaskDraft, id = 'draft'): TaskListIte
   };
 };
 
-const mapTaskToDraft = (task: TaskListItem): TaskDraft => {
+const mapTaskToDraft = (
+  task: TaskListItem,
+  initiativeOptions: SelectOption<string>[]
+): TaskDraft => {
   const draft: TaskDraft = {
     name: task.name,
     priority: task.priority,
@@ -1056,7 +1060,60 @@ const timelineModeTabs = [
 
 type TimelineMode = (typeof timelineModeTabs)[number];
 
-const EmployeeWorkloadTrack: React.FC = () => {
+type EmployeeWorkloadTrackProps = {
+  experts: ExpertProfile[];
+  initiatives: Initiative[];
+};
+
+const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
+  experts,
+  initiatives
+}) => {
+  const initiativeOptions = useMemo<SelectOption<string>[]>(() => {
+    const base = initiatives.map<SelectOption<string>>((initiative) => ({
+      label: initiative.name,
+      value: initiative.id
+    }));
+    if (base.length > 0) {
+      return base;
+    }
+    return defaultInitiativeOptions;
+  }, [initiatives]);
+
+  const dynamicEmployees = useMemo<EmployeeWorkload[]>(() => {
+    const toWorkloadValue = (availability: ExpertProfile['availability']): number => {
+      switch (availability) {
+        case 'busy':
+          return 0.95;
+        case 'partial':
+          return 0.65;
+        default:
+          return 0.35;
+      }
+    };
+
+    return experts.map<EmployeeWorkload>((expert, index) => ({
+      id: expert.id,
+      fullName: expert.fullName,
+      position: expert.title,
+      rank: index + 1,
+      workload: toWorkloadValue(expert.availability),
+      availability: expert.availabilityComment || 'Доступен под запрос',
+      focus: expert.focusAreas[0] ?? expert.summary ?? 'Задачи уточняются',
+      tasks: []
+    }));
+  }, [experts]);
+
+  const employees = useMemo(() => {
+    const existingIds = new Set(mockEmployees.map((employee) => employee.id));
+    const merged = [...mockEmployees];
+    dynamicEmployees.forEach((employee) => {
+      if (!existingIds.has(employee.id)) {
+        merged.push(employee);
+      }
+    });
+    return merged;
+  }, [dynamicEmployees]);
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
   const [timelineMode, setTimelineMode] = useState<TimelineMode>(timelineModeTabs[0]);
   const initialStoredTasks = useMemo(() => loadStoredTasks() ?? initialTaskList, []);
@@ -1066,7 +1123,10 @@ const EmployeeWorkloadTrack: React.FC = () => {
     initialStoredTasks[0]?.id ?? null
   );
   const [activeView, setActiveView] = useState<ViewTab>(viewTabs[0]);
-  const [taskDraft, setTaskDraft] = useState<TaskDraft>(defaultTaskDraft);
+  const [taskDraft, setTaskDraft] = useState<TaskDraft>((): TaskDraft => ({
+    ...defaultTaskDraft,
+    relatedInitiativeId: initiativeOptions[0]?.value ?? null
+  }));
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -1145,7 +1205,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
   }, []);
 
   const timelineDateTasks = useMemo(() => {
-    const projectTasks = mockEmployees.flatMap((employee) =>
+    const projectTasks = employees.flatMap((employee) =>
       employee.tasks.map((task) => ({
         start: startOfDay(toDate(task.start)),
         end: startOfDay(toDate(task.end))
@@ -1158,7 +1218,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
     }));
 
     return [...projectTasks, ...teamTasks];
-  }, [teamTaskWindows]);
+  }, [employees, teamTaskWindows]);
 
   const minTaskStart = useMemo(() => {
     if (timelineDateTasks.length === 0) {
@@ -1212,6 +1272,20 @@ const EmployeeWorkloadTrack: React.FC = () => {
     }));
   }, [periodOptions]);
 
+  useEffect(() => {
+    setTaskDraft((prev) => {
+      const nextInitiativeId = prev.relatedInitiativeId && initiativeOptions.some((option) => option.value === prev.relatedInitiativeId)
+        ? prev.relatedInitiativeId
+        : initiativeOptions[0]?.value ?? null;
+
+      if (nextInitiativeId === prev.relatedInitiativeId) {
+        return prev;
+      }
+
+      return { ...prev, relatedInitiativeId: nextInitiativeId };
+    });
+  }, [initiativeOptions]);
+
   const currentPeriodOptions = periodOptions[scale.value];
   const selectedPeriodValue = selectedPeriods[scale.value];
   const activePeriod = currentPeriodOptions.find((option) => option.value === selectedPeriodValue) ?? null;
@@ -1221,18 +1295,18 @@ const EmployeeWorkloadTrack: React.FC = () => {
     : undefined;
 
   const assigneeOptions = useMemo<SelectOption<string>[]>(() => {
-    return mockEmployees.map((employee) => ({
+    return employees.map((employee) => ({
       label: employee.fullName,
       value: employee.id
     }));
-  }, []);
+  }, [employees]);
 
   const employeeNameMap = useMemo<Record<string, string>>(() => {
-    return mockEmployees.reduce<Record<string, string>>((acc, employee) => {
+    return employees.reduce<Record<string, string>>((acc, employee) => {
       acc[employee.id] = employee.fullName;
       return acc;
     }, {});
-  }, []);
+  }, [employees]);
 
   const systemNameMap = useMemo<Record<string, string>>(() => {
     return systemOptions.reduce<Record<string, string>>((acc, option) => {
@@ -1246,7 +1320,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
       acc[option.value] = option.label;
       return acc;
     }, {});
-  }, []);
+  }, [initiativeOptions]);
 
   const mergeInitiativeTasks = useCallback(
     (tasks: WorkloadTask[]): WorkloadTask[] => {
@@ -1318,7 +1392,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
   const timelineData = useMemo(() => {
     const taskLookup = new Map<string, { task: WorkloadTask; employee: EmployeeWorkload }>();
 
-    const rows = mockEmployees.map((employee) => {
+    const rows = employees.map((employee) => {
       const sortedTasks = employee.tasks
         .slice()
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
@@ -1386,7 +1460,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
     });
 
     return { timelineRows: rows, timelineTaskLookup: taskLookup };
-  }, [mergeInitiativeTasks, teamTimelineTasksByEmployee, timelineMode.value]);
+  }, [employees, mergeInitiativeTasks, teamTimelineTasksByEmployee, timelineMode.value]);
 
   const timelineTaskLookup = timelineData.timelineTaskLookup;
   const timelineRows = timelineData.timelineRows;
@@ -1438,7 +1512,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
     (assigneeId: string, referenceTask: TaskListItem) => {
       const dueDate =
         teamTaskWindows.get(referenceTask.id)?.end ?? getScheduleDueDate(referenceTask.schedule);
-      const employee = mockEmployees.find((item) => item.id === assigneeId);
+      const employee = employees.find((item) => item.id === assigneeId);
 
       const overlappingProjectTasks = (() => {
         if (!employee || !dueDate) {
@@ -1471,7 +1545,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
 
       return overlappingProjectTasks + overlappingTeamTasks;
     },
-    [tasks, teamTaskWindows]
+    [employees, tasks, teamTaskWindows]
   );
 
   const getAssigneeLoadLevel = useCallback(
@@ -1599,29 +1673,35 @@ const EmployeeWorkloadTrack: React.FC = () => {
         ? prev.map((task) => (task.id === editingTaskId ? nextTask : task))
         : [nextTask, ...prev]
     );
-    setTaskDraft(() => ({ ...defaultTaskDraft }));
+    setTaskDraft(() => ({
+      ...defaultTaskDraft,
+      relatedInitiativeId: initiativeOptions[0]?.value ?? null
+    }));
     setEditingTaskId(null);
     setFormError(null);
     setSelectedTaskId(taskId);
-  }, [editingTaskId, taskDraft]);
+  }, [editingTaskId, initiativeOptions, taskDraft]);
 
   const handleEditTask = useCallback(
     (task: TaskListItem) => {
-      setTaskDraft(mapTaskToDraft(task));
+      setTaskDraft(mapTaskToDraft(task, initiativeOptions));
       setEditingTaskId(task.id);
       setFormError(null);
       if (activeView.value !== 'planner') {
         setActiveView(viewTabs[1]);
       }
     },
-    [activeView.value, setActiveView]
+    [activeView.value, initiativeOptions, setActiveView]
   );
 
   const handleCancelEdit = useCallback(() => {
-    setTaskDraft(() => ({ ...defaultTaskDraft }));
+    setTaskDraft(() => ({
+      ...defaultTaskDraft,
+      relatedInitiativeId: initiativeOptions[0]?.value ?? null
+    }));
     setEditingTaskId(null);
     setFormError(null);
-  }, []);
+  }, [initiativeOptions]);
 
   return (
     <div className={styles.wrapper}>
@@ -2130,7 +2210,7 @@ const EmployeeWorkloadTrack: React.FC = () => {
           </Text>
           <div className={styles.summary}>
             <Text size="xs" view="secondary">
-              Сотрудники: {mockEmployees.length}
+              Сотрудники: {employees.length}
             </Text>
             <Text size="xs" view="secondary">
               Показаны кандидаты с учетом загрузки по задачам

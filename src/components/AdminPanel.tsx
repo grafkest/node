@@ -28,7 +28,9 @@ import {
   type TeamRole,
   type UserStats,
   evidenceStatuses,
+  findSkillByName,
   getSkillNameById,
+  getRolesForSkill,
   getSkillsByRole,
   registerRoleCompetency,
   registerSkillDefinition,
@@ -3101,6 +3103,14 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
 
   const formatList = (values: string[]): string => values.join('\n');
 
+  const slugifySkillId = (name: string): string =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\u0400-\u04ff]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-');
+
   const buildExportFileName = () => {
     const baseName = draft.fullName.trim() || 'expert-profile';
     const normalized = baseName
@@ -3163,10 +3173,39 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     setImportState(null);
   };
 
+  const ensureImportedSkillsRegistered = useCallback(() => {
+    if (!importState) {
+      return;
+    }
+    const importRole = importState.draft.title.trim();
+
+    importState.draft.skills.forEach((skill) => {
+      const existingName = getSkillNameById(skill.id);
+      const currentRoles = getRolesForSkill(skill.id);
+      const shouldAttachRole = importRole
+        ? !currentRoles.includes(importRole as TeamRole)
+        : false;
+
+      if (!existingName || shouldAttachRole) {
+        registerSkillDefinition({
+          id: skill.id,
+          name: existingName ?? skill.id,
+          description: existingName ?? skill.id,
+          category: 'hard',
+          sources: [],
+          recommendedLevel: 'P',
+          evidenceStatus: 'screened',
+          roles: shouldAttachRole ? [...currentRoles, importRole as TeamRole] : currentRoles
+        });
+      }
+    });
+  }, [importState]);
+
   const handleImportApply = () => {
     if (!importState) {
       return;
     }
+    ensureImportedSkillsRegistered();
     onChange(importState.draft);
     setImportState(null);
     setIsImportModalOpen(false);
@@ -3275,6 +3314,57 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       if (!prev) {
         return prev;
       }
+
+      const normalizedRole = entry.roleTitle.trim();
+      const existingDefinition = findSkillByName(entry.competencyName);
+      const competencyRecord = prev.draft.competencyRecords?.find(
+        (record) => record.name === entry.competencyName
+      );
+      const level = competencyRecord?.level ?? 'P';
+      const proofStatus = competencyRecord?.proofStatus ?? 'screened';
+      const skillId = existingDefinition?.id ?? slugifySkillId(entry.competencyName);
+      const mergedRoles = existingDefinition?.roles ?? [];
+      const shouldAttachRole =
+        normalizedRole && !mergedRoles.includes(normalizedRole as TeamRole)
+          ? [...mergedRoles, normalizedRole as TeamRole]
+          : mergedRoles;
+
+      registerSkillDefinition({
+        id: skillId,
+        name: existingDefinition?.name ?? entry.competencyName,
+        description: existingDefinition?.description ?? entry.competencyName,
+        category: 'hard',
+        sources: existingDefinition?.sources ?? [],
+        recommendedLevel: existingDefinition?.recommendedLevel ?? level,
+        evidenceStatus: existingDefinition?.evidenceStatus ?? proofStatus,
+        roles: shouldAttachRole
+      });
+
+      const existingSkill = prev.draft.skills.find((skill) => skill.id === skillId);
+      const nextSkills = existingSkill
+        ? prev.draft.skills.map((skill) =>
+            skill.id === skillId ? { ...skill, level, proofStatus } : skill
+          )
+        : [
+            ...prev.draft.skills,
+            {
+              id: skillId,
+              level,
+              proofStatus,
+              evidence: [],
+              artifacts: [],
+              createdAt: new Date().toISOString(),
+              interest: 'medium',
+              availableFte: 0
+            }
+          ];
+
+      const nextCompetencies = updateCompetenciesFromSkills(
+        nextSkills,
+        prev.draft.competencies,
+        prev.draft.competencyRecords ?? []
+      );
+
       const pendingCompetencies = prev.pendingCompetencies.filter(
         (item) =>
           item.competencyName !== entry.competencyName || item.roleTitle !== entry.roleTitle
@@ -3285,15 +3375,21 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       );
       return {
         ...prev,
+        draft: {
+          ...prev.draft,
+          skills: nextSkills,
+          competencies: nextCompetencies.names,
+          competencyRecords: nextCompetencies.records
+        },
         pendingCompetencies,
         result: {
           ...prev.result,
           missingCompetencies: remainingMissing,
           warnings: [
             ...prev.result.warnings,
-            `Компетенция «${entry.competencyName}» добавлена в базу роли «${
+            `Компетенция «${entry.competencyName}» добавлена как hard skill и связана с ролью «${
               entry.roleTitle || 'роль не указана'
-            }» и будет импортирована.`
+            }».`
           ]
         }
       };
