@@ -27,7 +27,6 @@ import {
   type TeamMember,
   type TeamRole,
   type UserStats,
-  type Initiative,
   evidenceStatuses,
   findSkillByName,
   getSkillNameById,
