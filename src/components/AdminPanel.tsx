@@ -39,6 +39,7 @@ import {
 import type { ExpertDraftPayload } from '../types/expert';
 import type {
   ExpertImportResult,
+  MissingDomainEntry,
   MissingCompetencyEntry,
   MissingSkillEntry
 } from '../utils/expertExcel';
@@ -3049,6 +3050,7 @@ type ExpertImportDialogState = {
   result: ExpertImportResult;
   pendingSkills: MissingSkillEntry[];
   pendingCompetencies: MissingCompetencyEntry[];
+  pendingDomains: MissingDomainEntry[];
   fileName: string;
 };
 
@@ -3124,10 +3126,12 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         errors: [...result.errors],
         warnings: [...result.warnings],
         missingHardSkills: [...result.missingHardSkills],
-        missingCompetencies: [...result.missingCompetencies]
+        missingCompetencies: [...result.missingCompetencies],
+        missingDomains: [...result.missingDomains]
       },
       pendingSkills: [...result.missingHardSkills],
       pendingCompetencies: [...result.missingCompetencies],
+      pendingDomains: [...result.missingDomains],
       fileName
     });
     setIsImportModalOpen(true);
@@ -3430,6 +3434,62 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     });
   };
 
+  const handleResolveMissingDomain = (entry: MissingDomainEntry, targetId: string) => {
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingDomains = prev.pendingDomains.filter(
+        (item) => item.requestedValue !== entry.requestedValue || item.source !== entry.source
+      );
+      const remainingMissing = prev.result.missingDomains.filter(
+        (item) => item.requestedValue !== entry.requestedValue || item.source !== entry.source
+      );
+      const domainSet = new Set(prev.draft.domains);
+      domainSet.add(targetId);
+      const resolvedLabel = domainLabelMap[targetId] ?? targetId;
+      return {
+        ...prev,
+        draft: { ...prev.draft, domains: Array.from(domainSet) },
+        pendingDomains,
+        result: {
+          ...prev.result,
+          missingDomains: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Домен «${entry.requestedValue}» сопоставлен с «${resolvedLabel}».`
+          ]
+        }
+      };
+    });
+  };
+
+  const handleSkipMissingDomain = (entry: MissingDomainEntry) => {
+    setImportState((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const pendingDomains = prev.pendingDomains.filter(
+        (item) => item.requestedValue !== entry.requestedValue || item.source !== entry.source
+      );
+      const remainingMissing = prev.result.missingDomains.filter(
+        (item) => item.requestedValue !== entry.requestedValue || item.source !== entry.source
+      );
+      return {
+        ...prev,
+        pendingDomains,
+        result: {
+          ...prev.result,
+          missingDomains: remainingMissing,
+          warnings: [
+            ...prev.result.warnings,
+            `Домен «${entry.requestedValue}» будет пропущен.`
+          ]
+        }
+      };
+    });
+  };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const [file] = event.target.files ?? [];
     if (!file) {
@@ -3475,6 +3535,11 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   const existingRoleItems = useMemo<SelectItem<string>[]>(
     () => availableRoles.map((role) => ({ label: role, value: role })),
     [availableRoles]
+  );
+
+  const domainOptions = useMemo<SelectItem<string>[]>(
+    () => domainItems.map((id) => ({ label: domainLabelMap[id] ?? id, value: id })),
+    [domainItems, domainLabelMap]
   );
 
   const selectedRole = useMemo(() => {
@@ -4303,6 +4368,49 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
                 </ul>
               </div>
             )}
+            {importState.pendingDomains.length > 0 && (
+              <div className={styles.importIssues}>
+                <Text size="s" weight="semibold">Неизвестные домены</Text>
+                <Text size="xs" view="secondary">
+                  Эти доменные области отсутствуют в базе. Сопоставьте их с существующими
+                  или пропустите.
+                </Text>
+                <div className={styles.listStack}>
+                  {importState.pendingDomains.map((entry, index) => (
+                    <div
+                      key={`${entry.source}-${entry.requestedValue}-${index}`}
+                      className={styles.importSkillCard}
+                    >
+                      <Text size="s" weight="semibold">{entry.requestedValue}</Text>
+                      <Text size="xs" view="secondary">
+                        {entry.source === 'id'
+                          ? 'Указан идентификатор, отсутствующий в базе.'
+                          : 'Указанное название отсутствует в базе.'}
+                      </Text>
+                      <Combobox<SelectItem<string>>
+                        size="s"
+                        placeholder="Выберите существующую доменную область"
+                        items={domainOptions}
+                        value={null}
+                        getItemLabel={(item) => item.label}
+                        getItemKey={(item) => item.value}
+                        onChange={(item) =>
+                          item ? handleResolveMissingDomain(entry, item.value) : undefined
+                        }
+                      />
+                      <div className={styles.importSkillActions}>
+                        <Button
+                          size="xs"
+                          view="ghost"
+                          label="Пропустить"
+                          onClick={() => handleSkipMissingDomain(entry)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {!isImportRoleKnown && (
               <div className={styles.importIssues}>
                 <Text size="s" weight="semibold">
@@ -4438,7 +4546,8 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
                 disabled={
                   importState.result.errors.length > 0 ||
                   importState.pendingSkills.length > 0 ||
-                  importState.pendingCompetencies.length > 0
+                  importState.pendingCompetencies.length > 0 ||
+                  importState.pendingDomains.length > 0
                 }
                 onClick={handleImportApply}
               />

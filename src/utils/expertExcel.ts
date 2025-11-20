@@ -251,6 +251,11 @@ export type MissingCompetencyEntry = {
   proofLabel?: string;
 };
 
+export type MissingDomainEntry = {
+  requestedValue: string;
+  source: 'id' | 'name';
+};
+
 export type ExpertImportResult = {
   draft: ExpertDraftPayload;
   requestedExpertId?: string;
@@ -258,6 +263,7 @@ export type ExpertImportResult = {
   warnings: string[];
   missingHardSkills: MissingSkillEntry[];
   missingCompetencies: MissingCompetencyEntry[];
+  missingDomains: MissingDomainEntry[];
 };
 
 export type ExpertExcelImportParams = {
@@ -737,17 +743,35 @@ export const parseExpertWorkbook = async ({
   const domainIds = splitMultiline(getProfileValue('domainIds'));
   const domainNames = splitMultiline(getProfileValue('domains'));
   const normalizedDomains = new Set<string>();
+  const missingDomains: MissingDomainEntry[] = [];
+  const missingDomainRegistry = new Set<string>();
   domainIds.forEach((id) => {
     if (domainLabelMap[id]) {
       normalizedDomains.add(id);
     } else if (id) {
-      warnings.push(`Домен «${id}» отсутствует в системе и будет пропущен.`);
+      const registryKey = `id:${id.toLowerCase()}`;
+      if (!missingDomainRegistry.has(registryKey)) {
+        missingDomainRegistry.add(registryKey);
+        missingDomains.push({ requestedValue: id, source: 'id' });
+      }
+      warnings.push(`Домен «${id}» отсутствует в системе и требует сопоставления.`);
     }
   });
   domainNames.forEach((name) => {
     const id = resolveLabelToId(domainNameMap, name);
     if (id) {
       normalizedDomains.add(id);
+    } else if (name) {
+      const normalized = name.trim();
+      if (!normalized) {
+        return;
+      }
+      const registryKey = `name:${normalized.toLowerCase()}`;
+      if (!missingDomainRegistry.has(registryKey)) {
+        missingDomainRegistry.add(registryKey);
+        missingDomains.push({ requestedValue: normalized, source: 'name' });
+      }
+      warnings.push(`Домен «${normalized}» отсутствует в системе и требует сопоставления.`);
     }
   });
 
@@ -1146,7 +1170,8 @@ export const parseExpertWorkbook = async ({
     errors,
     warnings,
     missingHardSkills,
-    missingCompetencies
+    missingCompetencies,
+    missingDomains
   };
 };
 
