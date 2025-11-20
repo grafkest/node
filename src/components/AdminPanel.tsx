@@ -2503,40 +2503,35 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
         </div>
         {onDelete && <Button size="s" view="clear" label="Удалить модуль" onClick={onDelete} />}
       </div>
-      {moduleSections.map((section, index) => (
-        <Collapse
-          key={section.id}
-          isOpen={current === index}
-          onClick={() => goToStep(index)}
-          label={
-            <div className={styles.collapseLabel}>
-              <Text size="s" weight="semibold">
-                {section.title}
-              </Text>
-              <Text size="xs" view="secondary">
-                Раздел {index + 1} из {moduleSections.length}
-              </Text>
-            </div>
-          }
-        >
-          <div className={styles.sectionContent}>
-            {section.id === 'general' && renderGeneralSection()}
-            {section.id === 'calculation' && renderCalculationSection()}
-            {section.id === 'technical' && renderTechnicalSection()}
-            {section.id === 'nonFunctional' && renderNonFunctionalSection()}
-          </div>
-          <div className={styles.stepActions}>
-            {index > 0 && (
-              <Button size="s" view="ghost" label="Вернуться" onClick={() => goToStep(index - 1)} />
-            )}
-            {index < moduleSections.length - 1 ? (
-              <Button size="s" label="Заполнить следующий раздел" onClick={() => goToStep(index + 1)} />
-            ) : (
-              <Button size="s" view="primary" label="Сохранить модуль" onClick={onSubmit} />
-            )}
-          </div>
-        </Collapse>
-      ))}
+      <Tabs
+        value={moduleSections[current]}
+        onChange={({ value }) => {
+          const index = moduleSections.findIndex((s) => s.id === value.id);
+          if (index >= 0) goToStep(index);
+        }}
+        items={moduleSections}
+        getItemLabel={(item) => item.title}
+        getItemKey={(item) => item.id}
+        size="s"
+        className={styles.moduleTabs}
+      />
+      <div className={styles.moduleFormContent}>
+        {moduleSections[current].id === 'general' && renderGeneralSection()}
+        {moduleSections[current].id === 'calculation' && renderCalculationSection()}
+        {moduleSections[current].id === 'technical' && renderTechnicalSection()}
+        {moduleSections[current].id === 'nonFunctional' && renderNonFunctionalSection()}
+        
+        <div className={styles.stepActions}>
+          {current > 0 && (
+            <Button size="s" view="ghost" label="Назад" onClick={() => goToStep(current - 1)} />
+          )}
+          {current < moduleSections.length - 1 ? (
+            <Button size="s" label="Далее" onClick={() => goToStep(current + 1)} />
+          ) : (
+            <Button size="s" view="primary" label="Сохранить модуль" onClick={onSubmit} />
+          )}
+        </div>
+      </div>
     </div>
   );
 };

@@ -2316,8 +2316,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                       className={clsx(styles.expertCard, {
                         [styles.expertCardActive]: isActive
                       })}
-                      verticalSpace="l"
-                      horizontalSpace="l"
+                      verticalSpace="m"
+                      horizontalSpace="m"
                       shadow={false}
                       onClick={() => handleSelectExpert(expert.id)}
                       role="button"
@@ -2330,40 +2330,24 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                       }}
                     >
                       <div className={styles.expertCardHeader}>
-                        <Text size="m" weight="semibold">
+                        <Text size="l" weight="bold">
                           {expert.fullName}
                         </Text>
-                        <Text size="xs" view="secondary">
+                        <Text size="s" view="secondary">
                           {expert.title}
                         </Text>
                       </div>
-                      <Text size="xs" view="ghost">
-                        {expert.summary}
-                      </Text>
+                      
                       <div className={styles.expertCardMeta}>
-                        <Badge size="xs" view="filled" label={`${expert.experienceYears} лет опыта`} />
-                        <Badge size="xs" view="stroked" label={expert.location} />
+                        <Badge size="s" view="stroked" status="system" label={`${expert.experienceYears} лет опыта`} />
+                        <Badge size="s" view="stroked" status="system" label={expert.location} />
                         <Badge
-                          size="xs"
+                          size="s"
                           view="filled"
                           status={availability.status}
                           label={availability.label}
                         />
                       </div>
-                      <div className={styles.skillBadges}>
-                        {expert.competencies.slice(0, 3).map((competency) => (
-                          <Badge key={competency} size="xs" view="stroked" label={competency} />
-                        ))}
-                      </div>
-                      {resolveSoftSkills(expert).length > 0 && (
-                        <div className={styles.softSkillBadges}>
-                          {resolveSoftSkills(expert)
-                            .slice(0, 3)
-                            .map((skill) => (
-                              <Badge key={skill} size="xs" view="ghost" label={skill} />
-                            ))}
-                        </div>
-                      )}
                     </Card>
                   );
                 })}

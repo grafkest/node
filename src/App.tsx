@@ -1,3 +1,4 @@
+import { Theme, presetGpnDefault, presetGpnDark } from '@consta/uikit/Theme';
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
@@ -88,6 +89,8 @@ import {
   type RolePlanningDraft
 } from './utils/initiativeMatching';
 import { preparePlannerModuleSelections } from './utils/initiativePlanner';
+import { LayoutShell } from './components/LayoutShell';
+import { CreateGraphModal } from './components/CreateGraphModal';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -175,6 +178,7 @@ function App() {
     [sidebarBaseHeight]
   );
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
   const [graphCopyOptions, setGraphCopyOptions] = useState<
@@ -3073,19 +3077,6 @@ function App() {
     (isGraphsLoading && graphs.length === 0) ||
     (isSnapshotLoading && !hasLoadedSnapshotRef.current);
 
-  if (shouldShowInitialLoader) {
-    return (
-      <Layout className={styles.app} direction="column">
-        <div className={styles.loadingState}>
-          <Loader size="m" />
-          <Text size="s" view="secondary">
-            Загружаем доступные графы и их содержимое...
-          </Text>
-        </div>
-      </Layout>
-    );
-  }
-
   const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
   const isStatsActive = viewMode === 'stats';
@@ -3135,10 +3126,79 @@ function App() {
   const deleteGraphDisabled =
     !activeGraph || activeGraph.isDefault || isGraphActionInProgress || isGraphsLoading;
 
-  const createButtonLabel = isCreatePanelOpen ? 'Отменить создание' : 'Создать граф';
+  const headerActions = (
+    <div className={styles.graphSelectorControls}>
+      <Select<{ label: string; value: string }>
+        size="s"
+        items={graphSelectOptions}
+        value={graphSelectValue}
+        placeholder={isGraphsLoading ? 'Загрузка графов...' : 'Выберите граф'}
+        disabled={graphSelectOptions.length === 0 || isGraphsLoading}
+        getItemLabel={(item) => item.label}
+        getItemKey={(item) => item.value}
+        onChange={(option) => {
+          if (option) {
+            handleSelectGraph(option.value);
+          }
+        }}
+      />
+      {activeGraphBadge && (
+        <Badge
+          className={styles.graphBadge}
+          size="s"
+          view="filled"
+          status={activeGraphBadge.status}
+          label={activeGraphBadge.label}
+        />
+      )}
+      <Button
+        size="s"
+        view="secondary"
+        label="Создать граф"
+        onClick={() => {
+          setIsCreatePanelOpen(true);
+          setGraphActionStatus(null);
+        }}
+        disabled={isGraphsLoading}
+      />
+      <Button
+        size="s"
+        view="ghost"
+        label="Удалить граф"
+        onClick={() => {
+          if (activeGraphId) {
+            void handleDeleteGraph(activeGraphId);
+          }
+        }}
+        disabled={deleteGraphDisabled}
+      />
+      {graphListError && (
+        <Text size="xs" view="alert">
+          {graphListError}
+        </Text>
+      )}
+      {!isCreatePanelOpen && graphActionStatus && (
+        <Text
+          size="xs"
+          view={graphActionStatus.type === 'error' ? 'alert' : 'success'}
+        >
+          {graphActionStatus.message}
+        </Text>
+      )}
+    </div>
+  );
 
   return (
-    <Layout className={styles.app} direction="column">
+    <Theme preset={isDarkTheme ? presetGpnDark : presetGpnDefault} className={styles.app} direction="ltr">
+    <LayoutShell
+      currentView={viewMode}
+      onViewChange={setViewMode}
+      headerTitle={headerTitle}
+      headerDescription={headerDescription}
+      headerActions={headerActions}
+      isDarkTheme={isDarkTheme}
+      onToggleTheme={setIsDarkTheme}
+    >
       {snapshotError && (
         <div className={styles.errorBanner} role="status" aria-live="polite">
           <div className={styles.errorBannerContent}>
@@ -3156,210 +3216,62 @@ function App() {
           </div>
         </div>
       )}
-      <header className={styles.header}>
-        <div className={styles.headerContent}>
-          <Text size="2xl" weight="bold">
-            {headerTitle}
-          </Text>
+
+      <CreateGraphModal
+        isOpen={isCreatePanelOpen}
+        onClose={() => {
+          setIsCreatePanelOpen(false);
+          setGraphActionStatus(null);
+        }}
+        onCreate={() => void handleSubmitCreateGraph()}
+        graphName={graphNameDraft}
+        onGraphNameChange={(val) => setGraphNameDraft(val)}
+        sourceGraphId={graphSourceIdDraft}
+        onSourceGraphIdChange={setGraphSourceIdDraft}
+        copyOptions={graphCopyOptions}
+        onCopyOptionsChange={setGraphCopyOptions}
+        isSubmitting={isGraphActionInProgress}
+        status={graphActionStatus}
+        graphOptions={graphSelectOptions}
+        sourceGraphDraft={sourceGraphDraft}
+      />
+
+      {shouldShowInitialLoader ? (
+        <div className={styles.loadingState} style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+          <Loader size="m" />
           <Text size="s" view="secondary">
-            {headerDescription}
+            Загружаем доступные графы и их содержимое...
           </Text>
-          <div className={styles.graphSelector}>
-            <div className={styles.graphSelectorHeading}>
-              <Text size="xs" weight="semibold">
-                Текущий граф
-              </Text>
-              {activeGraph?.updatedAt && (
-                <Text size="xs" view="secondary">
-                  Обновлено: {new Date(activeGraph.updatedAt).toLocaleString()}
-                </Text>
-              )}
-            </div>
-            <div className={styles.graphSelectorControls}>
-              <Select<{ label: string; value: string }>
-                size="s"
-                items={graphSelectOptions}
-                value={graphSelectValue}
-                placeholder={isGraphsLoading ? 'Загрузка графов...' : 'Выберите граф'}
-                disabled={graphSelectOptions.length === 0 || isGraphsLoading}
-                getItemLabel={(item) => item.label}
-                getItemKey={(item) => item.value}
-                onChange={(option) => {
-                  if (option) {
-                    handleSelectGraph(option.value);
-                  }
-                }}
-              />
-              {activeGraphBadge && (
-                <Badge
-                  className={styles.graphBadge}
-                  size="s"
-                  view="filled"
-                  status={activeGraphBadge.status}
-                  label={activeGraphBadge.label}
-                />
-              )}
-              <Button
-                size="s"
-                view="secondary"
-                label={createButtonLabel}
-                onClick={() => {
-                  setIsCreatePanelOpen((prev) => !prev);
-                  setGraphActionStatus(null);
-                }}
-                disabled={isGraphsLoading}
-              />
-              <Button
-                size="s"
-                view="ghost"
-                label="Удалить граф"
-                onClick={() => {
-                  if (activeGraphId) {
-                    void handleDeleteGraph(activeGraphId);
-                  }
-                }}
-                disabled={deleteGraphDisabled}
-              />
-            </div>
-            {graphListError && (
-              <Text size="xs" view="alert">
-                {graphListError}
-              </Text>
-            )}
-            {!isCreatePanelOpen && graphActionStatus && (
+        </div>
+      ) : (
+        <>
+          {adminNotice && (
+            <div
+              key={adminNotice.id}
+              className={`${styles.noticeBanner} ${
+                adminNotice.type === 'success' ? styles.noticeSuccess : styles.noticeError
+              }`}
+              role={adminNotice.type === 'error' ? 'alert' : 'status'}
+              aria-live={adminNotice.type === 'error' ? 'assertive' : 'polite'}
+            >
               <Text
-                size="xs"
-                view={graphActionStatus.type === 'error' ? 'alert' : 'success'}
+                size="s"
+                view={adminNotice.type === 'error' ? 'alert' : 'success'}
+                className={
+                  adminNotice.type === 'success' ? styles.noticeSuccessMessage : undefined
+                }
               >
-                {graphActionStatus.message}
+                {adminNotice.message}
               </Text>
-            )}
-          </div>
-          {isCreatePanelOpen && (
-            <div className={styles.graphCreatePanel}>
-              <div className={styles.graphCreateRow}>
-                <TextField
-                  size="s"
-                  label="Название графа"
-                  placeholder="Например, Экспериментальный"
-                  value={graphNameDraft}
-                  disabled={isGraphActionInProgress}
-                  onChange={(value) => setGraphNameDraft(value ?? '')}
-                />
-                <Select<{ label: string; value: string }>
-                  size="s"
-                  items={graphSelectOptions}
-                  value={graphSourceSelectValue}
-                  getItemLabel={(item) => item.label}
-                  getItemKey={(item) => item.value}
-                  placeholder="Без копирования"
-                  disabled={isGraphActionInProgress || graphSelectOptions.length <= 1}
-                  onChange={(option) => {
-                    setGraphSourceIdDraft(option?.value ?? null);
-                  }}
-                  style={{ minWidth: 220 }}
-                />
-              </div>
-              <div className={styles.graphCopyOptions}>
-                <CheckboxGroup
-                  size="s"
-                  direction="row"
-                  items={graphCopyOptionItems}
-                  value={selectedGraphCopyOptionItems}
-                  getItemKey={(item) => item.id}
-                  getItemLabel={(item) => item.label}
-                  onChange={(items) => {
-                    setGraphCopyOptions(new Set((items ?? []).map((item) => item.id)));
-                  }}
-                  disabled={!graphSourceIdDraft || isGraphActionInProgress}
-                />
-                {graphSourceIdDraft && sourceGraphDraft && (
-                  <Badge
-                    className={styles.graphSourceBadge}
-                    size="xs"
-                    view="filled"
-                    status={sourceGraphDraft.isDefault ? 'success' : 'system'}
-                    label={
-                      sourceGraphDraft.isDefault
-                        ? `Источник: ${sourceGraphDraft.name} • основной`
-                        : `Источник: ${sourceGraphDraft.name}`
-                    }
-                  />
-                )}
-                <Text size="xs" view="secondary">
-                  {graphSourceIdDraft
-                    ? 'Выберите, какие данные скопировать из выбранного графа.'
-                    : 'Если источник не выбран, граф создаётся пустым.'}
-                </Text>
-              </div>
-              <div className={styles.graphCreateActions}>
-                <Button
-                  size="s"
-                  label="Создать граф"
-                  onClick={() => {
-                    void handleSubmitCreateGraph();
-                  }}
-                  loading={isGraphActionInProgress}
-                  disabled={isGraphActionInProgress}
-                />
-                <Button
-                  size="s"
-                  view="ghost"
-                  label="Отмена"
-                  onClick={() => {
-                    setIsCreatePanelOpen(false);
-                    setGraphActionStatus(null);
-                  }}
-                  disabled={isGraphActionInProgress}
-                />
-              </div>
-              {graphActionStatus && (
-                <Text
-                  size="xs"
-                  view={graphActionStatus.type === 'error' ? 'alert' : 'success'}
-                >
-                  {graphActionStatus.message}
-                </Text>
-              )}
+              <Button size="xs" view="ghost" label="Скрыть" onClick={dismissAdminNotice} />
             </div>
           )}
-        </div>
-        <Tabs
-          size="s"
-          items={viewTabs}
-          value={activeViewTab}
-          getItemKey={(item) => item.value}
-          getItemLabel={(item) => item.label}
-          onChange={(tab) => setViewMode(tab.value)}
-        />
-      </header>
-      {adminNotice && (
-        <div
-          key={adminNotice.id}
-          className={`${styles.noticeBanner} ${
-            adminNotice.type === 'success' ? styles.noticeSuccess : styles.noticeError
-          }`}
-          role={adminNotice.type === 'error' ? 'alert' : 'status'}
-          aria-live={adminNotice.type === 'error' ? 'assertive' : 'polite'}
-        >
-          <Text
-            size="s"
-            view={adminNotice.type === 'error' ? 'alert' : 'success'}
-            className={
-              adminNotice.type === 'success' ? styles.noticeSuccessMessage : undefined
-            }
+          <main
+            className={styles.main}
+            hidden={!isGraphActive}
+            aria-hidden={!isGraphActive}
+            style={{ display: isGraphActive ? undefined : 'none' }}
           >
-            {adminNotice.message}
-          </Text>
-          <Button size="xs" view="ghost" label="Скрыть" onClick={dismissAdminNotice} />
-        </div>
-      )}
-      <main
-        className={styles.main}
-        hidden={!isGraphActive}
-        aria-hidden={!isGraphActive}
-        style={{ display: isGraphActive ? undefined : 'none' }}
-      >
           <aside
             ref={sidebarRef}
             className={styles.sidebar}
@@ -3577,7 +3489,10 @@ function App() {
           onDeleteExpert={handleDeleteExpert}
         />
       </main>
-    </Layout>
+      </>
+    )}
+    </LayoutShell>
+    </Theme>
   );
 }
 

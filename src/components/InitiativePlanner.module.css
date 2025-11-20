@@ -14,23 +14,31 @@
 .header {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .headerInfo {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .headerDescription {
   max-width: 720px;
+  line-height: 1.5;
 }
 
 .metaRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 32px;
+  padding-top: 8px;
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .headerControls {
@@ -43,8 +51,8 @@
 .statusSection {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
+  gap: 12px;
+  padding: 20px;
   border: 1px solid var(--color-bg-border);
   border-radius: 12px;
   background: var(--color-bg-secondary);
@@ -109,14 +117,14 @@
 
 .rolesSection {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   min-width: 0;
 }
 
 .sideColumn {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   min-height: 0;
   min-width: 0;
 }
@@ -168,13 +176,13 @@
 .customerCard {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .customerGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .customerComment {
@@ -216,7 +224,7 @@
 .candidateList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .candidateCard {
@@ -261,9 +269,9 @@
 .candidateDetails {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   border-top: 1px dashed var(--color-bg-border);
-  padding-top: 12px;
+  padding-top: 16px;
 }
 
 .candidateComment {
@@ -275,7 +283,7 @@
 .scoreDetails {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .scoreRow {

@@ -4,6 +4,9 @@ import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Combobox } from '@consta/uikit/Combobox';
 import { Switch } from '@consta/uikit/Switch';
 import { Text } from '@consta/uikit/Text';
+import { TextField } from '@consta/uikit/TextField';
+import { IconSearchStroked } from '@consta/icons/IconSearchStroked';
+import { IconClose } from '@consta/icons/IconClose';
 import clsx from 'clsx';
 import React from 'react';
 import type { ComboboxPropRenderItem } from '@consta/uikit/Combobox';
@@ -93,105 +96,114 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
 
   return (
     <div className={styles.filters}>
-      <label className={styles.field}>
-        <Text size="s" weight="semibold">
-          Поиск
-        </Text>
-        <input
-          className={styles.input}
+      <div className={styles.section}>
+        <TextField
+          width="full"
+          size="s"
           value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Введите название или владельца"
+          onChange={(value) => onSearchChange(value ?? '')}
+          placeholder="Поиск модулей..."
+          leftSide={IconSearchStroked}
+          rightSide={search ? (
+            <Button
+              view="clear"
+              size="xs"
+              iconLeft={IconClose}
+              onClick={() => onSearchChange('')}
+              onlyIcon
+            />
+          ) : undefined}
         />
-      </label>
+      </div>
 
-      <div className={styles.field}>
-        <Text size="s" weight="semibold">
-          Статусы
+      <div className={styles.section}>
+        <Text size="xs" weight="bold" transform="uppercase" view="secondary" className={styles.sectionTitle}>
+          Статус
         </Text>
-        <CheckboxGroup
-          size="s"
-          direction="column"
-          items={statusOptions}
-          value={selectedStatusOptions}
-          getItemKey={(item) => item.id}
-          getItemLabel={(item) => item.label}
-          onChange={(nextItems) => {
-            const nextSelected = new Set(
-              (nextItems ?? []).map((item) => item.id)
+        <div className={styles.statusFilters}>
+          {statusOptions.map((status) => {
+            const isActive = activeStatuses.has(status.id);
+            return (
+              <Button
+                key={status.id}
+                size="xs"
+                view={isActive ? 'primary' : 'ghost'}
+                label={status.label}
+                onClick={() => onToggleStatus(status.id)}
+                className={styles.statusChip}
+              />
             );
-            statuses.forEach((status) => {
-              const shouldBeActive = nextSelected.has(status);
-              const isActive = activeStatuses.has(status);
-              if (shouldBeActive !== isActive) {
-                onToggleStatus(status);
-              }
-            });
-          }}
-          className={styles.statusGroup}
-        />
+          })}
+        </div>
       </div>
 
-      <div className={styles.field}>
-        <Text size="s" weight="semibold">
-          Название продукта
+      <div className={styles.section}>
+        <Text size="xs" weight="bold" transform="uppercase" view="secondary" className={styles.sectionTitle}>
+          Продукты и Компании
         </Text>
-        <Combobox
-          placeholder="Все продукты"
-          size="s"
-          items={products}
-          value={productFilter}
-          getItemKey={(item) => item}
-          getItemLabel={(item) => item}
-          onChange={(value) => onProductChange(value ?? [])}
-          form="default"
-          multiple
-          selectAll
-          renderItem={renderProductOption}
-          className={styles.combobox}
-        />
+        <div className={styles.formStack}>
+          <Combobox
+            placeholder="Все продукты"
+            size="s"
+            items={products}
+            value={productFilter}
+            getItemKey={(item) => item}
+            getItemLabel={(item) => item}
+            onChange={(value) => onProductChange(value ?? [])}
+            multiple
+            renderItem={renderProductOption}
+            className={styles.combobox}
+            label="Продукт"
+            labelPosition="top"
+          />
+          <Combobox
+            placeholder="Все компании"
+            size="s"
+            items={companies}
+            value={companyFilter}
+            getItemKey={(item) => item}
+            getItemLabel={(item) => item}
+            onChange={(value) => onCompanyChange(value ?? null)}
+            className={styles.combobox}
+            label="Компания"
+            labelPosition="top"
+          />
+        </div>
       </div>
 
-      <div className={styles.field}>
-        <Text size="s" weight="semibold">
-          Компания
+      <div className={styles.section}>
+         <Text size="xs" weight="bold" transform="uppercase" view="secondary" className={styles.sectionTitle}>
+          Настройки графа
         </Text>
-        <Combobox
-          placeholder="Все компании"
-          size="s"
-          items={companies}
-          value={companyFilter}
-          getItemKey={(item) => item}
-          getItemLabel={(item) => item}
-          onChange={(value) => onCompanyChange(value ?? null)}
-          form="default"
-          className={styles.combobox}
-        />
-      </div>
-
-      <div className={styles.switchRow}>
         <Switch
           checked={showAllConnections}
           onChange={({ target }) => onToggleConnections(target.checked)}
-          label="Показывать связи между продуктами"
+          label="Все связи"
           size="s"
-        />
-        <Button
-          size="s"
-          view="secondary"
-          label="Сбросить фильтры"
-          onClick={() => {
-            onSearchChange('');
-            onProductChange(products);
-            onCompanyChange(null);
-            statuses.forEach((status) => {
-              if (!activeStatuses.has(status)) {
-                onToggleStatus(status);
-              }
-            });
-          }}
+          className={styles.switch}
         />
       </div>
+      
+      {(search || productFilter.length > 0 || companyFilter || !statuses.every(s => activeStatuses.has(s))) && (
+        <div className={styles.resetSection}>
+             <Button
+              size="s"
+              view="ghost"
+              width="full"
+              label="Сбросить все фильтры"
+              onClick={() => {
+                onSearchChange('');
+                onProductChange([]);
+                onCompanyChange(null);
+                statuses.forEach((status) => {
+                  if (!activeStatuses.has(status)) {
+                    onToggleStatus(status);
+                  }
+                });
+              }}
+            />
+        </div>
+      )}
     </div>
   );
 };

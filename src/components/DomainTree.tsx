@@ -1,9 +1,10 @@
 import { Checkbox } from '@consta/uikit/Checkbox';
-import { Collapse } from '@consta/uikit/Collapse';
 import { Text } from '@consta/uikit/Text';
+import { IconArrowRight } from '@consta/icons/IconArrowRight';
 import React, { useMemo, useState } from 'react';
 import type { DomainNode } from '../data';
 import styles from './DomainTree.module.css';
+import clsx from 'clsx';
 
 type DomainTreeProps = {
   tree: DomainNode[];
@@ -21,9 +22,12 @@ type TreeItemProps = {
 };
 
 const TreeItem: React.FC<TreeItemProps> = ({ node, selected, descendants, onToggle, depth = 0 }) => {
-  const [open, setOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = node.children && node.children.length > 0;
-  const paddingLeft = useMemo(() => depth * 16, [depth]);
+  
+  // Indentation logic: 24px for expand button + (depth * 24px) indent
+  const paddingLeft = depth * 16;
+
   const cascade = useMemo(() => descendants.get(node.id) ?? [node.id], [descendants, node.id]);
   const isChecked = useMemo(() => cascade.every((id) => selected.has(id)), [cascade, selected]);
   const isIntermediate = useMemo(
@@ -31,70 +35,60 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, selected, descendants, onTogg
     [cascade, isChecked, selected]
   );
 
+  const handleToggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExpanded((prev) => !prev);
+  };
+
   return (
-    <div className={styles.item} style={{ paddingLeft }}>
-      <div className={styles.header}>
-        {hasChildren ? (
-          <Collapse
-            label={<Text size="s">{node.name}</Text>}
-            isOpen={open}
-            onClick={() => setOpen((prev) => !prev)}
-            iconPosition="left"
-            className={styles.collapse}
-          >
-            <div className={styles.checkboxRow}>
-              <Checkbox
+    <div className={styles.item}>
+      <div className={clsx(styles.row, { [styles.expanded]: isExpanded })}>
+        <div 
+            className={styles.expandButton} 
+            style={{ marginLeft: paddingLeft }}
+            onClick={hasChildren ? handleToggleExpand : undefined}
+        >
+          {hasChildren && (
+            <IconArrowRight size="xs" className={styles.expandIcon} />
+          )}
+        </div>
+        
+        <div className={styles.checkboxWrapper} onClick={() => onToggle(node.id)}>
+            <Checkbox
                 checked={isChecked}
                 intermediate={isIntermediate}
-                onChange={() => onToggle(node.id)}
                 size="s"
+                onChange={() => {}} // Handled by wrapper div
                 label={
-                  <div className={styles.leafLabel}>
-                    <Text size="s" weight="semibold">
-                      {node.name}
-                    </Text>
-                    {node.description && (
-                      <Text size="xs" view="secondary">
-                        {node.description}
-                      </Text>
-                    )}
-                  </div>
+                    <div className={styles.leafLabel}>
+                        <Text size="s" lineHeight="m">
+                            {node.name}
+                        </Text>
+                        {node.description && (
+                            <Text size="xs" view="secondary" lineHeight="s">
+                                {node.description}
+                            </Text>
+                        )}
+                    </div>
                 }
-              />
-            </div>
-              {open &&
-                node.children?.map((child) => (
-                  <TreeItem
+            />
+        </div>
+      </div>
+      
+      {hasChildren && isExpanded && (
+        <div className={styles.children}>
+            {node.children?.map((child) => (
+                <TreeItem
                     key={child.id}
                     node={child}
                     selected={selected}
                     descendants={descendants}
                     onToggle={onToggle}
                     depth={depth + 1}
-                  />
-                ))}
-          </Collapse>
-        ) : (
-          <Checkbox
-            checked={isChecked}
-            onChange={() => onToggle(node.id)}
-            size="s"
-            label={
-              <div className={styles.leafLabel}>
-                <Text size="s" weight="semibold">
-                  {node.name}
-                </Text>
-                {node.description && (
-                  <Text size="xs" view="secondary">
-                    {node.description}
-                  </Text>
-                )}
-              </div>
-            }
-          />
-        )}
-      </div>
-      {!hasChildren && <div className={styles.spacer} />}
+                />
+            ))}
+        </div>
+      )}
     </div>
   );
 };

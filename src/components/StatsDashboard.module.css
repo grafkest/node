@@ -4,6 +4,20 @@
   gap: 24px;
 }
 
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 32px;
+  text-align: center;
+  background: var(--color-bg-default);
+  border-radius: 12px;
+  border: 1px dashed var(--color-bg-border);
+  gap: 12px;
+  height: 400px;
+}
+
 .summaryGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

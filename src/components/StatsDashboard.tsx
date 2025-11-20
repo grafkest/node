@@ -74,6 +74,19 @@ const StatsDashboard = ({
   reuseHistory
 }: StatsDashboardProps) => {
   const domainNameMap = useMemo(() => buildDomainNameMap(domains), [domains]);
+
+  if (!modules.length && !domains.length && !artifacts.length) {
+    return (
+      <div className={styles.emptyState}>
+        <Text size="xl" weight="bold">Нет данных для статистики</Text>
+        <Text size="s" view="secondary">
+          В текущем графе отсутствуют модули, домены или артефакты.
+          Попробуйте добавить данные или выбрать другой граф.
+        </Text>
+      </div>
+    );
+  }
+
   const systems = useMemo(() => {
     const map = new Map<string, SystemRow>();
 
@@ -220,7 +233,18 @@ const StatsDashboard = ({
     height: 280,
     columnWidthRatio: 0.6,
     label: {
-      position: 'top'
+      position: 'top',
+      style: { fontSize: 12 }
+    },
+    xAxis: {
+        label: {
+            style: { fontSize: 12 }
+        }
+    },
+    yAxis: {
+        label: {
+            style: { fontSize: 12 }
+        }
     },
     tooltip: ({ type, count }) => ({
       name: type,
@@ -239,8 +263,14 @@ const StatsDashboard = ({
     },
     yAxis: {
       label: {
-        formatter: (value: string) => `${value}%`
+        formatter: (value: string) => `${value}%`,
+        style: { fontSize: 12 }
       }
+    },
+    xAxis: {
+        label: {
+            style: { fontSize: 12 }
+        }
     },
     tooltip: ({ averagePercent, periodLabel }) => ({
       name: periodLabel,

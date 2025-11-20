@@ -134,6 +134,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const initialCameraState = useMemo(() => readStoredCameraState(), []);
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const nodeCacheRef = useRef<Map<string, ForceNode>>(new Map());
   const lastReportedLayoutRef = useRef<string>('');
   const cameraStateRef = useRef<CameraState | null>(initialCameraState);
@@ -169,7 +170,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       return;
     }
 
-    const element = containerRef.current;
+    const element = wrapperRef.current;
     if (!element) {
       return;
     }
@@ -190,11 +191,11 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, [updateViewportSize]);
 
   useEffect(() => {
-    if (!containerRef.current) {
+    if (!wrapperRef.current) {
       return;
     }
 
-    const { clientWidth, clientHeight } = containerRef.current;
+    const { clientWidth, clientHeight } = wrapperRef.current;
     if (clientWidth > 0 && clientHeight > 0) {
       updateViewportSize(clientWidth, clientHeight);
     }
@@ -206,7 +207,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       return current;
     }
 
-    const element = containerRef.current;
+    const element = wrapperRef.current;
     if (element) {
       const width = element.clientWidth;
       const height = element.clientHeight;
@@ -857,40 +858,43 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   return (
     <div ref={containerRef} className={styles.container}>
-      <div className={styles.legend}>
-        <Badge label="🚀 Модуль • prod" size="s" view="filled" status="warning" />
-        <Badge label="🔧 Модуль • in-dev" size="s" view="filled" status="normal" />
-        <Badge label="🛑 Модуль • deprecated" size="s" view="filled" status="alert" />
-        <Badge label="📂 Домен" size="s" view="filled" status="system" />
-        <Badge label="🧩 Артефакт" size="s" view="filled" status="success" />
-        <Badge label="🎯 Инициатива" size="s" view="filled" status="warning" />
-      </div>
-      {highlightedNode ? (
-        <div className={styles.viewControls}>
-          <button
-            type="button"
-            className={styles.controlButton}
-            onClick={handleFocusButton}
-            title="Двойное нажатие по модулю, домену или артефакту приближает граф"
-          >
-            Приблизить
-          </button>
-          <button
-            type="button"
-            className={styles.controlButton}
-            onClick={handleShowAllButton}
-            title="Двойное нажатие повторно показывает весь граф"
-          >
-            Показать все
-          </button>
+      <div className={styles.header}>
+        <div className={styles.legend}>
+          <Badge label="🚀 Модуль • prod" size="s" view="filled" status="warning" />
+          <Badge label="🔧 Модуль • in-dev" size="s" view="filled" status="normal" />
+          <Badge label="🛑 Модуль • deprecated" size="s" view="filled" status="alert" />
+          <Badge label="📂 Домен" size="s" view="filled" status="system" />
+          <Badge label="🧩 Артефакт" size="s" view="filled" status="success" />
+          <Badge label="🎯 Инициатива" size="s" view="filled" status="warning" />
         </div>
-      ) : null}
-      <React.Suspense fallback={<Loader size="m" />}>
-        <ForceGraph2D
-          ref={graphRef}
-          width={dimensions.width || 600}
-          height={dimensions.height || 400}
-          graphData={graphData}
+        {highlightedNode ? (
+          <div className={styles.viewControls}>
+            <button
+              type="button"
+              className={styles.controlButton}
+              onClick={handleFocusButton}
+              title="Двойное нажатие по модулю, домену или артефакту приближает граф"
+            >
+              Приблизить
+            </button>
+            <button
+              type="button"
+              className={styles.controlButton}
+              onClick={handleShowAllButton}
+              title="Двойное нажатие повторно показывает весь граф"
+            >
+              Показать все
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <div className={styles.graphWrapper} ref={wrapperRef}>
+        <React.Suspense fallback={<Loader size="m" />}>
+          <ForceGraph2D
+            ref={graphRef}
+            width={dimensions.width || 600}
+            height={dimensions.height || 400}
+            graphData={graphData}
           nodeLabel={(node: ForceNode) => node.name ?? node.id}
           linkColor={(link: ForceLink) =>
             resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
@@ -919,6 +923,7 @@ const GraphView: React.FC<GraphViewProps> = ({
           onZoomEnd={handleZoomEnd}
         />
       </React.Suspense>
+      </div>
     </div>
   );
 };

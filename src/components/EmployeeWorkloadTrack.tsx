@@ -1417,6 +1417,11 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
               (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
             );
 
+      if (mergedTasks.length === 0) {
+         // Return early or with empty state placeholder if needed, 
+         // but standard Gantt might handle empty rows gracefully.
+      }
+
       mergedTasks.forEach((task) => {
         taskLookup.set(task.id, { task, employee });
       });
@@ -1424,7 +1429,6 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
       const sidebar = (
         <div className={styles.employeeCell}>
           <div className={styles.employeeMeta}>
-            <Badge size="xs" status="success" label={`№${employee.rank}`} />
             <Text size="s" weight="semibold">
               {employee.fullName}
             </Text>
@@ -2313,25 +2317,27 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
                   {formatTimelineTaskPeriod(activeTimelineTask.task.start, activeTimelineTask.task.end)}
                 </Text>
               </div>
-              <div className={styles.timelineDetailsEmployee}>
-                <Text size="2xs" view="secondary">
-                  Сотрудник
-                </Text>
-                <Text size="s" weight="semibold">
-                  {activeTimelineTask.employee.fullName}
-                </Text>
-                <Text size="xs" view="secondary">
-                  {activeTimelineTask.employee.position}
-                </Text>
+            <div className={styles.timelineDetailsEmployee}>
+              <Text size="2xs" view="secondary">
+                Сотрудник
+              </Text>
+              <Text size="s" weight="semibold">
+                {activeTimelineTask.employee.fullName}
+              </Text>
+              <Text size="xs" view="secondary">
+                {activeTimelineTask.employee.position}
+              </Text>
+            </div>
+            <div className={styles.timelineDetailsStats}>
+              <div className={styles.statBadge}>
+                <Text size="2xs" view="secondary">Загруженность</Text>
+                <Text size="xs" weight="bold">{Math.round(activeTimelineTask.employee.workload * 100)}%</Text>
               </div>
-              <div className={styles.timelineDetailsStats}>
-                <Text size="2xs" view="secondary">
-                  Загруженность: {Math.round(activeTimelineTask.employee.workload * 100)}%
-                </Text>
-                <Text size="2xs" view="secondary">
-                  {activeTimelineTask.employee.availability}
-                </Text>
+              <div className={styles.statBadge}>
+                 <Text size="2xs" view="secondary">Доступность</Text>
+                 <Text size="xs">{activeTimelineTask.employee.availability}</Text>
               </div>
+            </div>
               <Text size="xs" view="secondary">
                 {activeTimelineTask.employee.focus}
               </Text>

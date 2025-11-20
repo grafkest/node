@@ -1,7 +1,7 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
   min-height: 0;
   flex: 1;
 }
@@ -9,7 +9,7 @@
 .controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  gap: 20px;
   align-items: end;
 }
 
@@ -27,7 +27,7 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .searchField {
@@ -47,7 +47,7 @@
 .viewToolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
 }
@@ -68,27 +68,27 @@
 }
 
 .comboboxValueSummary {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 16px;
   color: var(--color-typo-primary);
 }
 
 .content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  gap: 24px;
   min-height: 0;
   flex: 1;
 }
 
 .listLayout {
-  grid-template-columns: minmax(0, 0.65fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 0.6fr) minmax(320px, 1fr);
 }
 
 .rolePane {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  gap: 16px;
+  gap: 24px;
   min-height: 0;
 }
 
@@ -96,14 +96,14 @@
 .roleGraphPane {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   min-height: 0;
 }
 
 .roleList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -111,7 +111,7 @@
 .roleCard {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   border: 1px solid var(--color-bg-border);
   border-radius: 12px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -164,7 +164,7 @@
 .graphControls {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding: 0 4px;
 }
 
@@ -181,7 +181,7 @@
 .graphFilterMeta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .graphSoftToggle {
@@ -198,7 +198,7 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -228,7 +228,7 @@
 .focusMeta {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-top: 8px;
 }
 
@@ -236,7 +236,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .focusExpertButton {
@@ -246,7 +246,7 @@
 .expertCard {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   border: 1px solid var(--color-bg-border);
   border-radius: 12px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -271,7 +271,7 @@
 .expertCardMeta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .skillBadges {
@@ -290,10 +290,10 @@
 .placeholder {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  padding: 48px;
   text-align: center;
   border: 1px dashed var(--color-bg-border);
   border-radius: 12px;
@@ -304,7 +304,7 @@
   background: var(--color-bg-default);
   border-radius: 12px;
   box-shadow: var(--shadow-layer);
-  padding: 16px;
+  padding: 24px;
   overflow-y: auto;
   min-height: 0;
   display: flex;
@@ -313,21 +313,21 @@
 .detailsContent {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
   width: 100%;
 }
 
 .detailHeader {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .detailActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .detailBadges {
@@ -339,18 +339,19 @@
 .detailSection {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .sectionTitle {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  color: var(--color-typo-secondary);
 }
 
 .badgeGroup {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .focusList,
@@ -360,14 +361,14 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .detailListItem {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-bottom: 4px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--color-bg-border);
 }
 

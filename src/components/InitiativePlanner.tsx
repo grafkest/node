@@ -552,17 +552,18 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
             {selectedInitiative.description}
           </Text>
           <div className={styles.metaRow}>
-            <Badge size="s" view="stroked" label={`Владелец: ${selectedInitiative.owner}`} />
-            <Badge
-              size="s"
-              view="stroked"
-              label={`Домены: ${domainLabels.join(', ') || 'не указаны'}`}
-            />
-            <Badge
-              size="s"
-              view="stroked"
-              label={`Обновлено: ${new Date(selectedInitiative.lastUpdated).toLocaleString('ru-RU')}`}
-            />
+            <div className={styles.metaItem}>
+              <Text size="xs" view="secondary">Владелец</Text>
+              <Text size="s" weight="semibold">{selectedInitiative.owner}</Text>
+            </div>
+            <div className={styles.metaItem}>
+              <Text size="xs" view="secondary">Домены</Text>
+              <Text size="s" weight="semibold">{domainLabels.join(', ') || '—'}</Text>
+            </div>
+            <div className={styles.metaItem}>
+              <Text size="xs" view="secondary">Обновлено</Text>
+              <Text size="s" weight="semibold">{new Date(selectedInitiative.lastUpdated).toLocaleString('ru-RU')}</Text>
+            </div>
           </div>
         </div>
         <div className={styles.headerControls}>
