@@ -1,6 +1,6 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Loader } from '@consta/uikit/Loader';
-import { useTheme } from '@consta/uikit/Theme';
+import { useTheme, type ThemePreset } from '@consta/uikit/Theme';
 import { forceCollide } from 'd3-force-3d';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D, {
@@ -127,10 +127,11 @@ const GraphView: React.FC<GraphViewProps> = ({
   normalizationRequest,
   onLayoutChange
 }) => {
-  const { theme } = useTheme();
-  const themeClassName = theme?.className ?? 'default';
-
-  const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
+  const { theme, themeClassNames } = useTheme();
+  const palette = useMemo(
+    () => resolvePalette(themeClassNames),
+    [theme, themeClassNames]
+  );
   const initialCameraState = useMemo(() => readStoredCameraState(), []);
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -145,6 +146,10 @@ const GraphView: React.FC<GraphViewProps> = ({
   const maxNodeCountRef = useRef(0);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
+
+  useEffect(() => {
+    graphRef.current?.refresh();
+  }, [palette]);
 
   useEffect(() => {
     lastReportedLayoutRef.current = JSON.stringify(layoutPositions ?? {});
@@ -1305,17 +1310,32 @@ function resolveNodeIcon(node: GraphNode): string {
   return '';
 }
 
-function resolvePalette(themeClassName?: string): GraphPalette {
+function resolvePalette(themeClassNames?: ThemePreset | string): GraphPalette {
   if (typeof window === 'undefined') {
     return DEFAULT_PALETTE;
   }
 
   const themeElement = (() => {
-    if (!themeClassName) {
-      return document.querySelector('.Theme');
+    const tokens: string[] = [];
+
+    if (typeof themeClassNames === 'string') {
+      tokens.push(...themeClassNames.split(/\s+/).filter(Boolean));
+    } else if (themeClassNames && typeof themeClassNames === 'object') {
+      const color = (themeClassNames as ThemePreset).color;
+      const colorToken = typeof color === 'string' ? color : color?.primary;
+
+      [
+        colorToken,
+        (themeClassNames as ThemePreset).control,
+        (themeClassNames as ThemePreset).font,
+        (themeClassNames as ThemePreset).size,
+        (themeClassNames as ThemePreset).space,
+        (themeClassNames as ThemePreset).shadow
+      ]
+        .filter((token): token is string => Boolean(token && token.trim()))
+        .forEach((token) => tokens.push(token.trim()));
     }
 
-    const tokens = themeClassName.split(/\s+/).filter(Boolean);
     const selectorVariants = [
       tokens.length > 0 ? tokens.map((token) => `.${token}`).join('') : null,
       tokens[0] ? `.${tokens[0]}` : null,

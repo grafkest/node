@@ -6,7 +6,7 @@ import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import { useTheme } from '@consta/uikit/Theme';
+import { useTheme, type ThemePreset } from '@consta/uikit/Theme';
 import clsx from 'clsx';
 import React, {
   useCallback,
@@ -242,11 +242,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   onUpdateExpertSkills,
   onUpdateExpertSoftSkills
 }) => {
-  const { theme } = useTheme();
-  const themeClassName = theme?.className;
+  const { theme, themeClassNames } = useTheme();
   const palette = useMemo(
-    () => resolveExpertPalette(themeClassName),
-    [themeClassName]
+    () => resolveExpertPalette(themeClassNames),
+    [theme, themeClassNames]
   );
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -279,6 +278,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const roleGraphZoomAppliedRef = useRef(false);
   const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
   const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    graphRef.current?.refresh();
+    roleGraphRef.current?.refresh();
+  }, [palette]);
   useEffect(() => {
     if (!includeSoftSkills && focusedSkill?.type === 'soft') {
       setFocusedSkill(null);
@@ -3032,17 +3036,32 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
   );
 };
 
-function resolveExpertPalette(themeClassName?: string): ExpertPalette {
+function resolveExpertPalette(themeClassNames?: ThemePreset | string): ExpertPalette {
   if (typeof window === 'undefined') {
     return DEFAULT_PALETTE;
   }
 
   const themeElement = (() => {
-    if (!themeClassName) {
-      return document.querySelector('.Theme');
+    const tokens: string[] = [];
+
+    if (typeof themeClassNames === 'string') {
+      tokens.push(...themeClassNames.split(/\s+/).filter(Boolean));
+    } else if (themeClassNames && typeof themeClassNames === 'object') {
+      const color = (themeClassNames as ThemePreset).color;
+      const colorToken = typeof color === 'string' ? color : color?.primary;
+
+      [
+        colorToken,
+        (themeClassNames as ThemePreset).control,
+        (themeClassNames as ThemePreset).font,
+        (themeClassNames as ThemePreset).size,
+        (themeClassNames as ThemePreset).space,
+        (themeClassNames as ThemePreset).shadow
+      ]
+        .filter((token): token is string => Boolean(token && token.trim()))
+        .forEach((token) => tokens.push(token.trim()));
     }
 
-    const tokens = themeClassName.split(/\s+/).filter(Boolean);
     const selectorVariants = [
       tokens.length > 0 ? tokens.map((token) => `.${token}`).join('') : null,
       tokens[0] ? `.${tokens[0]}` : null,
