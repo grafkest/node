@@ -263,6 +263,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [focusedSkill, setFocusedSkill] = useState<SkillFocus | null>(null);
   const [focusedAssignment, setFocusedAssignment] = useState<AssignmentFocus | null>(null);
   const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
+  const [graphInstanceKey, setGraphInstanceKey] = useState(0);
+  const [roleGraphInstanceKey, setRoleGraphInstanceKey] = useState(0);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const initialGraphZoomAppliedRef = useRef<Record<'graph' | 'assignments', boolean>>({
@@ -307,6 +309,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     refreshGraphInstance(graphRef);
     refreshGraphInstance(roleGraphRef);
   }, [palette, refreshGraphInstance]);
+
+  useEffect(() => {
+    setGraphInstanceKey((value) => value + 1);
+    setRoleGraphInstanceKey((value) => value + 1);
+    initialGraphZoomAppliedRef.current = { graph: false, assignments: false };
+    roleGraphZoomAppliedRef.current = false;
+  }, [palette]);
   useEffect(() => {
     if (!includeSoftSkills && focusedSkill?.type === 'soft') {
       setFocusedSkill(null);
@@ -1393,6 +1402,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     graphDimensions.width,
     skillGraphLinks,
     skillGraphNodes,
+    graphInstanceKey,
     viewMode
   ]);
 
@@ -1421,7 +1431,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }
 
     graph.d3ReheatSimulation();
-  }, [assignmentGraphLinks, skillGraphLinks, viewMode]);
+  }, [assignmentGraphLinks, graphInstanceKey, skillGraphLinks, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'graph') {
@@ -1576,7 +1586,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [roleGraphData, roleGraphDimensions.height, roleGraphDimensions.width, viewMode]);
+  }, [
+    roleGraphData,
+    roleGraphDimensions.height,
+    roleGraphDimensions.width,
+    roleGraphInstanceKey,
+    viewMode
+  ]);
 
   useEffect(() => {
     if (viewMode !== 'graph' && viewMode !== 'assignments') {
@@ -1609,6 +1625,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     assignmentGraphNodes,
     skillGraphLinks,
     skillGraphNodes,
+    graphInstanceKey,
     viewMode
   ]);
 
@@ -1634,7 +1651,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
       (linkForce as { strength: (value: number) => void }).strength(0.7);
     }
-  }, [roleGraphData, viewMode]);
+  }, [roleGraphData, roleGraphInstanceKey, viewMode]);
 
   const highlightNodeIds = useMemo(() => {
     const set = new Set<string>();
@@ -2469,6 +2486,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                 </div>
               ) : (
                 <ForceGraph2D
+                  key={graphInstanceKey}
                   ref={graphRef}
                   width={graphDimensions.width}
                   height={graphDimensions.height}
@@ -2630,6 +2648,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                 </div>
               ) : (
                 <ForceGraph2D
+                  key={graphInstanceKey}
                   ref={graphRef}
                   width={graphDimensions.width}
                   height={graphDimensions.height}
@@ -2768,6 +2787,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                           </div>
                         ) : (
                           <ForceGraph2D
+                            key={roleGraphInstanceKey}
                             ref={roleGraphRef}
                             width={roleGraphDimensions.width}
                             height={roleGraphDimensions.height}

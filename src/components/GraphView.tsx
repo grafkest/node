@@ -150,6 +150,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const maxNodeCountRef = useRef(0);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
+  const [graphInstanceKey, setGraphInstanceKey] = useState(0);
 
   const refreshGraphInstance = useCallback(() => {
     const refresh = (graphRef.current as unknown as { refresh?: () => void })?.refresh;
@@ -177,6 +178,11 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     return () => observer.disconnect();
   }, [theme, themeClassNames]);
+
+  useEffect(() => {
+    nodeCacheRef.current.clear();
+    setGraphInstanceKey((value) => value + 1);
+  }, [palette]);
 
   useEffect(() => {
     refreshGraphInstance();
@@ -604,7 +610,8 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   useEffect(() => {
     configureSimulation();
-  }, [configureSimulation]);
+    restoreCamera();
+  }, [configureSimulation, graphInstanceKey, restoreCamera]);
 
   useEffect(() => {
     if (!highlightedNode) {
@@ -927,6 +934,7 @@ const GraphView: React.FC<GraphViewProps> = ({
       <div className={styles.graphWrapper} ref={wrapperRef}>
         <React.Suspense fallback={<Loader size="m" />}>
           <ForceGraph2D
+            key={graphInstanceKey}
             ref={graphRef}
             width={dimensions.width || 600}
             height={dimensions.height || 400}
