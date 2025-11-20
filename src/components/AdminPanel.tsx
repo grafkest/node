@@ -714,7 +714,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   return (
     <div className={styles.container}>
       <div className={styles.selector}>
-      <div className={styles.selector}>
         <Text size="s" weight="semibold" className={styles.selectorTitle}>
           Панель администратора
         </Text>
