@@ -151,6 +151,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
   const [graphInstanceKey, setGraphInstanceKey] = useState(0);
+  const [isGraphVisible, setIsGraphVisible] = useState(true);
 
   const refreshGraphInstance = useCallback(() => {
     const refresh = (graphRef.current as unknown as { refresh?: () => void })?.refresh;
@@ -186,7 +187,13 @@ const GraphView: React.FC<GraphViewProps> = ({
     hasInitialFitRef.current = false;
     lastFocusedNodeRef.current = null;
     setIsFocusedView(false);
-    setGraphInstanceKey((value) => value + 1);
+    setIsGraphVisible(false);
+    const frame = window.requestAnimationFrame(() => {
+      setGraphInstanceKey((value) => value + 1);
+      setIsGraphVisible(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [palette]);
 
   useEffect(() => {
@@ -614,9 +621,17 @@ const GraphView: React.FC<GraphViewProps> = ({
   ]);
 
   useEffect(() => {
-    configureSimulation();
-    restoreCamera();
-  }, [configureSimulation, graphInstanceKey, restoreCamera]);
+    if (!isGraphVisible || !graphRef.current) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      configureSimulation();
+      restoreCamera();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [configureSimulation, graphInstanceKey, isGraphVisible, restoreCamera]);
 
   useEffect(() => {
     if (!highlightedNode) {
@@ -938,40 +953,44 @@ const GraphView: React.FC<GraphViewProps> = ({
       </div>
       <div className={styles.graphWrapper} ref={wrapperRef}>
         <React.Suspense fallback={<Loader size="m" />}>
-          <ForceGraph2D
-            key={graphInstanceKey}
-            ref={graphRef}
-            width={dimensions.width || 600}
-            height={dimensions.height || 400}
-            graphData={graphData}
-          nodeLabel={(node: ForceNode) => node.name ?? node.id}
-          linkColor={(link: ForceLink) =>
-            resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
-          }
-          nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
-            drawNode(
-              node,
-              ctx,
-              globalScale,
-              highlightedNode,
-              palette,
-              visibleDomainIds,
-              visibleModuleStatuses
-            );
-          }}
-          nodeCanvasObjectMode={() => 'replace'}
-          onNodeClick={(node) => {
-            onSelect(node as ForceNode);
-          }}
-          onNodeDoubleClick={(node) => {
-            handleNodeDoubleClick(node as ForceNode);
-          }}
-          onNodeDragEnd={handleNodeDragEnd}
-          onEngineStop={handleEngineStop}
-          onZoom={handleZoomTransform}
-          onZoomEnd={handleZoomEnd}
-        />
-      </React.Suspense>
+          {isGraphVisible ? (
+            <ForceGraph2D
+              key={graphInstanceKey}
+              ref={graphRef}
+              width={dimensions.width || 600}
+              height={dimensions.height || 400}
+              graphData={graphData}
+              nodeLabel={(node: ForceNode) => node.name ?? node.id}
+              linkColor={(link: ForceLink) =>
+                resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
+              }
+              nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
+                drawNode(
+                  node,
+                  ctx,
+                  globalScale,
+                  highlightedNode,
+                  palette,
+                  visibleDomainIds,
+                  visibleModuleStatuses
+                );
+              }}
+              nodeCanvasObjectMode={() => 'replace'}
+              onNodeClick={(node) => {
+                onSelect(node as ForceNode);
+              }}
+              onNodeDoubleClick={(node) => {
+                handleNodeDoubleClick(node as ForceNode);
+              }}
+              onNodeDragEnd={handleNodeDragEnd}
+              onEngineStop={handleEngineStop}
+              onZoom={handleZoomTransform}
+              onZoomEnd={handleZoomEnd}
+            />
+          ) : (
+            <Loader size="m" />
+          )}
+        </React.Suspense>
       </div>
     </div>
   );

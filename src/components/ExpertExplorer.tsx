@@ -265,6 +265,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
   const [graphInstanceKey, setGraphInstanceKey] = useState(0);
   const [roleGraphInstanceKey, setRoleGraphInstanceKey] = useState(0);
+  const [isSkillGraphVisible, setIsSkillGraphVisible] = useState(true);
+  const [isRoleGraphVisible, setIsRoleGraphVisible] = useState(true);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const initialGraphZoomAppliedRef = useRef<Record<'graph' | 'assignments', boolean>>({
@@ -311,8 +313,15 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [palette, refreshGraphInstance]);
 
   useEffect(() => {
-    setGraphInstanceKey((value) => value + 1);
-    setRoleGraphInstanceKey((value) => value + 1);
+    setIsSkillGraphVisible(false);
+    setIsRoleGraphVisible(false);
+    const frame = window.requestAnimationFrame(() => {
+      setGraphInstanceKey((value) => value + 1);
+      setRoleGraphInstanceKey((value) => value + 1);
+      setIsSkillGraphVisible(true);
+      setIsRoleGraphVisible(true);
+    });
+
     graphRef.current = null;
     roleGraphRef.current = null;
     setFocusedSkill(null);
@@ -320,6 +329,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     setSelectedRole(null);
     initialGraphZoomAppliedRef.current = { graph: false, assignments: false };
     roleGraphZoomAppliedRef.current = false;
+
+    return () => window.cancelAnimationFrame(frame);
   }, [palette]);
   useEffect(() => {
     if (!includeSoftSkills && focusedSkill?.type === 'soft') {
@@ -759,7 +770,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [roleAggregationMap, roleAggregations, selectedRole]);
 
   useEffect(() => {
-    if (viewMode !== 'roles') {
+    if (!isRoleGraphVisible || viewMode !== 'roles') {
       return;
     }
 
@@ -899,7 +910,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       return;
     }
 
-    if (viewMode !== 'graph' && viewMode !== 'assignments') {
+    if (!isSkillGraphVisible || (viewMode !== 'graph' && viewMode !== 'assignments')) {
       return;
     }
 
@@ -1378,7 +1389,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [viewMode]);
 
   useEffect(() => {
-    if (viewMode !== 'graph' && viewMode !== 'assignments') {
+    if (!isSkillGraphVisible || (viewMode !== 'graph' && viewMode !== 'assignments')) {
       return;
     }
 
@@ -1408,12 +1419,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     skillGraphLinks,
     skillGraphNodes,
     graphInstanceKey,
+    isSkillGraphVisible,
     viewMode
   ]);
 
   useEffect(() => {
     const graph = graphRef.current;
-    if (!graph) {
+    if (!isSkillGraphVisible || !graph) {
       return;
     }
 
@@ -1436,7 +1448,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }
 
     graph.d3ReheatSimulation();
-  }, [assignmentGraphLinks, graphInstanceKey, skillGraphLinks, viewMode]);
+  }, [assignmentGraphLinks, graphInstanceKey, isSkillGraphVisible, skillGraphLinks, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'graph') {
@@ -1592,6 +1604,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     return () => window.clearTimeout(timeout);
   }, [
+    isRoleGraphVisible,
     roleGraphData,
     roleGraphDimensions.height,
     roleGraphDimensions.width,
@@ -1656,7 +1669,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
       (linkForce as { strength: (value: number) => void }).strength(0.7);
     }
-  }, [roleGraphData, roleGraphInstanceKey, viewMode]);
+  }, [isSkillGraphVisible, roleGraphData, roleGraphInstanceKey, viewMode]);
 
   const highlightNodeIds = useMemo(() => {
     const set = new Set<string>();
@@ -2489,7 +2502,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                     Нет данных для построения графа с выбранными фильтрами.
                   </Text>
                 </div>
-              ) : (
+              ) : isSkillGraphVisible ? (
                 <ForceGraph2D
                   key={graphInstanceKey}
                   ref={graphRef}
@@ -2507,6 +2520,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   enableZoomInteraction
                   enablePanInteraction
                 />
+              ) : (
+                <Loader size="m" />
               )}
             </div>
             </div>
@@ -2651,7 +2666,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                     Нет данных для визуализации назначений с выбранными фильтрами.
                   </Text>
                 </div>
-              ) : (
+              ) : isSkillGraphVisible ? (
                 <ForceGraph2D
                   key={graphInstanceKey}
                   ref={graphRef}
@@ -2669,6 +2684,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   enableZoomInteraction
                   enablePanInteraction
                 />
+              ) : (
+                <Loader size="m" />
               )}
             </div>
           </div>
@@ -2790,7 +2807,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                               Нет данных для построения графа по выбранной роли.
                             </Text>
                           </div>
-                        ) : (
+                        ) : isRoleGraphVisible ? (
                           <ForceGraph2D
                             key={roleGraphInstanceKey}
                             ref={roleGraphRef}
@@ -2808,6 +2825,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                             enableZoomInteraction
                             enablePanInteraction
                           />
+                        ) : (
+                          <Loader size="m" />
                         )}
                       </div>
                       <Card className={styles.roleExpertsCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
