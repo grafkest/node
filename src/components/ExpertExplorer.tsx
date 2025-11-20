@@ -243,10 +243,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   onUpdateExpertSoftSkills
 }) => {
   const { theme, themeClassNames } = useTheme();
-  const palette = useMemo(
-    () => resolveExpertPalette(themeClassNames),
-    [theme, themeClassNames]
-  );
+  const [palette, setPalette] = useState<ExpertPalette>(() => resolveExpertPalette(themeClassNames));
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
@@ -278,6 +275,26 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const roleGraphZoomAppliedRef = useRef(false);
   const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
   const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const applyPalette = () => {
+      const nextPalette = resolveExpertPalette(themeClassNames);
+      setPalette((prev) => (areExpertPalettesEqual(prev, nextPalette) ? prev : nextPalette));
+    };
+
+    applyPalette();
+
+    if (typeof MutationObserver === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const target = findThemeElement(themeClassNames) ?? document.body;
+    const observer = new MutationObserver(applyPalette);
+
+    observer.observe(target, { attributes: true, attributeFilter: ['class', 'style'] });
+
+    return () => observer.disconnect();
+  }, [theme, themeClassNames]);
 
   useEffect(() => {
     graphRef.current?.refresh();
@@ -3041,48 +3058,7 @@ function resolveExpertPalette(themeClassNames?: ThemePreset | string): ExpertPal
     return DEFAULT_PALETTE;
   }
 
-  const themeElement = (() => {
-    const tokens: string[] = [];
-
-    if (typeof themeClassNames === 'string') {
-      tokens.push(...themeClassNames.split(/\s+/).filter(Boolean));
-    } else if (themeClassNames && typeof themeClassNames === 'object') {
-      const color = (themeClassNames as ThemePreset).color;
-      const colorToken = typeof color === 'string' ? color : color?.primary;
-
-      [
-        colorToken,
-        (themeClassNames as ThemePreset).control,
-        (themeClassNames as ThemePreset).font,
-        (themeClassNames as ThemePreset).size,
-        (themeClassNames as ThemePreset).space,
-        (themeClassNames as ThemePreset).shadow
-      ]
-        .filter((token): token is string => Boolean(token && token.trim()))
-        .forEach((token) => tokens.push(token.trim()));
-    }
-
-    const selectorVariants = [
-      tokens.length > 0 ? tokens.map((token) => `.${token}`).join('') : null,
-      tokens[0] ? `.${tokens[0]}` : null,
-      '.Theme'
-    ].filter(Boolean) as string[];
-
-    for (const selector of selectorVariants) {
-      try {
-        const element = document.querySelector(selector);
-        if (element) {
-          return element;
-        }
-      } catch {
-        // Ignore invalid selectors and try the next fallback
-      }
-    }
-
-    return null;
-  })();
-
-  const stylesRef = getComputedStyle((themeElement as HTMLElement) ?? document.body);
+  const stylesRef = getComputedStyle((findThemeElement(themeClassNames) as HTMLElement) ?? document.body);
   const getVar = (token: string, fallback: string) =>
     stylesRef.getPropertyValue(token).trim() || fallback;
 
@@ -3110,6 +3086,70 @@ function resolveExpertPalette(themeClassNames?: ThemePreset | string): ExpertPal
     initiativeEdge: withAlpha(initiativeColor, 0.45),
     planEdge: withAlpha(initiativeColor, 0.32)
   };
+}
+
+function findThemeElement(themeClassNames?: ThemePreset | string): Element | null {
+  const tokens: string[] = [];
+
+  if (typeof themeClassNames === 'string') {
+    tokens.push(...themeClassNames.split(/\s+/).filter(Boolean));
+  } else if (themeClassNames && typeof themeClassNames === 'object') {
+    const color = (themeClassNames as ThemePreset).color;
+    const colorToken = typeof color === 'string' ? color : color?.primary;
+
+    [
+      colorToken,
+      (themeClassNames as ThemePreset).control,
+      (themeClassNames as ThemePreset).font,
+      (themeClassNames as ThemePreset).size,
+      (themeClassNames as ThemePreset).space,
+      (themeClassNames as ThemePreset).shadow
+    ]
+      .filter((token): token is string => Boolean(token && token.trim()))
+      .forEach((token) => tokens.push(token.trim()));
+  }
+
+  const selectorVariants = [
+    tokens.length > 0 ? tokens.map((token) => `.${token}`).join('') : null,
+    tokens[0] ? `.${tokens[0]}` : null,
+    '.Theme'
+  ].filter(Boolean) as string[];
+
+  for (const selector of selectorVariants) {
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        return element;
+      }
+    } catch {
+      // Ignore invalid selectors and try the next fallback
+    }
+  }
+
+  return null;
+}
+
+function areExpertPalettesEqual(a: ExpertPalette, b: ExpertPalette): boolean {
+  return (
+    a.background === b.background &&
+    a.text === b.text &&
+    a.textMuted === b.textMuted &&
+    a.textOnAccent === b.textOnAccent &&
+    a.expert === b.expert &&
+    a.domain === b.domain &&
+    a.competency === b.competency &&
+    a.consulting === b.consulting &&
+    a.soft === b.soft &&
+    a.role === b.role &&
+    a.module === b.module &&
+    a.initiative === b.initiative &&
+    a.edge === b.edge &&
+    a.edgeHighlight === b.edgeHighlight &&
+    a.roleEdge === b.roleEdge &&
+    a.moduleEdge === b.moduleEdge &&
+    a.initiativeEdge === b.initiativeEdge &&
+    a.planEdge === b.planEdge
+  );
 }
 
 function getReadableTextColor(backgroundColor: string, palette: ExpertPalette): string {
