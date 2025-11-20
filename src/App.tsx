@@ -1,9 +1,7 @@
 import { Theme, presetGpnDefault, presetGpnDark } from '@consta/uikit/Theme';
-import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Collapse } from '@consta/uikit/Collapse';
 import { Loader } from '@consta/uikit/Loader';
-import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import {
   Suspense,
@@ -1089,30 +1087,9 @@ function App() {
     [graphs]
   );
 
-  const graphSelectValue = useMemo(
-    () => graphSelectOptions.find((option) => option.value === activeGraphId) ?? null,
-    [graphSelectOptions, activeGraphId]
-  );
-
   // Removed unused graphSourceSelectValue
   // Removed unused graphCopyOptionItems
   // Removed unused selectedGraphCopyOptionItems
-
-  const activeGraph = useMemo(
-    () => graphs.find((graph) => graph.id === activeGraphId) ?? null,
-    [graphs, activeGraphId]
-  );
-
-  const activeGraphBadge = useMemo(() => {
-    if (!activeGraph) {
-      return null;
-    }
-
-    return {
-      label: activeGraph.isDefault ? 'Основной граф' : 'Дополнительный граф',
-      status: activeGraph.isDefault ? ('success' as const) : ('system' as const)
-    };
-  }, [activeGraph]);
 
   const sourceGraphDraft = useMemo(
     () => graphs.find((graph) => graph.id === graphSourceIdDraft) ?? null,
@@ -2935,15 +2912,6 @@ function App() {
     [applySnapshot, markGraphDirty, showAdminNotice]
   );
 
-  const handleSelectGraph = useCallback(
-    (graphId: string) => {
-      setGraphActionStatus(null);
-      setIsCreatePanelOpen(false);
-      updateActiveGraph(graphId);
-    },
-    [updateActiveGraph]
-  );
-
   const handleSubmitCreateGraph = useCallback(async () => {
     if (isGraphActionInProgress) {
       return;
@@ -3128,71 +3096,6 @@ function App() {
     return 'Управляйте данными графа: обновляйте карточки модулей, доменов и артефактов, а также удаляйте устаревшие связи.';
   })();
 
-  const deleteGraphDisabled =
-    !activeGraph || activeGraph.isDefault || isGraphActionInProgress || isGraphsLoading;
-
-  const headerActions = (
-    <div className={styles.graphSelectorControls}>
-      <Select<{ label: string; value: string }>
-        size="s"
-        items={graphSelectOptions}
-        value={graphSelectValue}
-        placeholder={isGraphsLoading ? 'Загрузка графов...' : 'Выберите граф'}
-        disabled={graphSelectOptions.length === 0 || isGraphsLoading}
-        getItemLabel={(item) => item.label}
-        getItemKey={(item) => item.value}
-        onChange={(option) => {
-          if (option) {
-            handleSelectGraph(option.value);
-          }
-        }}
-      />
-      {activeGraphBadge && (
-        <Badge
-          className={styles.graphBadge}
-          size="s"
-          view="filled"
-          status={activeGraphBadge.status}
-          label={activeGraphBadge.label}
-        />
-      )}
-      <Button
-        size="s"
-        view="secondary"
-        label="Создать граф"
-        onClick={() => {
-          setIsCreatePanelOpen(true);
-          setGraphActionStatus(null);
-        }}
-        disabled={isGraphsLoading}
-      />
-      <Button
-        size="s"
-        view="ghost"
-        label="Удалить граф"
-        onClick={() => {
-          if (activeGraphId) {
-            void handleDeleteGraph(activeGraphId);
-          }
-        }}
-        disabled={deleteGraphDisabled}
-      />
-      {graphListError && (
-        <Text size="xs" view="alert">
-          {graphListError}
-        </Text>
-      )}
-      {!isCreatePanelOpen && graphActionStatus && (
-        <Text
-          size="xs"
-          view={graphActionStatus.type === 'error' ? 'alert' : 'success'}
-        >
-          {graphActionStatus.message}
-        </Text>
-      )}
-    </div>
-  );
-
   const themePreset = useMemo(() => {
     if (themeMode === 'dark') return presetGpnDark;
     return presetGpnDefault;
@@ -3209,7 +3112,6 @@ function App() {
       onViewChange={setViewMode}
       headerTitle={headerTitle}
       headerDescription={headerDescription}
-      headerActions={headerActions}
       themeMode={themeMode}
       onSetThemeMode={handleSetThemeMode}
       graphs={graphs}
@@ -3218,6 +3120,7 @@ function App() {
       onGraphCreate={handleCreateGraph}
       onGraphDelete={handleDeleteGraph}
       isGraphListLoading={isGraphsLoading}
+      graphListError={graphListError}
     >
       {snapshotError && (
         <div className={styles.errorBanner} role="status" aria-live="polite">

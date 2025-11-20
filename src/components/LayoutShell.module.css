@@ -85,6 +85,10 @@
   width: 100%;
 }
 
+.graphSelectDropdown {
+  z-index: 2000;
+}
+
 .graphActions {
   display: flex;
   flex-direction: column;

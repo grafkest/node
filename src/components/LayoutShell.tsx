@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Text } from '@consta/uikit/Text';
 import { Button } from '@consta/uikit/Button';
 import { ChoiceGroup } from '@consta/uikit/ChoiceGroup';
@@ -39,6 +39,7 @@ interface LayoutShellProps {
   onGraphCreate?: () => void;
   onGraphDelete?: (graphId: string) => void;
   isGraphListLoading?: boolean;
+  graphListError?: string | null;
 }
 
 const MENU_ITEMS: Array<{
@@ -74,9 +75,11 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   onGraphCreate,
   onGraphDelete,
   isGraphListLoading = false,
+  graphListError = null,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const graphDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const handleViewChange = (view: ViewMode) => {
     onViewChange(view);
@@ -106,6 +109,7 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
     if (onGraphSelect) {
       onGraphSelect(option?.value ?? null);
     }
+    setIsMobileMenuOpen(false);
   };
 
   return (
@@ -177,7 +181,14 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
               disabled={isGraphListLoading}
               onChange={handleGraphSelectChange}
               className={styles.graphSelect}
+              dropdownRef={graphDropdownRef}
+              dropdownClassName={styles.graphSelectDropdown}
             />
+            {graphListError && (
+              <Text size="xs" view="alert">
+                {graphListError}
+              </Text>
+            )}
             <div className={styles.graphActions}>
               {onGraphCreate && (
                 <Button
