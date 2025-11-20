@@ -313,6 +313,11 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   useEffect(() => {
     setGraphInstanceKey((value) => value + 1);
     setRoleGraphInstanceKey((value) => value + 1);
+    graphRef.current = null;
+    roleGraphRef.current = null;
+    setFocusedSkill(null);
+    setFocusedAssignment(null);
+    setSelectedRole(null);
     initialGraphZoomAppliedRef.current = { graph: false, assignments: false };
     roleGraphZoomAppliedRef.current = false;
   }, [palette]);

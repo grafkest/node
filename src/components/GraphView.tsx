@@ -181,6 +181,11 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   useEffect(() => {
     nodeCacheRef.current.clear();
+    graphRef.current = null;
+    cameraStateRef.current = null;
+    hasInitialFitRef.current = false;
+    lastFocusedNodeRef.current = null;
+    setIsFocusedView(false);
     setGraphInstanceKey((value) => value + 1);
   }, [palette]);
 
