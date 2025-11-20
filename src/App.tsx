@@ -84,6 +84,7 @@ import {
 import { preparePlannerModuleSelections } from './utils/initiativePlanner';
 import { LayoutShell } from './components/LayoutShell';
 import { CreateGraphModal } from './components/CreateGraphModal';
+import GraphPersistenceControls from './components/GraphPersistenceControls';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -3377,6 +3378,26 @@ function App() {
         aria-hidden={!isAdminActive}
         style={{ display: isAdminActive ? undefined : 'none' }}
       >
+        <GraphPersistenceControls
+          modules={moduleData}
+          domains={domainData}
+          artifacts={artifactData}
+          experts={expertProfiles}
+          initiatives={initiativeData}
+          onImport={handleImportGraph}
+          onImportFromGraph={handleImportFromExistingGraph}
+          graphs={graphs}
+          activeGraphId={activeGraphId}
+          onGraphSelect={handleGraphSelect}
+          onGraphCreate={handleCreateGraph}
+          onGraphDelete={activeGraphId ? () => handleDeleteGraph(activeGraphId) : undefined}
+          isGraphListLoading={isGraphsLoading}
+          syncStatus={syncStatus}
+          layout={layoutSnapshot}
+          isSyncAvailable={isSyncAvailable}
+          onRetryLoad={handleRetryLoadSnapshot}
+          isReloading={isReloadingSnapshot}
+        />
         <AdminPanel
           modules={moduleData}
           domains={domainData}

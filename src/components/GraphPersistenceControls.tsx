@@ -279,83 +279,131 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     [graphsOptions, activeGraphId]
   );
 
+  const formattedLastUpdated = useMemo(() => {
+    if (!lastUpdated) {
+      return null;
+    }
+
+    const date = new Date(lastUpdated);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return date.toLocaleString('ru-RU');
+  }, [lastUpdated]);
+
   return (
     <section className={styles.wrapper} aria-label="Управление графами">
       <div className={styles.topBar}>
-         <div className={styles.selectorGroup}>
-            <Select<{ label: string; value: string }>
-              size="s"
-              items={graphsOptions}
-              value={currentGraphOption}
-              placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
-              getItemLabel={(item) => item.label}
-              getItemKey={(item) => item.value}
-              disabled={isGraphListLoading || isReloading}
-              onChange={handleGraphSelectChange}
-              className={styles.graphSelect}
+        <div className={styles.selectorGroup}>
+          <Select<{ label: string; value: string }>
+            size="s"
+            items={graphsOptions}
+            value={currentGraphOption}
+            placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            disabled={isGraphListLoading || isReloading}
+            onChange={handleGraphSelectChange}
+            className={styles.graphSelect}
+          />
+          {activeGraphId && (
+            <div className={styles.graphActions}>
+              {onGraphCreate && (
+                <Button
+                  size="s"
+                  view="clear"
+                  iconLeft={IconAdd}
+                  onlyIcon
+                  onClick={onGraphCreate}
+                  title="Создать новый граф"
+                />
+              )}
+              {onGraphDelete && (
+                <Button
+                  size="s"
+                  view="clear"
+                  status="alert"
+                  iconLeft={IconTrash}
+                  onlyIcon
+                  onClick={onGraphDelete}
+                  title="Удалить текущий граф"
+                />
+              )}
+            </div>
+          )}
+          {!activeGraphId && onGraphCreate && (
+            <Button size="s" view="secondary" label="Создать граф" onClick={onGraphCreate} />
+          )}
+        </div>
+
+        <div className={styles.syncStatus}>
+          {syncStatus && (
+            <Text
+              size="xs"
+              view={
+                syncStatus.state === 'error'
+                  ? 'alert'
+                  : syncStatus.state === 'saving'
+                    ? 'ghost'
+                    : 'secondary'
+              }
+            >
+              {syncStatus.message ??
+                (syncStatus.state === 'saving'
+                  ? 'Сохранение...'
+                  : syncStatus.state === 'error'
+                    ? 'Ошибка'
+                    : 'Синхронизировано')}
+            </Text>
+          )}
+          {activeGraphId && isSyncAvailable && onRetryLoad && (
+            <Button
+              size="xs"
+              view="clear"
+              iconLeft={IconRestart}
+              onlyIcon
+              loading={isReloading}
+              onClick={onRetryLoad}
+              title="Перезагрузить данные"
             />
-            {activeGraphId && (
-               <div className={styles.graphActions}>
-                  {onGraphCreate && (
-                     <Button 
-                       size="s" 
-                       view="clear" 
-                       iconLeft={IconAdd} 
-                       onlyIcon 
-                       onClick={onGraphCreate} 
-                       title="Создать новый граф"
-                     />
-                  )}
-                  {onGraphDelete && (
-                     <Button 
-                       size="s" 
-                       view="clear" 
-                       status="alert"
-                       iconLeft={IconTrash} 
-                       onlyIcon 
-                       onClick={onGraphDelete}
-                       title="Удалить текущий граф"
-                     />
-                  )}
-               </div>
-            )}
-             {!activeGraphId && onGraphCreate && (
-                <Button size="s" view="secondary" label="Создать граф" onClick={onGraphCreate} />
-             )}
-         </div>
-         
-         <div className={styles.syncStatus}>
-            {syncStatus && (
-                <Text
-                  size="xs"
-                  view={
-                    syncStatus.state === 'error'
-                      ? 'alert'
-                      : syncStatus.state === 'saving'
-                        ? 'ghost'
-                        : 'secondary'
-                  }
-                >
-                  {syncStatus.message ??
-                    (syncStatus.state === 'saving'
-                      ? 'Сохранение...'
-                      : syncStatus.state === 'error'
-                        ? 'Ошибка'
-                        : 'Синхронизировано')}
-                </Text>
-              )}
-              {activeGraphId && isSyncAvailable && onRetryLoad && (
-                 <Button
-                    size="xs"
-                    view="clear"
-                    iconLeft={IconRestart}
-                    onlyIcon
-                    loading={isReloading}
-                    onClick={onRetryLoad}
-                    title="Перезагрузить данные"
-                 />
-              )}
-         </div>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.header}>
+        <Text size="s" weight="semibold">
+          Импорт и экспорт графа
+        </Text>
+        <Text size="xs" view="secondary">
+          Сохраните текущие данные в файл JSON или загрузите ранее выгруженный граф.
+        </Text>
+        {formattedLastUpdated && (
+          <Text size="xs" view="secondary">
+            Последнее обновление: {formattedLastUpdated}
+          </Text>
+        )}
+      </div>
+
+      <div className={styles.actions}>
+        <Button size="s" view="secondary" label="Экспорт в JSON" onClick={handleExport} />
+        <Button size="s" view="primary" label="Импорт из файла" onClick={handleTriggerImport} />
+        {onForceSave && (
+          <Button
+            size="s"
+            view="ghost"
+            label="Сохранить в хранилище"
+            onClick={onForceSave}
+            disabled={!isSyncAvailable}
+          />
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          onChange={handleFileChange}
+          style={{ display: 'none' }}
+        />
       </div>
 
       {isCopySectionAvailable && (
