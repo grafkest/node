@@ -1,6 +1,7 @@
 import {
   GRAPH_SNAPSHOT_VERSION,
   type GraphCopyRequest,
+  type GraphDataScope,
   type GraphLayoutSnapshot,
   type GraphSnapshotPayload,
   type GraphSummary
@@ -158,6 +159,32 @@ export async function importGraphFromSource(
   signal?: AbortSignal
 ): Promise<GraphSnapshotPayload> {
   const snapshot = await fetchGraphSnapshot(request.graphId, signal);
+  const scopes: GraphDataScope[] = [];
+
+  if (request.includeDomains) scopes.push('domains');
+  if (request.includeModules) scopes.push('modules');
+  if (request.includeArtifacts) scopes.push('artifacts');
+  if (request.includeExperts) scopes.push('experts');
+  if (request.includeInitiatives) scopes.push('initiatives');
+
+  const allowedNodeIds = new Set<string>();
+
+  if (request.includeDomains) snapshot.domains.forEach((domain) => allowedNodeIds.add(domain.id));
+  if (request.includeModules) snapshot.modules.forEach((module) => allowedNodeIds.add(module.id));
+  if (request.includeArtifacts) snapshot.artifacts.forEach((artifact) => allowedNodeIds.add(artifact.id));
+  if (request.includeInitiatives) {
+    snapshot.initiatives?.forEach((initiative) => allowedNodeIds.add(initiative.id));
+  }
+
+  const filteredLayout =
+    snapshot.layout && allowedNodeIds.size > 0
+      ? normalizeLayoutSnapshot({
+          nodes: Object.fromEntries(
+            Object.entries(snapshot.layout.nodes ?? {}).filter(([id]) => allowedNodeIds.has(id))
+          )
+        }) ?? undefined
+      : undefined;
+
   return {
     version: snapshot.version,
     exportedAt: snapshot.exportedAt,
@@ -166,10 +193,8 @@ export async function importGraphFromSource(
     artifacts: request.includeArtifacts ? snapshot.artifacts : [],
     experts: request.includeExperts ? snapshot.experts ?? [] : [],
     initiatives: request.includeInitiatives ? snapshot.initiatives ?? [] : [],
-    layout:
-      request.includeModules && snapshot.layout
-        ? normalizeLayoutSnapshot(snapshot.layout) ?? undefined
-        : undefined
+    layout: filteredLayout,
+    scopesIncluded: scopes
   };
 }
 

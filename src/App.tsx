@@ -26,6 +26,7 @@ import AdminPanel, {
 import FiltersPanel from './components/FiltersPanel';
 import {
   GRAPH_SNAPSHOT_VERSION,
+  type GraphDataScope,
   type GraphLayoutNodePosition,
   type GraphLayoutSnapshot,
   type GraphSnapshotPayload,
@@ -84,6 +85,7 @@ import {
 import { preparePlannerModuleSelections } from './utils/initiativePlanner';
 import { LayoutShell } from './components/LayoutShell';
 import { CreateGraphModal } from './components/CreateGraphModal';
+import GraphPersistenceControls from './components/GraphPersistenceControls';
 
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
@@ -284,22 +286,32 @@ function App() {
 
   const applySnapshot = useCallback(
     (snapshot: GraphSnapshotPayload) => {
-      const flattenedDomains = flattenDomainTree(snapshot.domains);
+      const scopes = new Set<GraphDataScope>(
+        snapshot.scopesIncluded ?? ['domains', 'modules', 'artifacts', 'experts', 'initiatives']
+      );
+
+      const nextDomains = scopes.has('domains') ? snapshot.domains : domainData;
+      const nextModules = scopes.has('modules') ? snapshot.modules : moduleData;
+      const nextArtifacts = scopes.has('artifacts') ? snapshot.artifacts : artifactData;
+      const nextExperts = scopes.has('experts') ? snapshot.experts ?? initialExperts : expertProfiles;
+      const nextInitiatives = scopes.has('initiatives') ? snapshot.initiatives ?? [] : initiativeData;
+
+      const flattenedDomains = flattenDomainTree(nextDomains);
       const domainIds = flattenedDomains.map((domain) => domain.id);
       const activeNodeIds = new Set<string>([...domainIds]);
-      snapshot.modules.forEach((module) => activeNodeIds.add(module.id));
-      snapshot.artifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
-      (snapshot.initiatives ?? []).forEach((initiative) => activeNodeIds.add(initiative.id));
+      nextModules.forEach((module) => activeNodeIds.add(module.id));
+      nextArtifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+      nextInitiatives.forEach((initiative) => activeNodeIds.add(initiative.id));
 
-      setDomainData(snapshot.domains);
-      setModuleDataState(recalculateReuseScores(snapshot.modules));
-      setArtifactData(snapshot.artifacts);
-      setInitiativeData(snapshot.initiatives ?? []);
-      setExpertProfiles(snapshot.experts ?? initialExperts);
+      setDomainData(nextDomains);
+      setModuleDataState(recalculateReuseScores(nextModules));
+      setArtifactData(nextArtifacts);
+      setInitiativeData(nextInitiatives);
+      setExpertProfiles(nextExperts);
       setSelectedNode(null);
       setSearch('');
       setStatusFilters(new Set(allStatuses));
-      setProductFilter(buildProductList(snapshot.modules));
+      setProductFilter(buildProductList(nextModules));
       setCompanyFilter(null);
       setSelectedDomains(new Set(domainIds));
       let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
@@ -374,7 +386,7 @@ function App() {
         hasPendingPersistRef.current = false;
       }
     },
-    []
+    [artifactData, domainData, expertProfiles, initiativeData, moduleData]
   );
 
   const loadSnapshot = useCallback(
@@ -2875,7 +2887,6 @@ function App() {
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
       markGraphDirty();
-      skipNextSyncRef.current = true;
     },
     [applySnapshot, markGraphDirty]
   );
@@ -2892,7 +2903,6 @@ function App() {
       try {
         const snapshot = await importGraphFromSource(request);
         applySnapshot(snapshot);
-        skipNextSyncRef.current = true;
         setIsSyncAvailable(true);
         markGraphDirty();
         return {
@@ -3377,6 +3387,26 @@ function App() {
         aria-hidden={!isAdminActive}
         style={{ display: isAdminActive ? undefined : 'none' }}
       >
+        <GraphPersistenceControls
+          modules={moduleData}
+          domains={domainData}
+          artifacts={artifactData}
+          experts={expertProfiles}
+          initiatives={initiativeData}
+          onImport={handleImportGraph}
+          onImportFromGraph={handleImportFromExistingGraph}
+          graphs={graphs}
+          activeGraphId={activeGraphId}
+          onGraphSelect={handleGraphSelect}
+          onGraphCreate={handleCreateGraph}
+          onGraphDelete={activeGraphId ? () => handleDeleteGraph(activeGraphId) : undefined}
+          isGraphListLoading={isGraphsLoading}
+          syncStatus={syncStatus}
+          layout={layoutSnapshot}
+          isSyncAvailable={isSyncAvailable}
+          onRetryLoad={handleRetryLoadSnapshot}
+          isReloading={isReloadingSnapshot}
+        />
         <AdminPanel
           modules={moduleData}
           domains={domainData}

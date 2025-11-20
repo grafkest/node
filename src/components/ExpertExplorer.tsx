@@ -508,7 +508,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   );
 
   const domainOptions = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(Object.keys(domainNameMap));
     experts.forEach((expert) => {
       const result = matchesFilters(expert, { applyDomain: false });
       if (!result.passes) {
@@ -519,7 +519,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     return Array.from(set).sort((a, b) =>
       resolveDomainName(a).localeCompare(resolveDomainName(b), 'ru')
     );
-  }, [experts, matchesFilters, resolveDomainName]);
+  }, [domainNameMap, experts, matchesFilters, resolveDomainName]);
 
   const competencyOptions = useMemo(() => {
     const set = new Set<string>();

@@ -11,6 +11,7 @@ import type { ArtifactNode, DomainNode, ExpertProfile, Initiative, ModuleNode } 
 import { normalizeLayoutSnapshot } from '../services/graphStorage';
 import {
   GRAPH_SNAPSHOT_VERSION,
+  type GraphDataScope,
   type GraphLayoutSnapshot,
   type GraphSnapshotPayload,
   type GraphSummary,
@@ -80,6 +81,9 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   const [copyOptions, setCopyOptions] = useState<
     Set<'domains' | 'modules' | 'artifacts' | 'experts' | 'initiatives'>
   >(() => new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
+  const [fileTransferOptions, setFileTransferOptions] = useState<
+    Set<GraphDataScope>
+  >(() => new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
   const [isGraphImporting, setIsGraphImporting] = useState(false);
 
   const buildSnapshot = useCallback((): GraphSnapshotPayload => {
@@ -97,8 +101,13 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   }, [artifacts, domains, experts, initiatives, layout, modules]);
 
   const handleExport = () => {
+    if (fileTransferOptions.size === 0) {
+      setStatus({ type: 'error', message: 'Выберите типы данных для экспорта.' });
+      return;
+    }
+
     try {
-      const snapshot = buildSnapshot();
+      const snapshot = filterSnapshotByScope(buildSnapshot(), fileTransferOptions);
       const data = JSON.stringify(snapshot, null, 2);
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -140,14 +149,19 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
           throw new Error('Файл не соответствует структуре графа');
         }
 
-        const normalized = normalizeImportedSnapshot(parsed);
+        if (fileTransferOptions.size === 0) {
+          throw new Error('Выберите хотя бы один тип данных для импорта.');
+        }
 
-        onImport(normalized);
-        const moduleCount = normalized.modules.length;
-        const domainCount = normalized.domains.length;
-        const artifactCount = normalized.artifacts.length;
-        const expertCount = normalized.experts?.length ?? 0;
-        const initiativeCount = normalized.initiatives?.length ?? 0;
+        const normalized = normalizeImportedSnapshot(parsed);
+        const filtered = filterSnapshotByScope(normalized, fileTransferOptions);
+
+        onImport(filtered);
+        const moduleCount = filtered.modules.length;
+        const domainCount = filtered.domains.length;
+        const artifactCount = filtered.artifacts.length;
+        const expertCount = filtered.experts?.length ?? 0;
+        const initiativeCount = filtered.initiatives?.length ?? 0;
         setStatus({
           type: 'success',
           message:
@@ -194,7 +208,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     [graphOptions, sourceGraphId]
   );
 
-  const copyOptionItems = useMemo(
+  const dataScopeItems = useMemo(
     () =>
       [
         { id: 'domains' as const, label: 'Домены' },
@@ -207,9 +221,16 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   );
 
   const selectedCopyOptionItems = useMemo(
-    () => copyOptionItems.filter((item) => copyOptions.has(item.id)),
-    [copyOptionItems, copyOptions]
+    () => dataScopeItems.filter((item) => copyOptions.has(item.id)),
+    [dataScopeItems, copyOptions]
   );
+
+  const selectedTransferOptionItems = useMemo(
+    () => dataScopeItems.filter((item) => fileTransferOptions.has(item.id)),
+    [dataScopeItems, fileTransferOptions]
+  );
+
+  const isFileTransferSelectionEmpty = fileTransferOptions.size === 0;
 
   const isCopySectionAvailable = Boolean(onImportFromGraph) && graphOptions.length > 0;
   const canImportFromGraph =
@@ -279,83 +300,164 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     [graphsOptions, activeGraphId]
   );
 
+  const formattedLastUpdated = useMemo(() => {
+    if (!lastUpdated) {
+      return null;
+    }
+
+    const date = new Date(lastUpdated);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return date.toLocaleString('ru-RU');
+  }, [lastUpdated]);
+
   return (
     <section className={styles.wrapper} aria-label="Управление графами">
       <div className={styles.topBar}>
-         <div className={styles.selectorGroup}>
-            <Select<{ label: string; value: string }>
-              size="s"
-              items={graphsOptions}
-              value={currentGraphOption}
-              placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
-              getItemLabel={(item) => item.label}
-              getItemKey={(item) => item.value}
-              disabled={isGraphListLoading || isReloading}
-              onChange={handleGraphSelectChange}
-              className={styles.graphSelect}
+        <div className={styles.selectorGroup}>
+          <Select<{ label: string; value: string }>
+            size="s"
+            items={graphsOptions}
+            value={currentGraphOption}
+            placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
+            getItemLabel={(item) => item.label}
+            getItemKey={(item) => item.value}
+            disabled={isGraphListLoading || isReloading}
+            onChange={handleGraphSelectChange}
+            className={styles.graphSelect}
+          />
+          {activeGraphId && (
+            <div className={styles.graphActions}>
+              {onGraphCreate && (
+                <Button
+                  size="s"
+                  view="clear"
+                  iconLeft={IconAdd}
+                  onlyIcon
+                  onClick={onGraphCreate}
+                  title="Создать новый граф"
+                />
+              )}
+              {onGraphDelete && (
+                <Button
+                  size="s"
+                  view="clear"
+                  status="alert"
+                  iconLeft={IconTrash}
+                  onlyIcon
+                  onClick={onGraphDelete}
+                  title="Удалить текущий граф"
+                />
+              )}
+            </div>
+          )}
+          {!activeGraphId && onGraphCreate && (
+            <Button size="s" view="secondary" label="Создать граф" onClick={onGraphCreate} />
+          )}
+        </div>
+
+        <div className={styles.syncStatus}>
+          {syncStatus && (
+            <Text
+              size="xs"
+              view={
+                syncStatus.state === 'error'
+                  ? 'alert'
+                  : syncStatus.state === 'saving'
+                    ? 'ghost'
+                    : 'secondary'
+              }
+            >
+              {syncStatus.message ??
+                (syncStatus.state === 'saving'
+                  ? 'Сохранение...'
+                  : syncStatus.state === 'error'
+                    ? 'Ошибка'
+                    : 'Синхронизировано')}
+            </Text>
+          )}
+          {activeGraphId && isSyncAvailable && onRetryLoad && (
+            <Button
+              size="xs"
+              view="clear"
+              iconLeft={IconRestart}
+              onlyIcon
+              loading={isReloading}
+              onClick={onRetryLoad}
+              title="Перезагрузить данные"
             />
-            {activeGraphId && (
-               <div className={styles.graphActions}>
-                  {onGraphCreate && (
-                     <Button 
-                       size="s" 
-                       view="clear" 
-                       iconLeft={IconAdd} 
-                       onlyIcon 
-                       onClick={onGraphCreate} 
-                       title="Создать новый граф"
-                     />
-                  )}
-                  {onGraphDelete && (
-                     <Button 
-                       size="s" 
-                       view="clear" 
-                       status="alert"
-                       iconLeft={IconTrash} 
-                       onlyIcon 
-                       onClick={onGraphDelete}
-                       title="Удалить текущий граф"
-                     />
-                  )}
-               </div>
-            )}
-             {!activeGraphId && onGraphCreate && (
-                <Button size="s" view="secondary" label="Создать граф" onClick={onGraphCreate} />
-             )}
-         </div>
-         
-         <div className={styles.syncStatus}>
-            {syncStatus && (
-                <Text
-                  size="xs"
-                  view={
-                    syncStatus.state === 'error'
-                      ? 'alert'
-                      : syncStatus.state === 'saving'
-                        ? 'ghost'
-                        : 'secondary'
-                  }
-                >
-                  {syncStatus.message ??
-                    (syncStatus.state === 'saving'
-                      ? 'Сохранение...'
-                      : syncStatus.state === 'error'
-                        ? 'Ошибка'
-                        : 'Синхронизировано')}
-                </Text>
-              )}
-              {activeGraphId && isSyncAvailable && onRetryLoad && (
-                 <Button
-                    size="xs"
-                    view="clear"
-                    iconLeft={IconRestart}
-                    onlyIcon
-                    loading={isReloading}
-                    onClick={onRetryLoad}
-                    title="Перезагрузить данные"
-                 />
-              )}
-         </div>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.header}>
+        <Text size="s" weight="semibold">
+          Импорт и экспорт графа
+        </Text>
+        <Text size="xs" view="secondary">
+          Сохраните текущие данные в файл JSON или загрузите ранее выгруженный граф.
+        </Text>
+        {formattedLastUpdated && (
+          <Text size="xs" view="secondary">
+            Последнее обновление: {formattedLastUpdated}
+          </Text>
+        )}
+      </div>
+
+      <div className={styles.transferSection}>
+        <div className={styles.transferOptions}>
+          <Text size="xs" view="secondary">
+            Выберите типы данных для экспорта и импорта из файла JSON.
+          </Text>
+          <CheckboxGroup
+            size="s"
+            direction="row"
+            items={dataScopeItems}
+            value={selectedTransferOptionItems}
+            getItemKey={(item) => item.id}
+            getItemLabel={(item) => item.label}
+            onChange={(items) => {
+              setFileTransferOptions(new Set((items ?? []).map((item) => item.id)));
+            }}
+          />
+          <Text size="xs" view="secondary">
+            Даже если в файле присутствуют все сущности, будут загружены только выбранные.
+          </Text>
+        </div>
+        <div className={styles.actions}>
+          <Button
+            size="s"
+            view="secondary"
+            label="Экспорт в JSON"
+            onClick={handleExport}
+            disabled={isFileTransferSelectionEmpty}
+          />
+          <Button
+            size="s"
+            view="primary"
+            label="Импорт из файла"
+            onClick={handleTriggerImport}
+            disabled={isFileTransferSelectionEmpty}
+          />
+          {onForceSave && (
+            <Button
+              size="s"
+              view="ghost"
+              label="Сохранить в хранилище"
+              onClick={onForceSave}
+              disabled={!isSyncAvailable}
+            />
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+          />
+        </div>
       </div>
 
       {isCopySectionAvailable && (
@@ -401,7 +503,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
               <CheckboxGroup
                 size="s"
                 direction="row"
-                items={copyOptionItems}
+                items={dataScopeItems}
                 value={selectedCopyOptionItems}
                 getItemKey={(item) => item.id}
                 getItemLabel={(item) => item.label}
@@ -476,6 +578,7 @@ type GraphSnapshotLike = {
   experts?: ExpertProfile[];
   initiatives?: Initiative[];
   layout?: GraphSnapshotPayload['layout'];
+  scopesIncluded?: GraphDataScope[];
 };
 
 function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
@@ -509,7 +612,84 @@ function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
   return true;
 }
 
+function filterSnapshotByScope(
+  snapshot: GraphSnapshotPayload,
+  scopes: Set<GraphDataScope>
+): GraphSnapshotPayload {
+  const includeDomains = scopes.has('domains');
+  const includeModules = scopes.has('modules');
+  const includeArtifacts = scopes.has('artifacts');
+  const includeExperts = scopes.has('experts');
+  const includeInitiatives = scopes.has('initiatives');
+
+  const allowedNodeIds = new Set<string>();
+
+  if (includeDomains) {
+    snapshot.domains.forEach((domain) => allowedNodeIds.add(domain.id));
+  }
+
+  if (includeModules) {
+    snapshot.modules.forEach((module) => allowedNodeIds.add(module.id));
+  }
+
+  if (includeArtifacts) {
+    snapshot.artifacts.forEach((artifact) => allowedNodeIds.add(artifact.id));
+  }
+
+  if (includeInitiatives) {
+    snapshot.initiatives?.forEach((initiative) => allowedNodeIds.add(initiative.id));
+  }
+
+  const filteredLayout =
+    snapshot.layout && allowedNodeIds.size > 0
+      ? filterLayoutByNodes(snapshot.layout, allowedNodeIds)
+      : undefined;
+
+  return {
+    version: snapshot.version,
+    exportedAt: snapshot.exportedAt,
+    domains: includeDomains ? snapshot.domains : [],
+    modules: includeModules ? snapshot.modules : [],
+    artifacts: includeArtifacts ? snapshot.artifacts : [],
+    experts: includeExperts ? snapshot.experts ?? [] : [],
+    initiatives: includeInitiatives ? snapshot.initiatives ?? [] : [],
+    layout: filteredLayout,
+    scopesIncluded: Array.from(scopes)
+  };
+}
+
+function filterLayoutByNodes(
+  layout: GraphLayoutSnapshot,
+  allowedNodeIds: Set<string>
+): GraphLayoutSnapshot | undefined {
+  const filteredEntries = Object.entries(layout.nodes ?? {}).reduce<
+    GraphLayoutSnapshot['nodes']
+  >((acc, [id, position]) => {
+    if (allowedNodeIds.has(id)) {
+      acc[id] = position;
+    }
+    return acc;
+  }, {});
+
+  if (Object.keys(filteredEntries).length === 0) {
+    return undefined;
+  }
+
+  return { nodes: filteredEntries };
+}
+
 function normalizeImportedSnapshot(snapshot: GraphSnapshotLike): GraphSnapshotPayload {
+  const scopes = snapshot.scopesIncluded ?? [];
+  const validScopes = Array.isArray(scopes)
+    ? scopes.filter((scope): scope is GraphDataScope =>
+        scope === 'domains' ||
+        scope === 'modules' ||
+        scope === 'artifacts' ||
+        scope === 'experts' ||
+        scope === 'initiatives'
+      )
+    : [];
+
   return {
     version:
       typeof snapshot.version === 'number' && Number.isFinite(snapshot.version)
@@ -521,7 +701,8 @@ function normalizeImportedSnapshot(snapshot: GraphSnapshotLike): GraphSnapshotPa
     artifacts: snapshot.artifacts,
     experts: snapshot.experts ?? undefined,
     initiatives: snapshot.initiatives ?? [],
-    layout: normalizeLayoutSnapshot(snapshot.layout) ?? undefined
+    layout: normalizeLayoutSnapshot(snapshot.layout) ?? undefined,
+    scopesIncluded: validScopes.length ? validScopes : undefined
   };
 }
 

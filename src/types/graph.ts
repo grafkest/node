@@ -19,6 +19,8 @@ export type GraphLayoutSnapshot = {
   nodes: Record<string, GraphLayoutNodePosition>;
 };
 
+export type GraphDataScope = 'domains' | 'modules' | 'artifacts' | 'experts' | 'initiatives';
+
 export type GraphSnapshotPayload = {
   version: number;
   exportedAt?: string;
@@ -28,6 +30,11 @@ export type GraphSnapshotPayload = {
   experts?: ExpertProfile[];
   initiatives?: Initiative[];
   layout?: GraphLayoutSnapshot;
+  /**
+   * Ограничивает, какие сущности нужно заменить при загрузке снапшота.
+   * Если не указано, считается что снимок содержит все сущности.
+   */
+  scopesIncluded?: GraphDataScope[];
 };
 
 export type GraphSyncStatus =
