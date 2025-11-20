@@ -12,7 +12,6 @@ import { IconCheck } from '@consta/icons/IconCheck';
 import { IconSettings } from '@consta/icons/IconSettings';
 import { IconMoon } from '@consta/icons/IconMoon';
 import { IconSun } from '@consta/icons/IconSun';
-import { IconLightningBolt } from '@consta/icons/IconLightningBolt';
 import { IconHamburger } from '@consta/icons/IconHamburger';
 import { IconClose } from '@consta/icons/IconClose';
 import { IconArrowLeft } from '@consta/icons/IconArrowLeft';
@@ -23,7 +22,7 @@ import type { GraphSummary } from '../types/graph';
 import styles from './LayoutShell.module.css';
 
 type ViewMode = 'graph' | 'stats' | 'experts' | 'initiatives' | 'employee-tasks' | 'admin';
-type ThemeMode = 'light' | 'dark' | 'cyberpunk';
+type ThemeMode = 'light' | 'dark';
 
 interface LayoutShellProps {
   currentView: ViewMode;
@@ -58,7 +57,6 @@ const MENU_ITEMS: Array<{
 const THEME_OPTIONS = [
   { label: 'Светлая', id: 'light', icon: IconSun },
   { label: 'Темная', id: 'dark', icon: IconMoon },
-  { label: 'Киберпанк', id: 'cyberpunk', icon: IconLightningBolt },
 ];
 
 export const LayoutShell: React.FC<LayoutShellProps> = ({
@@ -115,7 +113,7 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
       <aside className={`${styles.sidebar} ${isMobileMenuOpen ? styles.sidebarOpen : ''} ${isCollapsed ? styles.sidebarCollapsed : ''}`}>
         <div className={styles.sidebarHeader}>
           {!isCollapsed && (
-            <Text size="l" weight="bold" view="brand" className={styles.logoText}>
+            <Text size="l" weight="bold" view="primary" className={styles.logoText}>
               Nedra.Expert Node
             </Text>
           )}

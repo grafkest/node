@@ -93,11 +93,13 @@
 
 .main {
   display: grid;
-  grid-template-columns: 300px 1fr 360px; /* Adjusted column widths */
+  grid-template-columns: 300px minmax(0, 1fr) 360px; /* Adjusted column widths */
   gap: 24px;
   padding: 24px;
   box-sizing: border-box;
   flex: 1;
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   overflow: hidden;
   background-color: var(--color-bg-stripe); /* Light gray background for content area */

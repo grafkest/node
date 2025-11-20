@@ -1,5 +1,4 @@
 import { Theme, presetGpnDefault, presetGpnDark } from '@consta/uikit/Theme';
-import { presetCyberpunk } from './utils/themePresetCyberpunk';
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Collapse } from '@consta/uikit/Collapse';
@@ -106,7 +105,7 @@ const viewTabs = [
 ] as const;
 
 type ViewMode = (typeof viewTabs)[number]['value'];
-type ThemeMode = 'light' | 'dark' | 'cyberpunk';
+type ThemeMode = 'light' | 'dark';
 
 type AdminNotice = {
   id: number;
@@ -177,7 +176,7 @@ function App() {
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('app-theme');
-    if (saved === 'light' || saved === 'dark' || saved === 'cyberpunk') {
+    if (saved === 'light' || saved === 'dark') {
       return saved;
     }
     return 'light';
@@ -188,22 +187,6 @@ function App() {
     localStorage.setItem('app-theme', mode);
   }, []);
 
-  useEffect(() => {
-    if (themeMode === 'cyberpunk') {
-      console.log(
-        `%c
-    _   __     __                                  
-   / | / /__  / /________  ______  ____  ___  _____
-  /  |/ / _ \\/ __/ ___/ / / / __ \\/ __ \\/ _ \\/ ___/
- / /|  /  __/ /_/ /  / /_/ / / / / / / /  __/ /    
-/_/ |_/\\___/\\__/_/   \\__,_/_/ /_/_/ /_/\\___/_/     
-                                                   
-Wake up, Admin... The Matrix has you.
-        `,
-        'color: #00F0FF; font-family: monospace; font-weight: bold; font-size: 14px; text-shadow: 0 0 5px #00F0FF;'
-      );
-    }
-  }, [themeMode]);
 
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
@@ -3212,7 +3195,6 @@ Wake up, Admin... The Matrix has you.
 
   const themePreset = useMemo(() => {
     if (themeMode === 'dark') return presetGpnDark;
-    if (themeMode === 'cyberpunk') return presetCyberpunk;
     return presetGpnDefault;
   }, [themeMode]);
 
@@ -3220,7 +3202,7 @@ Wake up, Admin... The Matrix has you.
     <Theme
       key={themeMode}
       preset={themePreset}
-      className={`${styles.app} ${themeMode === 'cyberpunk' ? 'Theme_preset_cyberpunk' : ''}`}
+      className={styles.app}
     >
     <LayoutShell
       currentView={viewMode}
