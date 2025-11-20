@@ -3291,6 +3291,7 @@ function App() {
                 artifacts={graphArtifacts}
                 initiatives={graphInitiatives}
                 links={filteredLinks}
+                graphVersion={activeGraphId ?? 'local'}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}

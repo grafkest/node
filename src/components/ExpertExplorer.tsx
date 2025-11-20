@@ -6,7 +6,7 @@ import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
-import { useTheme } from '@consta/uikit/Theme';
+import { useTheme, type ThemePreset } from '@consta/uikit/Theme';
 import clsx from 'clsx';
 import React, {
   useCallback,
@@ -242,12 +242,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   onUpdateExpertSkills,
   onUpdateExpertSoftSkills
 }) => {
-  const { theme } = useTheme();
-  const themeClassName = theme?.className;
-  const palette = useMemo(
-    () => resolveExpertPalette(themeClassName),
-    [themeClassName]
-  );
+  const { theme, themeClassNames } = useTheme();
+  const [palette, setPalette] = useState<ExpertPalette>(() => resolveExpertPalette(themeClassNames));
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
@@ -267,6 +263,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [focusedSkill, setFocusedSkill] = useState<SkillFocus | null>(null);
   const [focusedAssignment, setFocusedAssignment] = useState<AssignmentFocus | null>(null);
   const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
+  const [graphInstanceKey, setGraphInstanceKey] = useState(0);
+  const [roleGraphInstanceKey, setRoleGraphInstanceKey] = useState(0);
+  const [isSkillGraphVisible, setIsSkillGraphVisible] = useState(true);
+  const [isRoleGraphVisible, setIsRoleGraphVisible] = useState(true);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const initialGraphZoomAppliedRef = useRef<Record<'graph' | 'assignments', boolean>>({
@@ -279,6 +279,59 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const roleGraphZoomAppliedRef = useRef(false);
   const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
   const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
+
+  const refreshGraphInstance = useCallback((ref: React.RefObject<ForceGraphMethods | null>) => {
+    const refresh = (ref.current as unknown as { refresh?: () => void })?.refresh;
+    if (typeof refresh === 'function') {
+      refresh.call(ref.current);
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    const applyPalette = () => {
+      const nextPalette = resolveExpertPalette(themeClassNames);
+      setPalette((prev) => (areExpertPalettesEqual(prev, nextPalette) ? prev : nextPalette));
+    };
+
+    applyPalette();
+
+    if (typeof MutationObserver === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const target = findThemeElement(themeClassNames) ?? document.body;
+    const observer = new MutationObserver(applyPalette);
+
+    observer.observe(target, { attributes: true, attributeFilter: ['class', 'style'] });
+
+    return () => observer.disconnect();
+  }, [theme, themeClassNames]);
+
+  useEffect(() => {
+    refreshGraphInstance(graphRef);
+    refreshGraphInstance(roleGraphRef);
+  }, [palette, refreshGraphInstance]);
+
+  useEffect(() => {
+    setIsSkillGraphVisible(false);
+    setIsRoleGraphVisible(false);
+    const frame = window.requestAnimationFrame(() => {
+      setGraphInstanceKey((value) => value + 1);
+      setRoleGraphInstanceKey((value) => value + 1);
+      setIsSkillGraphVisible(true);
+      setIsRoleGraphVisible(true);
+    });
+
+    graphRef.current = null;
+    roleGraphRef.current = null;
+    setFocusedSkill(null);
+    setFocusedAssignment(null);
+    setSelectedRole(null);
+    initialGraphZoomAppliedRef.current = { graph: false, assignments: false };
+    roleGraphZoomAppliedRef.current = false;
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [palette]);
   useEffect(() => {
     if (!includeSoftSkills && focusedSkill?.type === 'soft') {
       setFocusedSkill(null);
@@ -717,7 +770,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [roleAggregationMap, roleAggregations, selectedRole]);
 
   useEffect(() => {
-    if (viewMode !== 'roles') {
+    if (!isRoleGraphVisible || viewMode !== 'roles') {
       return;
     }
 
@@ -857,7 +910,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       return;
     }
 
-    if (viewMode !== 'graph' && viewMode !== 'assignments') {
+    if (!isSkillGraphVisible || (viewMode !== 'graph' && viewMode !== 'assignments')) {
       return;
     }
 
@@ -1336,7 +1389,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [viewMode]);
 
   useEffect(() => {
-    if (viewMode !== 'graph' && viewMode !== 'assignments') {
+    if (!isSkillGraphVisible || (viewMode !== 'graph' && viewMode !== 'assignments')) {
       return;
     }
 
@@ -1365,12 +1418,14 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     graphDimensions.width,
     skillGraphLinks,
     skillGraphNodes,
+    graphInstanceKey,
+    isSkillGraphVisible,
     viewMode
   ]);
 
   useEffect(() => {
     const graph = graphRef.current;
-    if (!graph) {
+    if (!isSkillGraphVisible || !graph) {
       return;
     }
 
@@ -1393,7 +1448,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }
 
     graph.d3ReheatSimulation();
-  }, [assignmentGraphLinks, skillGraphLinks, viewMode]);
+  }, [assignmentGraphLinks, graphInstanceKey, isSkillGraphVisible, skillGraphLinks, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'graph') {
@@ -1548,7 +1603,14 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [roleGraphData, roleGraphDimensions.height, roleGraphDimensions.width, viewMode]);
+  }, [
+    isRoleGraphVisible,
+    roleGraphData,
+    roleGraphDimensions.height,
+    roleGraphDimensions.width,
+    roleGraphInstanceKey,
+    viewMode
+  ]);
 
   useEffect(() => {
     if (viewMode !== 'graph' && viewMode !== 'assignments') {
@@ -1581,6 +1643,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     assignmentGraphNodes,
     skillGraphLinks,
     skillGraphNodes,
+    graphInstanceKey,
     viewMode
   ]);
 
@@ -1606,7 +1669,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     if (linkForce && typeof (linkForce as { strength?: unknown }).strength === 'function') {
       (linkForce as { strength: (value: number) => void }).strength(0.7);
     }
-  }, [roleGraphData, viewMode]);
+  }, [isSkillGraphVisible, roleGraphData, roleGraphInstanceKey, viewMode]);
 
   const highlightNodeIds = useMemo(() => {
     const set = new Set<string>();
@@ -2439,8 +2502,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                     Нет данных для построения графа с выбранными фильтрами.
                   </Text>
                 </div>
-              ) : (
+              ) : isSkillGraphVisible ? (
                 <ForceGraph2D
+                  key={graphInstanceKey}
                   ref={graphRef}
                   width={graphDimensions.width}
                   height={graphDimensions.height}
@@ -2456,6 +2520,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   enableZoomInteraction
                   enablePanInteraction
                 />
+              ) : (
+                <Loader size="m" />
               )}
             </div>
             </div>
@@ -2600,8 +2666,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                     Нет данных для визуализации назначений с выбранными фильтрами.
                   </Text>
                 </div>
-              ) : (
+              ) : isSkillGraphVisible ? (
                 <ForceGraph2D
+                  key={graphInstanceKey}
                   ref={graphRef}
                   width={graphDimensions.width}
                   height={graphDimensions.height}
@@ -2617,6 +2684,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   enableZoomInteraction
                   enablePanInteraction
                 />
+              ) : (
+                <Loader size="m" />
               )}
             </div>
           </div>
@@ -2738,8 +2807,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                               Нет данных для построения графа по выбранной роли.
                             </Text>
                           </div>
-                        ) : (
+                        ) : isRoleGraphVisible ? (
                           <ForceGraph2D
+                            key={roleGraphInstanceKey}
                             ref={roleGraphRef}
                             width={roleGraphDimensions.width}
                             height={roleGraphDimensions.height}
@@ -2755,6 +2825,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                             enableZoomInteraction
                             enablePanInteraction
                           />
+                        ) : (
+                          <Loader size="m" />
                         )}
                       </div>
                       <Card className={styles.roleExpertsCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
@@ -3032,13 +3104,12 @@ const ExpertDetails: React.FC<ExpertDetailsProps> = ({
   );
 };
 
-function resolveExpertPalette(themeClassName?: string): ExpertPalette {
+function resolveExpertPalette(themeClassNames?: ThemePreset | string): ExpertPalette {
   if (typeof window === 'undefined') {
     return DEFAULT_PALETTE;
   }
 
-  const themeElement = themeClassName ? document.querySelector(`.${themeClassName}`) : null;
-  const stylesRef = getComputedStyle((themeElement as HTMLElement) ?? document.body);
+  const stylesRef = getComputedStyle((findThemeElement(themeClassNames) as HTMLElement) ?? document.body);
   const getVar = (token: string, fallback: string) =>
     stylesRef.getPropertyValue(token).trim() || fallback;
 
@@ -3066,6 +3137,70 @@ function resolveExpertPalette(themeClassName?: string): ExpertPalette {
     initiativeEdge: withAlpha(initiativeColor, 0.45),
     planEdge: withAlpha(initiativeColor, 0.32)
   };
+}
+
+function findThemeElement(themeClassNames?: ThemePreset | string): Element | null {
+  const tokens: string[] = [];
+
+  if (typeof themeClassNames === 'string') {
+    tokens.push(...themeClassNames.split(/\s+/).filter(Boolean));
+  } else if (themeClassNames && typeof themeClassNames === 'object') {
+    const color = (themeClassNames as ThemePreset).color;
+    const colorToken = typeof color === 'string' ? color : color?.primary;
+
+    [
+      colorToken,
+      (themeClassNames as ThemePreset).control,
+      (themeClassNames as ThemePreset).font,
+      (themeClassNames as ThemePreset).size,
+      (themeClassNames as ThemePreset).space,
+      (themeClassNames as ThemePreset).shadow
+    ]
+      .filter((token): token is string => Boolean(token && token.trim()))
+      .forEach((token) => tokens.push(token.trim()));
+  }
+
+  const selectorVariants = [
+    tokens.length > 0 ? tokens.map((token) => `.${token}`).join('') : null,
+    tokens[0] ? `.${tokens[0]}` : null,
+    '.Theme'
+  ].filter(Boolean) as string[];
+
+  for (const selector of selectorVariants) {
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        return element;
+      }
+    } catch {
+      // Ignore invalid selectors and try the next fallback
+    }
+  }
+
+  return null;
+}
+
+function areExpertPalettesEqual(a: ExpertPalette, b: ExpertPalette): boolean {
+  return (
+    a.background === b.background &&
+    a.text === b.text &&
+    a.textMuted === b.textMuted &&
+    a.textOnAccent === b.textOnAccent &&
+    a.expert === b.expert &&
+    a.domain === b.domain &&
+    a.competency === b.competency &&
+    a.consulting === b.consulting &&
+    a.soft === b.soft &&
+    a.role === b.role &&
+    a.module === b.module &&
+    a.initiative === b.initiative &&
+    a.edge === b.edge &&
+    a.edgeHighlight === b.edgeHighlight &&
+    a.roleEdge === b.roleEdge &&
+    a.moduleEdge === b.moduleEdge &&
+    a.initiativeEdge === b.initiativeEdge &&
+    a.planEdge === b.planEdge
+  );
 }
 
 function getReadableTextColor(backgroundColor: string, palette: ExpertPalette): string {

@@ -1,8 +1,15 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Loader } from '@consta/uikit/Loader';
-import { useTheme } from '@consta/uikit/Theme';
+import { useTheme, type ThemePreset } from '@consta/uikit/Theme';
 import { forceCollide } from 'd3-force-3d';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import ForceGraph2D, {
   ForceGraphMethods,
   LinkObject,
@@ -35,6 +42,7 @@ type GraphViewProps = {
   artifacts: ArtifactNode[];
   initiatives: Initiative[];
   links: GraphLink[];
+  graphVersion?: string | number;
   onSelect: (node: GraphNode | null) => void;
   highlightedNode: string | null;
   visibleDomainIds: Set<string>;
@@ -55,13 +63,17 @@ type CameraState = {
   zoom: number;
 };
 
-function readStoredCameraState(): CameraState | null {
+function resolveCameraStorageKey(graphVersion?: string | number): string {
+  return graphVersion ? `${CAMERA_STORAGE_KEY}:${graphVersion}` : CAMERA_STORAGE_KEY;
+}
+
+function readStoredCameraState(storageKey: string): CameraState | null {
   if (typeof window === 'undefined') {
     return null;
   }
 
   try {
-    const rawValue = window.sessionStorage.getItem(CAMERA_STORAGE_KEY);
+    const rawValue = window.sessionStorage.getItem(storageKey);
     if (!rawValue) {
       return null;
     }
@@ -96,18 +108,18 @@ function readStoredCameraState(): CameraState | null {
   return null;
 }
 
-function writeStoredCameraState(state: CameraState | null): void {
+function writeStoredCameraState(storageKey: string, state: CameraState | null): void {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
     if (!state) {
-      window.sessionStorage.removeItem(CAMERA_STORAGE_KEY);
+      window.sessionStorage.removeItem(storageKey);
       return;
     }
 
-    window.sessionStorage.setItem(CAMERA_STORAGE_KEY, JSON.stringify(state));
+    window.sessionStorage.setItem(storageKey, JSON.stringify(state));
   } catch (error) {
     console.warn('Failed to persist camera state', error);
   }
@@ -119,6 +131,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   artifacts,
   initiatives,
   links,
+  graphVersion,
   onSelect,
   highlightedNode,
   visibleDomainIds,
@@ -127,11 +140,16 @@ const GraphView: React.FC<GraphViewProps> = ({
   normalizationRequest,
   onLayoutChange
 }) => {
-  const { theme } = useTheme();
-  const themeClassName = theme?.className ?? 'default';
-
-  const palette = useMemo(() => resolvePalette(themeClassName), [themeClassName]);
-  const initialCameraState = useMemo(() => readStoredCameraState(), []);
+  const { theme, themeClassNames } = useTheme();
+  const [palette, setPalette] = useState<GraphPalette>(() => resolvePalette(themeClassNames));
+  const cameraStorageKey = useMemo(
+    () => resolveCameraStorageKey(graphVersion),
+    [graphVersion]
+  );
+  const initialCameraState = useMemo(
+    () => readStoredCameraState(cameraStorageKey),
+    [cameraStorageKey]
+  );
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -145,6 +163,55 @@ const GraphView: React.FC<GraphViewProps> = ({
   const maxNodeCountRef = useRef(0);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
+  const [graphInstanceKey, setGraphInstanceKey] = useState(0);
+  const [isGraphVisible, setIsGraphVisible] = useState(true);
+
+  const refreshGraphInstance = useCallback(() => {
+    const refresh = (graphRef.current as unknown as { refresh?: () => void })?.refresh;
+    if (typeof refresh === 'function') {
+      refresh.call(graphRef.current);
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    const applyPalette = () => {
+      const nextPalette = resolvePalette(themeClassNames);
+      setPalette((prev) => (arePalettesEqual(prev, nextPalette) ? prev : nextPalette));
+    };
+
+    applyPalette();
+
+    if (typeof MutationObserver === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const target = findThemeElement(themeClassNames) ?? document.body;
+    const observer = new MutationObserver(applyPalette);
+
+    observer.observe(target, { attributes: true, attributeFilter: ['class', 'style'] });
+
+    return () => observer.disconnect();
+  }, [theme, themeClassNames]);
+
+  useEffect(() => {
+    nodeCacheRef.current.clear();
+    graphRef.current = null;
+    cameraStateRef.current = initialCameraState;
+    hasInitialFitRef.current = false;
+    lastFocusedNodeRef.current = null;
+    setIsFocusedView(false);
+    setIsGraphVisible(false);
+    const frame = window.requestAnimationFrame(() => {
+      setGraphInstanceKey((value) => value + 1);
+      setIsGraphVisible(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [graphVersion, initialCameraState, palette]);
+
+  useEffect(() => {
+    refreshGraphInstance();
+  }, [palette, refreshGraphInstance]);
 
   useEffect(() => {
     lastReportedLayoutRef.current = JSON.stringify(layoutPositions ?? {});
@@ -391,9 +458,9 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: zoomValue
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
     }
-  }, [getViewportSize]);
+  }, [cameraStorageKey, getViewportSize]);
 
   const scheduleCameraCapture = useCallback(
     (delay = 0) => {
@@ -567,8 +634,17 @@ const GraphView: React.FC<GraphViewProps> = ({
   ]);
 
   useEffect(() => {
-    configureSimulation();
-  }, [configureSimulation]);
+    if (!isGraphVisible || !graphRef.current) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      configureSimulation();
+      restoreCamera();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [configureSimulation, graphInstanceKey, isGraphVisible, restoreCamera]);
 
   useEffect(() => {
     if (!highlightedNode) {
@@ -613,10 +689,10 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: zoomValue
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
       scheduleCameraCapture(420);
     }
-  }, [getViewportSize, highlightedNode, scheduleCameraCapture]);
+  }, [cameraStorageKey, getViewportSize, highlightedNode, scheduleCameraCapture]);
 
   const focusOnNode = useCallback(
     (node: ForceNode): boolean => {
@@ -639,12 +715,12 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: targetZoom
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
       lastFocusedNodeRef.current = node.id;
       scheduleCameraCapture(420);
       return true;
     },
-    [getViewportSize, scheduleCameraCapture]
+    [cameraStorageKey, getViewportSize, scheduleCameraCapture]
   );
 
   const showEntireGraph = useCallback(() => {
@@ -656,10 +732,10 @@ const GraphView: React.FC<GraphViewProps> = ({
     lastFocusedNodeRef.current = null;
     setIsFocusedView(false);
     cameraStateRef.current = null;
-    writeStoredCameraState(null);
+    writeStoredCameraState(cameraStorageKey, null);
     graph.zoomToFit?.(400, 80);
     scheduleCameraCapture(450);
-  }, [scheduleCameraCapture]);
+  }, [cameraStorageKey, scheduleCameraCapture]);
 
   useEffect(() => {
     if (cameraStateRef.current || hasInitialFitRef.current) {
@@ -746,9 +822,9 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: k
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
     },
-    [getViewportSize]
+    [cameraStorageKey, getViewportSize]
   );
 
   const handleZoomEnd = useCallback(() => {
@@ -890,39 +966,44 @@ const GraphView: React.FC<GraphViewProps> = ({
       </div>
       <div className={styles.graphWrapper} ref={wrapperRef}>
         <React.Suspense fallback={<Loader size="m" />}>
-          <ForceGraph2D
-            ref={graphRef}
-            width={dimensions.width || 600}
-            height={dimensions.height || 400}
-            graphData={graphData}
-          nodeLabel={(node: ForceNode) => node.name ?? node.id}
-          linkColor={(link: ForceLink) =>
-            resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
-          }
-          nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
-            drawNode(
-              node,
-              ctx,
-              globalScale,
-              highlightedNode,
-              palette,
-              visibleDomainIds,
-              visibleModuleStatuses
-            );
-          }}
-          nodeCanvasObjectMode={() => 'replace'}
-          onNodeClick={(node) => {
-            onSelect(node as ForceNode);
-          }}
-          onNodeDoubleClick={(node) => {
-            handleNodeDoubleClick(node as ForceNode);
-          }}
-          onNodeDragEnd={handleNodeDragEnd}
-          onEngineStop={handleEngineStop}
-          onZoom={handleZoomTransform}
-          onZoomEnd={handleZoomEnd}
-        />
-      </React.Suspense>
+          {isGraphVisible ? (
+            <ForceGraph2D
+              key={graphInstanceKey}
+              ref={graphRef}
+              width={dimensions.width || 600}
+              height={dimensions.height || 400}
+              graphData={graphData}
+              nodeLabel={(node: ForceNode) => node.name ?? node.id}
+              linkColor={(link: ForceLink) =>
+                resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
+              }
+              nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
+                drawNode(
+                  node,
+                  ctx,
+                  globalScale,
+                  highlightedNode,
+                  palette,
+                  visibleDomainIds,
+                  visibleModuleStatuses
+                );
+              }}
+              nodeCanvasObjectMode={() => 'replace'}
+              onNodeClick={(node) => {
+                onSelect(node as ForceNode);
+              }}
+              onNodeDoubleClick={(node) => {
+                handleNodeDoubleClick(node as ForceNode);
+              }}
+              onNodeDragEnd={handleNodeDragEnd}
+              onEngineStop={handleEngineStop}
+              onZoom={handleZoomTransform}
+              onZoomEnd={handleZoomEnd}
+            />
+          ) : (
+            <Loader size="m" />
+          )}
+        </React.Suspense>
       </div>
     </div>
   );
@@ -1305,13 +1386,12 @@ function resolveNodeIcon(node: GraphNode): string {
   return '';
 }
 
-function resolvePalette(themeClassName?: string): GraphPalette {
+function resolvePalette(themeClassNames?: ThemePreset | string): GraphPalette {
   if (typeof window === 'undefined') {
     return DEFAULT_PALETTE;
   }
 
-  const themeElement = themeClassName ? document.querySelector(`.${themeClassName}`) : null;
-  const styles = getComputedStyle((themeElement as HTMLElement) ?? document.body);
+  const styles = getComputedStyle((findThemeElement(themeClassNames) as HTMLElement) ?? document.body);
   const getVar = (token: string, fallback: string) => styles.getPropertyValue(token).trim() || fallback;
 
   return {
@@ -1328,6 +1408,64 @@ function resolvePalette(themeClassName?: string): GraphPalette {
     linkConsumes: getVar('--color-bg-normal', DEFAULT_PALETTE.linkConsumes),
     linkInitiative: getVar('--color-bg-accent', DEFAULT_PALETTE.linkInitiative)
   };
+}
+
+function findThemeElement(themeClassNames?: ThemePreset | string): Element | null {
+  const tokens: string[] = [];
+
+  if (typeof themeClassNames === 'string') {
+    tokens.push(...themeClassNames.split(/\s+/).filter(Boolean));
+  } else if (themeClassNames && typeof themeClassNames === 'object') {
+    const color = (themeClassNames as ThemePreset).color;
+    const colorToken = typeof color === 'string' ? color : color?.primary;
+
+    [
+      colorToken,
+      (themeClassNames as ThemePreset).control,
+      (themeClassNames as ThemePreset).font,
+      (themeClassNames as ThemePreset).size,
+      (themeClassNames as ThemePreset).space,
+      (themeClassNames as ThemePreset).shadow
+    ]
+      .filter((token): token is string => Boolean(token && token.trim()))
+      .forEach((token) => tokens.push(token.trim()));
+  }
+
+  const selectorVariants = [
+    tokens.length > 0 ? tokens.map((token) => `.${token}`).join('') : null,
+    tokens[0] ? `.${tokens[0]}` : null,
+    '.Theme'
+  ].filter(Boolean) as string[];
+
+  for (const selector of selectorVariants) {
+    try {
+      const element = document.querySelector(selector);
+      if (element) {
+        return element;
+      }
+    } catch {
+      // Ignore invalid selectors and try the next fallback
+    }
+  }
+
+  return null;
+}
+
+function arePalettesEqual(a: GraphPalette, b: GraphPalette): boolean {
+  return (
+    a.moduleProduction === b.moduleProduction &&
+    a.moduleInDev === b.moduleInDev &&
+    a.moduleDeprecated === b.moduleDeprecated &&
+    a.domain === b.domain &&
+    a.artifact === b.artifact &&
+    a.initiative === b.initiative &&
+    a.text === b.text &&
+    a.linkDependency === b.linkDependency &&
+    a.linkProduces === b.linkProduces &&
+    a.linkRelates === b.linkRelates &&
+    a.linkConsumes === b.linkConsumes &&
+    a.linkInitiative === b.linkInitiative
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {
