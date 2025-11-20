@@ -50,6 +50,20 @@
   gap: 12px;
 }
 
+.transferSection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.transferOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .copySection {
   display: flex;
   flex-direction: column;
