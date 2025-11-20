@@ -159,15 +159,15 @@
 }
 
 .assigneeIndicator[data-level='free'] {
-  background: #2fd196;
+  background: var(--color-chart-low);
 }
 
 .assigneeIndicator[data-level='focus'] {
-  background: #ffa600;
+  background: var(--color-chart-mid);
 }
 
 .assigneeIndicator[data-level='busy'] {
-  background: #ff5f5f;
+  background: var(--color-chart-high);
 }
 
 .assigneeOption {
@@ -315,15 +315,15 @@
 }
 
 .legendMarker[data-kind='project'] {
-  background: rgba(37, 110, 255, 0.9);
+  background: var(--color-bg-link);
 }
 
 .legendMarker[data-kind='out-of-project'] {
-  background: rgba(255, 166, 0, 0.9);
+  background: var(--color-bg-warning);
 }
 
 .legendMarker[data-kind='training'] {
-  background: rgba(47, 209, 150, 0.9);
+  background: var(--color-bg-success);
 }
 
 .employeeCell {
@@ -379,11 +379,32 @@
   }
 
   .taskRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    position: relative;
+    padding-bottom: 16px;
   }
 
   .taskRowHeader {
     display: none;
+  }
+
+  /* Mobile-specific layout adjustments for task row cells */
+  .taskRow > div:nth-child(1) { /* Task name */
+    font-weight: 600;
+  }
+
+  .taskRow > div:nth-child(2) { /* Status */
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+
+  .taskRow > div:nth-child(3), /* Priority */
+  .taskRow > div:nth-child(4), /* Period */
+  .taskRow > div:nth-child(5) { /* Assignee */
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 }

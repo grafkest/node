@@ -44,12 +44,13 @@
   border: 1px solid var(--color-bg-border);
   background: var(--color-bg-ghost);
   color: var(--color-typo-primary);
-  padding: 4px 12px;
+  padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
   transition: background 0.2s ease, box-shadow 0.2s ease;
   white-space: nowrap;
+  touch-action: manipulation;
 }
 
 .controlButton:hover {
@@ -72,5 +73,12 @@
     width: 100%;
     overflow-x: auto;
     padding-bottom: 4px;
+    /* Hide scrollbar for cleaner look but keep functionality */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .viewControls::-webkit-scrollbar {
+    display: none;
   }
 }

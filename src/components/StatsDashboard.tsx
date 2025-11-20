@@ -408,32 +408,34 @@ const StatsDashboard = ({
           <Text size="s" weight="semibold" className={styles.cardTitle}>
             Разрез по системам и статусам
           </Text>
-          <table className={styles.systemTable}>
-            <thead>
-              <tr>
-                <th>Система</th>
-                <th>Всего</th>
-                {statusOrder.map((status) => (
-                  <th key={status}>{statusLabels[status]}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {systems.map((system) => (
-                <tr key={system.name}>
-                  <td>{system.name}</td>
-                  <td>{system.total}</td>
+          <div className={styles.tableWrapper}>
+            <table className={styles.systemTable}>
+              <thead>
+                <tr>
+                  <th>Система</th>
+                  <th>Всего</th>
                   {statusOrder.map((status) => (
-                    <td key={status}>
-                      <span className={styles.statusPill} data-status={statusBadgeView[status]}>
-                        {system.statuses[status]}
-                      </span>
-                    </td>
+                    <th key={status}>{statusLabels[status]}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {systems.map((system) => (
+                  <tr key={system.name}>
+                    <td>{system.name}</td>
+                    <td>{system.total}</td>
+                    {statusOrder.map((status) => (
+                      <td key={status}>
+                        <span className={styles.statusPill} data-status={statusBadgeView[status]}>
+                          {system.statuses[status]}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
         <Card className={styles.card} verticalSpace="l" horizontalSpace="l" shadow={false}>
           <Text size="s" weight="semibold" className={styles.cardTitle}>

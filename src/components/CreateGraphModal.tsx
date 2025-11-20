@@ -52,7 +52,7 @@ export const CreateGraphModal: React.FC<CreateGraphModalProps> = ({
 }) => {
   return (
     <Modal isOpen={isOpen} hasOverlay onClickOutside={onClose} onEsc={onClose} title="Создание графа">
-      <div style={{ width: 500, padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ width: '100%', maxWidth: 500, padding: 24, display: 'flex', flexDirection: 'column', gap: 24, boxSizing: 'border-box' }}>
         <Text size="l" weight="bold">
           Создание нового графа
         </Text>

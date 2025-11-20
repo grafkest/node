@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Text } from '@consta/uikit/Text';
 import { Button } from '@consta/uikit/Button';
+import { ChoiceGroup } from '@consta/uikit/ChoiceGroup';
 import { IconRing } from '@consta/icons/IconRing';
 import { IconAreaChart } from '@consta/icons/IconAreaChart';
 import { IconUser } from '@consta/icons/IconUser';
@@ -9,12 +10,15 @@ import { IconCheck } from '@consta/icons/IconCheck';
 import { IconSettings } from '@consta/icons/IconSettings';
 import { IconMoon } from '@consta/icons/IconMoon';
 import { IconSun } from '@consta/icons/IconSun';
+import { IconLightningBolt } from '@consta/icons/IconLightningBolt';
 import { IconHamburger } from '@consta/icons/IconHamburger';
 import { IconClose } from '@consta/icons/IconClose';
-import { Switch } from '@consta/uikit/Switch';
+import { IconArrowLeft } from '@consta/icons/IconArrowLeft';
+import { IconArrowRight } from '@consta/icons/IconArrowRight';
 import styles from './LayoutShell.module.css';
 
 type ViewMode = 'graph' | 'stats' | 'experts' | 'initiatives' | 'employee-tasks' | 'admin';
+type ThemeMode = 'light' | 'dark' | 'cyberpunk';
 
 interface LayoutShellProps {
   currentView: ViewMode;
@@ -23,8 +27,8 @@ interface LayoutShellProps {
   headerDescription?: string;
   headerActions?: React.ReactNode;
   children: React.ReactNode;
-  isDarkTheme: boolean;
-  onToggleTheme: (isDark: boolean) => void;
+  themeMode: ThemeMode;
+  onSetThemeMode: (mode: ThemeMode) => void;
 }
 
 const MENU_ITEMS: Array<{
@@ -40,6 +44,12 @@ const MENU_ITEMS: Array<{
   { id: 'admin', label: 'Администрирование', icon: IconSettings },
 ];
 
+const THEME_OPTIONS = [
+  { label: 'Светлая', id: 'light', icon: IconSun },
+  { label: 'Темная', id: 'dark', icon: IconMoon },
+  { label: 'Киберпанк', id: 'cyberpunk', icon: IconLightningBolt },
+];
+
 export const LayoutShell: React.FC<LayoutShellProps> = ({
   currentView,
   onViewChange,
@@ -47,10 +57,11 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   headerDescription,
   headerActions,
   children,
-  isDarkTheme,
-  onToggleTheme,
+  themeMode,
+  onSetThemeMode,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleViewChange = (view: ViewMode) => {
     onViewChange(view);
@@ -59,11 +70,21 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
 
   return (
     <div className={styles.root}>
-      <aside className={`${styles.sidebar} ${isMobileMenuOpen ? styles.sidebarOpen : ''}`}>
+      <aside className={`${styles.sidebar} ${isMobileMenuOpen ? styles.sidebarOpen : ''} ${isCollapsed ? styles.sidebarCollapsed : ''}`}>
         <div className={styles.sidebarHeader}>
-          <Text size="l" weight="bold" view="brand">
-            Domain Graph
-          </Text>
+          {!isCollapsed && (
+            <Text size="l" weight="bold" view="brand" className={styles.logoText}>
+              Nedra.Expert Node
+            </Text>
+          )}
+          <Button 
+             className={styles.collapseButton}
+             view="clear"
+             size="s"
+             onlyIcon
+             iconLeft={isCollapsed ? IconArrowRight : IconArrowLeft}
+             onClick={() => setIsCollapsed(!isCollapsed)}
+          />
           <button 
             className={styles.mobileCloseButton}
             onClick={() => setIsMobileMenuOpen(false)}
@@ -76,44 +97,44 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
         <nav className={styles.sidebarContent}>
           {MENU_ITEMS.map((item) => {
             const isActive = currentView === item.id;
-            const Icon = item.icon;
-            
             return (
-              <div
+              <Button
                 key={item.id}
-                className={`${styles.menuItem} ${isActive ? styles.menuItemActive : ''}`}
+                view={isActive ? 'primary' : 'ghost'}
+                size="m"
+                width="full"
+                iconLeft={item.icon}
+                label={!isCollapsed ? item.label : undefined}
+                onlyIcon={isCollapsed}
+                className={styles.menuButton}
                 onClick={() => handleViewChange(item.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    handleViewChange(item.id);
-                  }
-                }}
-              >
-                <Icon size="s" view={isActive ? 'brand' : 'primary'} />
-                <Text size="s" view={isActive ? 'brand' : 'primary'} weight={isActive ? 'bold' : 'regular'}>
-                  {item.label}
-                </Text>
-              </div>
+              />
             );
           })}
         </nav>
         
-        <div className={styles.sidebarFooter}>
-           <div className={styles.themeRow}>
-             <Text size="xs" view="secondary">Тема</Text>
-             <Switch
-                size="s"
-                checked={isDarkTheme}
-                onChange={(e) => onToggleTheme(e.target.checked)}
-                label={isDarkTheme ? 'Темная' : 'Светлая'}
-             />
-           </div>
-          <Text size="xs" view="secondary">
-            v0.1.0
-          </Text>
-        </div>
+        {!isCollapsed && (
+          <div className={styles.sidebarFooter}>
+             <div className={styles.themeRow}>
+               <Text size="xs" view="secondary">Тема</Text>
+               <ChoiceGroup
+                  size="xs"
+                  items={THEME_OPTIONS}
+                  value={THEME_OPTIONS.find(t => t.id === themeMode)}
+                  getItemLabel={(item) => item.label}
+                  onChange={(item) => {
+                    if (item) onSetThemeMode(item.id as ThemeMode);
+                  }}
+                  multiple={false}
+                  name="ThemeSelector"
+                  view="ghost"
+               />
+             </div>
+            <Text size="xs" view="secondary">
+              v0.1.0
+            </Text>
+          </div>
+        )}
       </aside>
 
       {isMobileMenuOpen && (

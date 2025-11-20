@@ -1,3 +1,6 @@
+import { IconAdd } from '@consta/icons/IconAdd';
+import { IconTrash } from '@consta/icons/IconTrash';
+import { IconRestart } from '@consta/icons/IconRestart';
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
@@ -36,9 +39,17 @@ type GraphPersistenceControlsProps = {
   }) => Promise<{ domains: number; modules: number; artifacts: number; experts: number; initiatives: number }>;
   graphs?: GraphSummary[];
   activeGraphId?: string | null;
+  onGraphSelect?: (graphId: string | null) => void;
+  onGraphCreate?: () => void;
+  onGraphDelete?: () => void;
   isGraphListLoading?: boolean;
   syncStatus?: GraphSyncStatus | null;
   layout?: GraphLayoutSnapshot;
+  onForceSave?: () => void;
+  isSyncAvailable?: boolean;
+  onRetryLoad?: () => void;
+  isReloading?: boolean;
+  lastUpdated?: string;
 };
 
 const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
@@ -51,9 +62,17 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
   onImportFromGraph,
   graphs,
   activeGraphId,
+  onGraphSelect,
+  onGraphCreate,
+  onGraphDelete,
   isGraphListLoading = false,
   syncStatus,
-  layout
+  layout,
+  onForceSave,
+  isSyncAvailable,
+  onRetryLoad,
+  isReloading = false,
+  lastUpdated
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<StatusMessage | null>(null);
@@ -240,28 +259,105 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     }
   }, [onImportFromGraph, sourceGraphId, copyOptions, graphs]);
 
+  const handleGraphSelectChange = (option: { label: string; value: string } | null) => {
+    if (onGraphSelect) {
+      onGraphSelect(option?.value ?? null);
+    }
+  };
+
+  const graphsOptions = useMemo(
+    () =>
+      graphs?.map((graph) => ({
+        label: graph.isDefault ? `${graph.name} • основной` : graph.name,
+        value: graph.id
+      })) ?? [],
+    [graphs]
+  );
+
+  const currentGraphOption = useMemo(
+    () => graphsOptions.find((option) => option.value === activeGraphId) ?? null,
+    [graphsOptions, activeGraphId]
+  );
+
   return (
-    <section className={styles.wrapper} aria-label="Сохранение графа">
-      <div className={styles.header}>
-        <Text size="s" weight="semibold">
-          Экспорт и импорт графа
-        </Text>
-        <Text size="xs" view="secondary">
-          Сохраните текущее состояние экосистемы в JSON и загрузите его позже, чтобы восстановить
-          добавленные сущности.
-        </Text>
+    <section className={styles.wrapper} aria-label="Управление графами">
+      <div className={styles.topBar}>
+         <div className={styles.selectorGroup}>
+            <Select<{ label: string; value: string }>
+              size="s"
+              items={graphsOptions}
+              value={currentGraphOption}
+              placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
+              getItemLabel={(item) => item.label}
+              getItemKey={(item) => item.value}
+              disabled={isGraphListLoading || isReloading}
+              onChange={handleGraphSelectChange}
+              className={styles.graphSelect}
+            />
+            {activeGraphId && (
+               <div className={styles.graphActions}>
+                  {onGraphCreate && (
+                     <Button 
+                       size="s" 
+                       view="clear" 
+                       iconLeft={IconAdd} 
+                       onlyIcon 
+                       onClick={onGraphCreate} 
+                       title="Создать новый граф"
+                     />
+                  )}
+                  {onGraphDelete && (
+                     <Button 
+                       size="s" 
+                       view="clear" 
+                       status="alert"
+                       iconLeft={IconTrash} 
+                       onlyIcon 
+                       onClick={onGraphDelete}
+                       title="Удалить текущий граф"
+                     />
+                  )}
+               </div>
+            )}
+             {!activeGraphId && onGraphCreate && (
+                <Button size="s" view="secondary" label="Создать граф" onClick={onGraphCreate} />
+             )}
+         </div>
+         
+         <div className={styles.syncStatus}>
+            {syncStatus && (
+                <Text
+                  size="xs"
+                  view={
+                    syncStatus.state === 'error'
+                      ? 'alert'
+                      : syncStatus.state === 'saving'
+                        ? 'ghost'
+                        : 'secondary'
+                  }
+                >
+                  {syncStatus.message ??
+                    (syncStatus.state === 'saving'
+                      ? 'Сохранение...'
+                      : syncStatus.state === 'error'
+                        ? 'Ошибка'
+                        : 'Синхронизировано')}
+                </Text>
+              )}
+              {activeGraphId && isSyncAvailable && onRetryLoad && (
+                 <Button
+                    size="xs"
+                    view="clear"
+                    iconLeft={IconRestart}
+                    onlyIcon
+                    loading={isReloading}
+                    onClick={onRetryLoad}
+                    title="Перезагрузить данные"
+                 />
+              )}
+         </div>
       </div>
-      <div className={styles.actions}>
-        <Button size="s" label="Экспортировать граф" onClick={handleExport} />
-        <Button size="s" view="secondary" label="Импортировать граф" onClick={handleTriggerImport} />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          hidden
-          onChange={handleFileChange}
-        />
-      </div>
+
       {isCopySectionAvailable && (
         <div className={styles.copySection}>
           <div className={styles.copyHeader}>

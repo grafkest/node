@@ -34,6 +34,22 @@
   min-width: 220px;
 }
 
+@media (max-width: 768px) {
+  .searchField {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .viewToolbar {
+    gap: 12px;
+  }
+
+  .toolbarActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 .summaryRow {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -159,6 +175,36 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .listLayout {
+    grid-template-columns: 1fr;
+  }
+  
+  .rolePane {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsPane {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 200;
+    border-radius: 0;
+    display: none;
+  }
+
+  .detailsPane.active {
+    display: flex;
+  }
 }
 
 .graphControls {

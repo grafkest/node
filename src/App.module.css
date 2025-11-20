@@ -5,6 +5,8 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  background-color: var(--color-bg-default);
+  color: var(--color-typo-primary);
 }
 
 .loadingState {
@@ -46,12 +48,12 @@
 }
 
 .noticeSuccessMessage {
-  color: #0b5e2d;
+  color: var(--color-bg-success);
 }
 
 .noticeError {
-  background: #ffecec;
-  border-bottom-color: rgba(191, 18, 52, 0.35);
+  background: var(--color-bg-alert);
+  border-bottom-color: var(--color-bg-border);
 }
 
 .header {

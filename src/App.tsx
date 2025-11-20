@@ -1,14 +1,11 @@
 import { Theme, presetGpnDefault, presetGpnDark } from '@consta/uikit/Theme';
+import { presetCyberpunk } from './utils/themePresetCyberpunk';
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
-import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Collapse } from '@consta/uikit/Collapse';
-import { Layout } from '@consta/uikit/Layout';
 import { Loader } from '@consta/uikit/Loader';
 import { Select } from '@consta/uikit/Select';
-import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
-import { TextField } from '@consta/uikit/TextField';
 import {
   Suspense,
   lazy,
@@ -110,6 +107,7 @@ const viewTabs = [
 ] as const;
 
 type ViewMode = (typeof viewTabs)[number]['value'];
+type ThemeMode = 'light' | 'dark' | 'cyberpunk';
 
 type AdminNotice = {
   id: number;
@@ -178,7 +176,36 @@ function App() {
     [sidebarBaseHeight]
   );
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem('app-theme');
+    if (saved === 'light' || saved === 'dark' || saved === 'cyberpunk') {
+      return saved;
+    }
+    return 'light';
+  });
+
+  const handleSetThemeMode = useCallback((mode: ThemeMode) => {
+    setThemeMode(mode);
+    localStorage.setItem('app-theme', mode);
+  }, []);
+
+  useEffect(() => {
+    if (themeMode === 'cyberpunk') {
+      console.log(
+        `%c
+    _   __     __                                  
+   / | / /__  / /________  ______  ____  ___  _____
+  /  |/ / _ \\/ __/ ___/ / / / __ \\/ __ \\/ _ \\/ ___/
+ / /|  /  __/ /_/ /  / /_/ / / / / / / /  __/ /    
+/_/ |_/\\___/\\__/_/   \\__,_/_/ /_/_/ /_/\\___/_/     
+                                                   
+Wake up, Admin... The Matrix has you.
+        `,
+        'color: #00F0FF; font-family: monospace; font-weight: bold; font-size: 14px; text-shadow: 0 0 5px #00F0FF;'
+      );
+    }
+  }, [themeMode]);
+
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
   const [graphCopyOptions, setGraphCopyOptions] = useState<
@@ -1085,27 +1112,9 @@ function App() {
     [graphSelectOptions, activeGraphId]
   );
 
-  const graphSourceSelectValue = useMemo(
-    () => graphSelectOptions.find((option) => option.value === graphSourceIdDraft) ?? null,
-    [graphSelectOptions, graphSourceIdDraft]
-  );
-
-  const graphCopyOptionItems = useMemo(
-    () =>
-      [
-        { id: 'domains' as const, label: 'Домены' },
-        { id: 'modules' as const, label: 'Модули' },
-        { id: 'artifacts' as const, label: 'Артефакты' },
-        { id: 'experts' as const, label: 'Сотрудники' },
-        { id: 'initiatives' as const, label: 'Инициативы' }
-      ],
-    []
-  );
-
-  const selectedGraphCopyOptionItems = useMemo(
-    () => graphCopyOptionItems.filter((item) => graphCopyOptions.has(item.id)),
-    [graphCopyOptionItems, graphCopyOptions]
-  );
+  // Removed unused graphSourceSelectValue
+  // Removed unused graphCopyOptionItems
+  // Removed unused selectedGraphCopyOptionItems
 
   const activeGraph = useMemo(
     () => graphs.find((graph) => graph.id === activeGraphId) ?? null,
@@ -3077,7 +3086,6 @@ function App() {
     (isGraphsLoading && graphs.length === 0) ||
     (isSnapshotLoading && !hasLoadedSnapshotRef.current);
 
-  const activeViewTab = viewTabs.find((tab) => tab.value === viewMode) ?? viewTabs[0];
   const isGraphActive = viewMode === 'graph';
   const isStatsActive = viewMode === 'stats';
   const isExpertsActive = viewMode === 'experts';
@@ -3188,16 +3196,26 @@ function App() {
     </div>
   );
 
+  const themePreset = useMemo(() => {
+    if (themeMode === 'dark') return presetGpnDark;
+    if (themeMode === 'cyberpunk') return presetCyberpunk;
+    return presetGpnDefault;
+  }, [themeMode]);
+
   return (
-    <Theme preset={isDarkTheme ? presetGpnDark : presetGpnDefault} className={styles.app} direction="ltr">
+    <Theme
+      key={themeMode}
+      preset={themePreset}
+      className={`${styles.app} ${themeMode === 'cyberpunk' ? 'Theme_preset_cyberpunk' : ''}`}
+    >
     <LayoutShell
       currentView={viewMode}
       onViewChange={setViewMode}
       headerTitle={headerTitle}
       headerDescription={headerDescription}
       headerActions={headerActions}
-      isDarkTheme={isDarkTheme}
-      onToggleTheme={setIsDarkTheme}
+      themeMode={themeMode}
+      onSetThemeMode={handleSetThemeMode}
     >
       {snapshotError && (
         <div className={styles.errorBanner} role="status" aria-live="polite">

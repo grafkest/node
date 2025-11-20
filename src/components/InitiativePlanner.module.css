@@ -161,6 +161,7 @@
 @media (max-width: 960px) {
   .contentGrid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
   }
 
   .emptyCard {
@@ -170,6 +171,22 @@
 
   .emptyHintItem {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .headerDescription {
+    font-size: 14px;
+  }
+
+  .statusHeadline {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
