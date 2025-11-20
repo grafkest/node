@@ -2876,7 +2876,6 @@ function App() {
     (snapshot: GraphSnapshotPayload) => {
       applySnapshot(snapshot);
       markGraphDirty();
-      skipNextSyncRef.current = true;
     },
     [applySnapshot, markGraphDirty]
   );
@@ -2893,7 +2892,6 @@ function App() {
       try {
         const snapshot = await importGraphFromSource(request);
         applySnapshot(snapshot);
-        skipNextSyncRef.current = true;
         setIsSyncAvailable(true);
         markGraphDirty();
         return {
