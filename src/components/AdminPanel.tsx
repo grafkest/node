@@ -754,7 +754,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const expertSelectValue = expertOptions.find((item) => item.value === selectedExpertId) ?? expertOptions[0];
 
   return (
-    <>
+    <React.Fragment>
       <GraphPersistenceControls
         modules={modules}
         domains={domains}
@@ -951,7 +951,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
       </div>
     </div>
-    </>
+    </React.Fragment>
   );
 };
 
