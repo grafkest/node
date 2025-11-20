@@ -42,6 +42,7 @@ type GraphViewProps = {
   artifacts: ArtifactNode[];
   initiatives: Initiative[];
   links: GraphLink[];
+  graphVersion?: string | number;
   onSelect: (node: GraphNode | null) => void;
   highlightedNode: string | null;
   visibleDomainIds: Set<string>;
@@ -62,13 +63,17 @@ type CameraState = {
   zoom: number;
 };
 
-function readStoredCameraState(): CameraState | null {
+function resolveCameraStorageKey(graphVersion?: string | number): string {
+  return graphVersion ? `${CAMERA_STORAGE_KEY}:${graphVersion}` : CAMERA_STORAGE_KEY;
+}
+
+function readStoredCameraState(storageKey: string): CameraState | null {
   if (typeof window === 'undefined') {
     return null;
   }
 
   try {
-    const rawValue = window.sessionStorage.getItem(CAMERA_STORAGE_KEY);
+    const rawValue = window.sessionStorage.getItem(storageKey);
     if (!rawValue) {
       return null;
     }
@@ -103,18 +108,18 @@ function readStoredCameraState(): CameraState | null {
   return null;
 }
 
-function writeStoredCameraState(state: CameraState | null): void {
+function writeStoredCameraState(storageKey: string, state: CameraState | null): void {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
     if (!state) {
-      window.sessionStorage.removeItem(CAMERA_STORAGE_KEY);
+      window.sessionStorage.removeItem(storageKey);
       return;
     }
 
-    window.sessionStorage.setItem(CAMERA_STORAGE_KEY, JSON.stringify(state));
+    window.sessionStorage.setItem(storageKey, JSON.stringify(state));
   } catch (error) {
     console.warn('Failed to persist camera state', error);
   }
@@ -126,6 +131,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   artifacts,
   initiatives,
   links,
+  graphVersion,
   onSelect,
   highlightedNode,
   visibleDomainIds,
@@ -136,7 +142,14 @@ const GraphView: React.FC<GraphViewProps> = ({
 }) => {
   const { theme, themeClassNames } = useTheme();
   const [palette, setPalette] = useState<GraphPalette>(() => resolvePalette(themeClassNames));
-  const initialCameraState = useMemo(() => readStoredCameraState(), []);
+  const cameraStorageKey = useMemo(
+    () => resolveCameraStorageKey(graphVersion),
+    [graphVersion]
+  );
+  const initialCameraState = useMemo(
+    () => readStoredCameraState(cameraStorageKey),
+    [cameraStorageKey]
+  );
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -183,7 +196,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   useEffect(() => {
     nodeCacheRef.current.clear();
     graphRef.current = null;
-    cameraStateRef.current = null;
+    cameraStateRef.current = initialCameraState;
     hasInitialFitRef.current = false;
     lastFocusedNodeRef.current = null;
     setIsFocusedView(false);
@@ -194,7 +207,7 @@ const GraphView: React.FC<GraphViewProps> = ({
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [palette]);
+  }, [graphVersion, initialCameraState, palette]);
 
   useEffect(() => {
     refreshGraphInstance();
@@ -445,9 +458,9 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: zoomValue
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
     }
-  }, [getViewportSize]);
+  }, [cameraStorageKey, getViewportSize]);
 
   const scheduleCameraCapture = useCallback(
     (delay = 0) => {
@@ -676,10 +689,10 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: zoomValue
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
       scheduleCameraCapture(420);
     }
-  }, [getViewportSize, highlightedNode, scheduleCameraCapture]);
+  }, [cameraStorageKey, getViewportSize, highlightedNode, scheduleCameraCapture]);
 
   const focusOnNode = useCallback(
     (node: ForceNode): boolean => {
@@ -702,12 +715,12 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: targetZoom
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
       lastFocusedNodeRef.current = node.id;
       scheduleCameraCapture(420);
       return true;
     },
-    [getViewportSize, scheduleCameraCapture]
+    [cameraStorageKey, getViewportSize, scheduleCameraCapture]
   );
 
   const showEntireGraph = useCallback(() => {
@@ -719,10 +732,10 @@ const GraphView: React.FC<GraphViewProps> = ({
     lastFocusedNodeRef.current = null;
     setIsFocusedView(false);
     cameraStateRef.current = null;
-    writeStoredCameraState(null);
+    writeStoredCameraState(cameraStorageKey, null);
     graph.zoomToFit?.(400, 80);
     scheduleCameraCapture(450);
-  }, [scheduleCameraCapture]);
+  }, [cameraStorageKey, scheduleCameraCapture]);
 
   useEffect(() => {
     if (cameraStateRef.current || hasInitialFitRef.current) {
@@ -809,9 +822,9 @@ const GraphView: React.FC<GraphViewProps> = ({
         zoom: k
       };
       cameraStateRef.current = nextState;
-      writeStoredCameraState(nextState);
+      writeStoredCameraState(cameraStorageKey, nextState);
     },
-    [getViewportSize]
+    [cameraStorageKey, getViewportSize]
   );
 
   const handleZoomEnd = useCallback(() => {
