@@ -951,6 +951,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
       </div>
     </div>
+    </>
   );
 };
 
@@ -4512,7 +4513,6 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         )}
       </Modal>
     </div>
-    </>
   );
 };
 
