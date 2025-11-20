@@ -151,6 +151,13 @@ const GraphView: React.FC<GraphViewProps> = ({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isFocusedView, setIsFocusedView] = useState(false);
 
+  const refreshGraphInstance = useCallback(() => {
+    const refresh = (graphRef.current as unknown as { refresh?: () => void })?.refresh;
+    if (typeof refresh === 'function') {
+      refresh.call(graphRef.current);
+    }
+  }, []);
+
   useLayoutEffect(() => {
     const applyPalette = () => {
       const nextPalette = resolvePalette(themeClassNames);
@@ -172,8 +179,8 @@ const GraphView: React.FC<GraphViewProps> = ({
   }, [theme, themeClassNames]);
 
   useEffect(() => {
-    graphRef.current?.refresh();
-  }, [palette]);
+    refreshGraphInstance();
+  }, [palette, refreshGraphInstance]);
 
   useEffect(() => {
     lastReportedLayoutRef.current = JSON.stringify(layoutPositions ?? {});

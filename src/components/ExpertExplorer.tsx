@@ -276,6 +276,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const roleGraphContainerRef = useRef<HTMLDivElement | null>(null);
   const [roleGraphDimensions, setRoleGraphDimensions] = useState({ width: 0, height: 0 });
 
+  const refreshGraphInstance = useCallback((ref: React.RefObject<ForceGraphMethods | null>) => {
+    const refresh = (ref.current as unknown as { refresh?: () => void })?.refresh;
+    if (typeof refresh === 'function') {
+      refresh.call(ref.current);
+    }
+  }, []);
+
   useLayoutEffect(() => {
     const applyPalette = () => {
       const nextPalette = resolveExpertPalette(themeClassNames);
@@ -297,9 +304,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [theme, themeClassNames]);
 
   useEffect(() => {
-    graphRef.current?.refresh();
-    roleGraphRef.current?.refresh();
-  }, [palette]);
+    refreshGraphInstance(graphRef);
+    refreshGraphInstance(roleGraphRef);
+  }, [palette, refreshGraphInstance]);
   useEffect(() => {
     if (!includeSoftSkills && focusedSkill?.type === 'soft') {
       setFocusedSkill(null);
