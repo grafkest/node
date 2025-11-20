@@ -481,8 +481,8 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
               getItemLabel={(item) => item.label}
               getItemKey={(item) => item.value}
               disabled={isGraphListLoading || graphOptions.length === 0 || isGraphImporting}
-              onChange={(option) => {
-                setSourceGraphId(option?.value ?? null);
+              onChange={({ value }) => {
+                setSourceGraphId(value?.value ?? null);
               }}
               style={{ minWidth: 220 }}
             />
