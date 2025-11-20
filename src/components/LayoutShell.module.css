@@ -58,6 +58,36 @@
   gap: 4px;
 }
 
+.graphSection {
+  padding: 16px 12px;
+  border-top: 1px solid var(--color-bg-border);
+  border-bottom: 1px solid var(--color-bg-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--color-bg-default);
+}
+
+.graphSectionTitle {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.graphBadge {
+  width: 100%;
+  justify-content: center;
+}
+
+.graphSelect {
+  width: 100%;
+}
+
+.graphActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .sidebarFooter {
   padding: 24px 20px;
   border-top: 1px solid var(--color-bg-border);

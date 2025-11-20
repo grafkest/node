@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Text } from '@consta/uikit/Text';
 import { Button } from '@consta/uikit/Button';
 import { ChoiceGroup } from '@consta/uikit/ChoiceGroup';
+import { Select } from '@consta/uikit/Select';
+import { Badge } from '@consta/uikit/Badge';
 import { IconRing } from '@consta/icons/IconRing';
 import { IconAreaChart } from '@consta/icons/IconAreaChart';
 import { IconUser } from '@consta/icons/IconUser';
@@ -15,6 +17,9 @@ import { IconHamburger } from '@consta/icons/IconHamburger';
 import { IconClose } from '@consta/icons/IconClose';
 import { IconArrowLeft } from '@consta/icons/IconArrowLeft';
 import { IconArrowRight } from '@consta/icons/IconArrowRight';
+import { IconAdd } from '@consta/icons/IconAdd';
+import { IconTrash } from '@consta/icons/IconTrash';
+import type { GraphSummary } from '../types/graph';
 import styles from './LayoutShell.module.css';
 
 type ViewMode = 'graph' | 'stats' | 'experts' | 'initiatives' | 'employee-tasks' | 'admin';
@@ -29,6 +34,12 @@ interface LayoutShellProps {
   children: React.ReactNode;
   themeMode: ThemeMode;
   onSetThemeMode: (mode: ThemeMode) => void;
+  graphs?: GraphSummary[];
+  activeGraphId?: string | null;
+  onGraphSelect?: (graphId: string | null) => void;
+  onGraphCreate?: () => void;
+  onGraphDelete?: (graphId: string) => void;
+  isGraphListLoading?: boolean;
 }
 
 const MENU_ITEMS: Array<{
@@ -59,6 +70,12 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   children,
   themeMode,
   onSetThemeMode,
+  graphs,
+  activeGraphId,
+  onGraphSelect,
+  onGraphCreate,
+  onGraphDelete,
+  isGraphListLoading = false,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -66,6 +83,31 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   const handleViewChange = (view: ViewMode) => {
     onViewChange(view);
     setIsMobileMenuOpen(false);
+  };
+
+  const graphsOptions = useMemo(
+    () =>
+      graphs?.map((graph) => ({
+        label: graph.isDefault ? `${graph.name} • основной` : graph.name,
+        value: graph.id
+      })) ?? [],
+    [graphs]
+  );
+
+  const currentGraphOption = useMemo(
+    () => graphsOptions.find((option) => option.value === activeGraphId) ?? null,
+    [graphsOptions, activeGraphId]
+  );
+
+  const activeGraph = useMemo(
+    () => graphs?.find((graph) => graph.id === activeGraphId),
+    [graphs, activeGraphId]
+  );
+
+  const handleGraphSelectChange = (option: { label: string; value: string } | null) => {
+    if (onGraphSelect) {
+      onGraphSelect(option?.value ?? null);
+    }
   };
 
   return (
@@ -112,6 +154,54 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
             );
           })}
         </nav>
+        
+        {!isCollapsed && (
+          <div className={styles.graphSection}>
+            <Text size="xs" weight="semibold" view="secondary" className={styles.graphSectionTitle}>
+              Граф
+            </Text>
+            {activeGraph && (
+              <Badge
+                size="s"
+                view="filled"
+                status="success"
+                label={activeGraph.isDefault ? 'Основной граф' : activeGraph.name}
+                className={styles.graphBadge}
+              />
+            )}
+            <Select<{ label: string; value: string }>
+              size="s"
+              items={graphsOptions}
+              value={currentGraphOption}
+              placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
+              getItemLabel={(item) => item.label}
+              getItemKey={(item) => item.value}
+              disabled={isGraphListLoading}
+              onChange={handleGraphSelectChange}
+              className={styles.graphSelect}
+            />
+            <div className={styles.graphActions}>
+              {onGraphCreate && (
+                <Button
+                  size="s"
+                  view="secondary"
+                  width="full"
+                  label="Создать граф"
+                  onClick={onGraphCreate}
+                />
+              )}
+              {activeGraphId && onGraphDelete && !activeGraph?.isDefault && (
+                <Button
+                  size="s"
+                  view="ghost"
+                  width="full"
+                  label="Удалить граф"
+                  onClick={() => onGraphDelete(activeGraphId)}
+                />
+              )}
+            </div>
+          </div>
+        )}
         
         {!isCollapsed && (
           <div className={styles.sidebarFooter}>

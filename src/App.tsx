@@ -3230,6 +3230,12 @@ Wake up, Admin... The Matrix has you.
       headerActions={headerActions}
       themeMode={themeMode}
       onSetThemeMode={handleSetThemeMode}
+      graphs={graphs}
+      activeGraphId={activeGraphId}
+      onGraphSelect={handleGraphSelect}
+      onGraphCreate={handleCreateGraph}
+      onGraphDelete={handleDeleteGraph}
+      isGraphListLoading={isGraphsLoading}
     >
       {snapshotError && (
         <div className={styles.errorBanner} role="status" aria-live="polite">
@@ -3491,21 +3497,6 @@ Wake up, Admin... The Matrix has you.
           domains={domainData}
           artifacts={artifactData}
           experts={expertProfiles}
-          initiatives={initiativeData}
-          onImport={handleImportGraph}
-          onImportFromGraph={handleImportFromExistingGraph}
-          graphs={graphs}
-          activeGraphId={activeGraphId}
-          onGraphSelect={handleGraphSelect}
-          onGraphCreate={handleCreateGraph}
-          onGraphDelete={handleDeleteGraph}
-          isGraphListLoading={isGraphsLoading}
-          syncStatus={syncStatus}
-          layout={layoutSnapshot}
-          isSyncAvailable={isSyncAvailable}
-          onRetryLoad={refreshGraphs}
-          isReloading={isGraphsLoading}
-          lastUpdated={graphs.find(g => g.id === activeGraphId)?.updatedAt}
           moduleDraftPrefill={moduleDraftPrefill}
           onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
