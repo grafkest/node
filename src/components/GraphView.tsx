@@ -1310,7 +1310,32 @@ function resolvePalette(themeClassName?: string): GraphPalette {
     return DEFAULT_PALETTE;
   }
 
-  const themeElement = themeClassName ? document.querySelector(`.${themeClassName}`) : null;
+  const themeElement = (() => {
+    if (!themeClassName) {
+      return document.querySelector('.Theme');
+    }
+
+    const tokens = themeClassName.split(/\s+/).filter(Boolean);
+    const selectorVariants = [
+      tokens.length > 0 ? tokens.map((token) => `.${token}`).join('') : null,
+      tokens[0] ? `.${tokens[0]}` : null,
+      '.Theme'
+    ].filter(Boolean) as string[];
+
+    for (const selector of selectorVariants) {
+      try {
+        const element = document.querySelector(selector);
+        if (element) {
+          return element;
+        }
+      } catch {
+        // Ignore invalid selectors and try the next fallback
+      }
+    }
+
+    return null;
+  })();
+
   const styles = getComputedStyle((themeElement as HTMLElement) ?? document.body);
   const getVar = (token: string, fallback: string) => styles.getPropertyValue(token).trim() || fallback;
 
