@@ -11,6 +11,7 @@ import type { ArtifactNode, DomainNode, ExpertProfile, Initiative, ModuleNode } 
 import { normalizeLayoutSnapshot } from '../services/graphStorage';
 import {
   GRAPH_SNAPSHOT_VERSION,
+  type GraphDataScope,
   type GraphLayoutSnapshot,
   type GraphSnapshotPayload,
   type GraphSummary,
@@ -21,8 +22,6 @@ import styles from './GraphPersistenceControls.module.css';
 type StatusMessage =
   | { type: 'success'; message: string }
   | { type: 'error'; message: string };
-
-type GraphDataScope = 'domains' | 'modules' | 'artifacts' | 'experts' | 'initiatives';
 
 type GraphPersistenceControlsProps = {
   modules: ModuleNode[];
@@ -579,6 +578,7 @@ type GraphSnapshotLike = {
   experts?: ExpertProfile[];
   initiatives?: Initiative[];
   layout?: GraphSnapshotPayload['layout'];
+  scopesIncluded?: GraphDataScope[];
 };
 
 function isGraphSnapshotLike(value: unknown): value is GraphSnapshotLike {
@@ -653,7 +653,8 @@ function filterSnapshotByScope(
     artifacts: includeArtifacts ? snapshot.artifacts : [],
     experts: includeExperts ? snapshot.experts ?? [] : [],
     initiatives: includeInitiatives ? snapshot.initiatives ?? [] : [],
-    layout: filteredLayout
+    layout: filteredLayout,
+    scopesIncluded: Array.from(scopes)
   };
 }
 
@@ -678,6 +679,17 @@ function filterLayoutByNodes(
 }
 
 function normalizeImportedSnapshot(snapshot: GraphSnapshotLike): GraphSnapshotPayload {
+  const scopes = snapshot.scopesIncluded ?? [];
+  const validScopes = Array.isArray(scopes)
+    ? scopes.filter((scope): scope is GraphDataScope =>
+        scope === 'domains' ||
+        scope === 'modules' ||
+        scope === 'artifacts' ||
+        scope === 'experts' ||
+        scope === 'initiatives'
+      )
+    : [];
+
   return {
     version:
       typeof snapshot.version === 'number' && Number.isFinite(snapshot.version)
@@ -689,7 +701,8 @@ function normalizeImportedSnapshot(snapshot: GraphSnapshotLike): GraphSnapshotPa
     artifacts: snapshot.artifacts,
     experts: snapshot.experts ?? undefined,
     initiatives: snapshot.initiatives ?? [],
-    layout: normalizeLayoutSnapshot(snapshot.layout) ?? undefined
+    layout: normalizeLayoutSnapshot(snapshot.layout) ?? undefined,
+    scopesIncluded: validScopes.length ? validScopes : undefined
   };
 }
 

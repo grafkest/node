@@ -26,6 +26,7 @@ import AdminPanel, {
 import FiltersPanel from './components/FiltersPanel';
 import {
   GRAPH_SNAPSHOT_VERSION,
+  type GraphDataScope,
   type GraphLayoutNodePosition,
   type GraphLayoutSnapshot,
   type GraphSnapshotPayload,
@@ -285,22 +286,32 @@ function App() {
 
   const applySnapshot = useCallback(
     (snapshot: GraphSnapshotPayload) => {
-      const flattenedDomains = flattenDomainTree(snapshot.domains);
+      const scopes = new Set<GraphDataScope>(
+        snapshot.scopesIncluded ?? ['domains', 'modules', 'artifacts', 'experts', 'initiatives']
+      );
+
+      const nextDomains = scopes.has('domains') ? snapshot.domains : domainData;
+      const nextModules = scopes.has('modules') ? snapshot.modules : moduleData;
+      const nextArtifacts = scopes.has('artifacts') ? snapshot.artifacts : artifactData;
+      const nextExperts = scopes.has('experts') ? snapshot.experts ?? initialExperts : expertProfiles;
+      const nextInitiatives = scopes.has('initiatives') ? snapshot.initiatives ?? [] : initiativeData;
+
+      const flattenedDomains = flattenDomainTree(nextDomains);
       const domainIds = flattenedDomains.map((domain) => domain.id);
       const activeNodeIds = new Set<string>([...domainIds]);
-      snapshot.modules.forEach((module) => activeNodeIds.add(module.id));
-      snapshot.artifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
-      (snapshot.initiatives ?? []).forEach((initiative) => activeNodeIds.add(initiative.id));
+      nextModules.forEach((module) => activeNodeIds.add(module.id));
+      nextArtifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+      nextInitiatives.forEach((initiative) => activeNodeIds.add(initiative.id));
 
-      setDomainData(snapshot.domains);
-      setModuleDataState(recalculateReuseScores(snapshot.modules));
-      setArtifactData(snapshot.artifacts);
-      setInitiativeData(snapshot.initiatives ?? []);
-      setExpertProfiles(snapshot.experts ?? initialExperts);
+      setDomainData(nextDomains);
+      setModuleDataState(recalculateReuseScores(nextModules));
+      setArtifactData(nextArtifacts);
+      setInitiativeData(nextInitiatives);
+      setExpertProfiles(nextExperts);
       setSelectedNode(null);
       setSearch('');
       setStatusFilters(new Set(allStatuses));
-      setProductFilter(buildProductList(snapshot.modules));
+      setProductFilter(buildProductList(nextModules));
       setCompanyFilter(null);
       setSelectedDomains(new Set(domainIds));
       let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
@@ -375,7 +386,7 @@ function App() {
         hasPendingPersistRef.current = false;
       }
     },
-    []
+    [artifactData, domainData, expertProfiles, initiativeData, moduleData]
   );
 
   const loadSnapshot = useCallback(
