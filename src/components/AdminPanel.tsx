@@ -27,6 +27,7 @@ import {
   type TeamMember,
   type TeamRole,
   type UserStats,
+  type Initiative,
   evidenceStatuses,
   findSkillByName,
   getSkillNameById,
@@ -43,6 +44,8 @@ import type {
   MissingSkillEntry
 } from '../utils/expertExcel';
 import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
+import GraphPersistenceControls from './GraphPersistenceControls';
+import type { GraphSnapshotPayload, GraphSummary, GraphSyncStatus, GraphLayoutSnapshot } from '../types/graph';
 import styles from './AdminPanel.module.css';
 
 export type ModuleDraftPayload = {
@@ -124,6 +127,29 @@ type AdminPanelProps = {
   onCreateExpert: (draft: ExpertDraftPayload) => void;
   onUpdateExpert: (id: string, draft: ExpertDraftPayload) => void;
   onDeleteExpert: (id: string) => void;
+  initiatives: Initiative[];
+  onImport: (snapshot: GraphSnapshotPayload) => void;
+  onImportFromGraph?: (request: {
+    graphId: string;
+    includeDomains: boolean;
+    includeModules: boolean;
+    includeArtifacts: boolean;
+    includeExperts: boolean;
+    includeInitiatives: boolean;
+  }) => Promise<{ domains: number; modules: number; artifacts: number; experts: number; initiatives: number }>;
+  graphs?: GraphSummary[];
+  activeGraphId?: string | null;
+  onGraphSelect?: (graphId: string | null) => void;
+  onGraphCreate?: () => void;
+  onGraphDelete?: () => void;
+  isGraphListLoading?: boolean;
+  syncStatus?: GraphSyncStatus | null;
+  layout?: GraphLayoutSnapshot;
+  onForceSave?: () => void;
+  isSyncAvailable?: boolean;
+  onRetryLoad?: () => void;
+  isReloading?: boolean;
+  lastUpdated?: string;
 };
 
 type AdminTab = 'module' | 'domain' | 'artifact' | 'expert';
@@ -228,7 +254,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteArtifact,
   onCreateExpert,
   onUpdateExpert,
-  onDeleteExpert
+  onDeleteExpert,
+  initiatives,
+  onImport,
+  onImportFromGraph,
+  graphs,
+  activeGraphId,
+  onGraphSelect,
+  onGraphCreate,
+  onGraphDelete,
+  isGraphListLoading,
+  syncStatus,
+  layout,
+  onForceSave,
+  isSyncAvailable,
+  onRetryLoad,
+  isReloading,
+  lastUpdated
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('module');
 
@@ -712,6 +754,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const expertSelectValue = expertOptions.find((item) => item.value === selectedExpertId) ?? expertOptions[0];
 
   return (
+    <>
+      <GraphPersistenceControls
+        modules={modules}
+        domains={domains}
+        artifacts={artifacts}
+        experts={experts}
+        initiatives={initiatives}
+        onImport={onImport}
+        onImportFromGraph={onImportFromGraph}
+        graphs={graphs}
+        activeGraphId={activeGraphId}
+        onGraphSelect={onGraphSelect}
+        onGraphCreate={onGraphCreate}
+        onGraphDelete={onGraphDelete}
+        isGraphListLoading={isGraphListLoading}
+        syncStatus={syncStatus}
+        layout={layout}
+        onForceSave={onForceSave}
+        isSyncAvailable={isSyncAvailable}
+        onRetryLoad={onRetryLoad}
+        isReloading={isReloading}
+        lastUpdated={lastUpdated}
+      />
     <div className={styles.container}>
       <div className={styles.selector}>
         <Text size="s" weight="semibold" className={styles.selectorTitle}>
@@ -4447,6 +4512,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
         )}
       </Modal>
     </div>
+    </>
   );
 };
 

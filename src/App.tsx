@@ -27,7 +27,6 @@ import AdminPanel, {
   type ModuleDraftPrefillRequest
 } from './components/AdminPanel';
 import FiltersPanel from './components/FiltersPanel';
-import GraphPersistenceControls from './components/GraphPersistenceControls';
 import {
   GRAPH_SNAPSHOT_VERSION,
   type GraphLayoutNodePosition,
@@ -2894,8 +2893,8 @@ Wake up, Admin... The Matrix has you.
         works,
         requirements,
         customer: {
-          company: request.customer.company.trim(),
-          unit: request.customer.unit.trim(),
+          companies: request.customer.companies ?? [],
+          units: request.customer.units ?? [],
           representative: request.customer.representative.trim(),
           contact: request.customer.contact.trim(),
           comment: request.customer.comment?.trim() || undefined
@@ -3082,6 +3081,21 @@ Wake up, Admin... The Matrix has you.
     [graphs, isGraphActionInProgress, refreshGraphs, showAdminNotice]
   );
 
+  const handleCreateGraph = useCallback(() => {
+    setIsCreatePanelOpen(true);
+  }, []);
+
+  const handleGraphSelect = useCallback(
+    (graphId: string | null) => {
+      if (graphId) {
+        updateActiveGraph(graphId);
+      } else {
+        updateActiveGraph(null, { loadSnapshot: false });
+      }
+    },
+    [updateActiveGraph]
+  );
+
   const shouldShowInitialLoader =
     (isGraphsLoading && graphs.length === 0) ||
     (isSnapshotLoading && !hasLoadedSnapshotRef.current);
@@ -3251,7 +3265,7 @@ Wake up, Admin... The Matrix has you.
         isSubmitting={isGraphActionInProgress}
         status={graphActionStatus}
         graphOptions={graphSelectOptions}
-        sourceGraphDraft={sourceGraphDraft}
+        sourceGraphDraft={sourceGraphDraft ?? undefined}
       />
 
       {shouldShowInitialLoader ? (
@@ -3472,7 +3486,7 @@ Wake up, Admin... The Matrix has you.
         aria-hidden={!isAdminActive}
         style={{ display: isAdminActive ? undefined : 'none' }}
       >
-        <GraphPersistenceControls
+        <AdminPanel
           modules={moduleData}
           domains={domainData}
           artifacts={artifactData}
@@ -3482,15 +3496,16 @@ Wake up, Admin... The Matrix has you.
           onImportFromGraph={handleImportFromExistingGraph}
           graphs={graphs}
           activeGraphId={activeGraphId}
+          onGraphSelect={handleGraphSelect}
+          onGraphCreate={handleCreateGraph}
+          onGraphDelete={handleDeleteGraph}
           isGraphListLoading={isGraphsLoading}
           syncStatus={syncStatus}
           layout={layoutSnapshot}
-        />
-        <AdminPanel
-          modules={moduleData}
-          domains={domainData}
-          artifacts={artifactData}
-          experts={expertProfiles}
+          isSyncAvailable={isSyncAvailable}
+          onRetryLoad={refreshGraphs}
+          isReloading={isGraphsLoading}
+          lastUpdated={graphs.find(g => g.id === activeGraphId)?.updatedAt}
           moduleDraftPrefill={moduleDraftPrefill}
           onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
