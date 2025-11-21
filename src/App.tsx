@@ -180,14 +180,19 @@ function App() {
     [sidebarBaseHeight]
   );
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
+
+  useEffect(() => {
     const saved = localStorage.getItem('app-theme');
-    if (saved === 'light' || saved === 'dark') {
-      return saved;
+    if (saved === 'light') {
+      setThemeMode('light');
+      return;
     }
-    localStorage.setItem('app-theme', 'light');
-    return 'light';
-  });
+
+    if (saved !== 'light') {
+      localStorage.setItem('app-theme', 'light');
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('app-theme', themeMode);
