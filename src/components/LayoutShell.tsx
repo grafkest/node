@@ -80,6 +80,7 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const graphDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
 
   const handleViewChange = (view: ViewMode) => {
     onViewChange(view);
@@ -99,10 +100,14 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
 
   const currentGraphOption = useMemo(
     () =>
-      graphsOptions.find((option) => option.value === activeGraphId) ??
-      (fallbackGraphOption?.value === activeGraphId ? fallbackGraphOption : null) ??
-      (activeGraphId ? { label: 'Выбранный граф', value: activeGraphId } : null),
-    [graphsOptions, activeGraphId, fallbackGraphOption]
+      graphsOptions.find((option) => option.value === (selectedGraphId ?? activeGraphId)) ??
+      (fallbackGraphOption?.value === (selectedGraphId ?? activeGraphId)
+        ? fallbackGraphOption
+        : null) ??
+      (selectedGraphId ?? activeGraphId
+        ? { label: 'Выбранный граф', value: selectedGraphId ?? activeGraphId! }
+        : null),
+    [graphsOptions, activeGraphId, fallbackGraphOption, selectedGraphId]
   );
 
   const activeGraph = useMemo(
@@ -113,6 +118,7 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   React.useEffect(() => {
     if (!activeGraphId) {
       setFallbackGraphOption(null);
+      setSelectedGraphId(null);
       return;
     }
 
@@ -120,12 +126,14 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
     if (option) {
       setFallbackGraphOption(option);
     }
+    setSelectedGraphId(activeGraphId);
   }, [activeGraphId, graphsOptions]);
 
   const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
     if (onGraphSelect) {
       onGraphSelect(value?.value ?? null);
     }
+    setSelectedGraphId(value?.value ?? null);
     setIsMobileMenuOpen(false);
   };
 

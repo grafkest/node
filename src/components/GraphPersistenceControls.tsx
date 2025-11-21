@@ -85,6 +85,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     Set<GraphDataScope>
   >(() => new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
   const [isGraphImporting, setIsGraphImporting] = useState(false);
+  const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
 
   const buildSnapshot = useCallback((): GraphSnapshotPayload => {
     const sanitizedLayout = normalizeLayoutSnapshot(layout) ?? undefined;
@@ -284,6 +285,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     if (onGraphSelect) {
       onGraphSelect(value?.value ?? null);
     }
+    setSelectedGraphId(value?.value ?? null);
   };
 
   const graphsOptions = useMemo(
@@ -299,15 +301,20 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
 
   const currentGraphOption = useMemo(
     () =>
-      graphsOptions.find((option) => option.value === activeGraphId) ??
-      (fallbackGraphOption?.value === activeGraphId ? fallbackGraphOption : null) ??
-      (activeGraphId ? { label: 'Выбранный граф', value: activeGraphId } : null),
-    [graphsOptions, activeGraphId, fallbackGraphOption]
+      graphsOptions.find((option) => option.value === (selectedGraphId ?? activeGraphId)) ??
+      (fallbackGraphOption?.value === (selectedGraphId ?? activeGraphId)
+        ? fallbackGraphOption
+        : null) ??
+      (selectedGraphId ?? activeGraphId
+        ? { label: 'Выбранный граф', value: selectedGraphId ?? activeGraphId! }
+        : null),
+    [graphsOptions, activeGraphId, fallbackGraphOption, selectedGraphId]
   );
 
   useEffect(() => {
     if (!activeGraphId) {
       setFallbackGraphOption(null);
+      setSelectedGraphId(null);
       return;
     }
 
@@ -315,6 +322,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     if (option) {
       setFallbackGraphOption(option);
     }
+    setSelectedGraphId(activeGraphId);
   }, [activeGraphId, graphsOptions]);
 
   const formattedLastUpdated = useMemo(() => {
