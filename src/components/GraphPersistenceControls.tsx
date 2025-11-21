@@ -85,6 +85,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     Set<GraphDataScope>
   >(() => new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
   const [isGraphImporting, setIsGraphImporting] = useState(false);
+  const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
 
   const buildSnapshot = useCallback((): GraphSnapshotPayload => {
     const sanitizedLayout = normalizeLayoutSnapshot(layout) ?? undefined;
@@ -284,6 +285,8 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     if (onGraphSelect) {
       onGraphSelect(value?.value ?? null);
     }
+    setSelectedGraphId(value?.value ?? null);
+    setFallbackGraphOption(value);
   };
 
   const graphsOptions = useMemo(
@@ -295,10 +298,34 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     [graphs]
   );
 
+  const [fallbackGraphOption, setFallbackGraphOption] = useState<{ label: string; value: string } | null>(null);
+
   const currentGraphOption = useMemo(
-    () => graphsOptions.find((option) => option.value === activeGraphId) ?? null,
-    [graphsOptions, activeGraphId]
+    () =>
+      graphsOptions.find((option) => option.value === (selectedGraphId ?? activeGraphId)) ??
+      fallbackGraphOption,
+    [graphsOptions, activeGraphId, fallbackGraphOption, selectedGraphId]
   );
+
+  useEffect(() => {
+    if (!activeGraphId) {
+      setFallbackGraphOption(null);
+      setSelectedGraphId(null);
+      return;
+    }
+
+    const option = graphsOptions.find((item) => item.value === activeGraphId);
+    if (option) {
+      setFallbackGraphOption(option);
+      setSelectedGraphId(option.value);
+      return;
+    }
+
+    if (!fallbackGraphOption || fallbackGraphOption.value !== activeGraphId) {
+      setFallbackGraphOption({ label: 'Выбранный граф', value: activeGraphId });
+    }
+    setSelectedGraphId(activeGraphId);
+  }, [activeGraphId, fallbackGraphOption, graphsOptions]);
 
   const formattedLastUpdated = useMemo(() => {
     if (!lastUpdated) {

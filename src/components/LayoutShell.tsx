@@ -80,6 +80,7 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const graphDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
 
   const handleViewChange = (view: ViewMode) => {
     onViewChange(view);
@@ -95,9 +96,13 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
     [graphs]
   );
 
+  const [fallbackGraphOption, setFallbackGraphOption] = useState<{ label: string; value: string } | null>(null);
+
   const currentGraphOption = useMemo(
-    () => graphsOptions.find((option) => option.value === activeGraphId) ?? null,
-    [graphsOptions, activeGraphId]
+    () =>
+      graphsOptions.find((option) => option.value === (selectedGraphId ?? activeGraphId)) ??
+      fallbackGraphOption,
+    [graphsOptions, activeGraphId, fallbackGraphOption, selectedGraphId]
   );
 
   const activeGraph = useMemo(
@@ -105,10 +110,33 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
     [graphs, activeGraphId]
   );
 
+  React.useEffect(() => {
+    if (!activeGraphId) {
+      setFallbackGraphOption(null);
+      setSelectedGraphId(null);
+      return;
+    }
+
+    const option = graphsOptions.find((item) => item.value === activeGraphId);
+
+    if (option) {
+      setFallbackGraphOption(option);
+      setSelectedGraphId(option.value);
+      return;
+    }
+
+    if (!fallbackGraphOption || fallbackGraphOption.value !== activeGraphId) {
+      setFallbackGraphOption({ label: 'Выбранный граф', value: activeGraphId });
+    }
+    setSelectedGraphId(activeGraphId);
+  }, [activeGraphId, fallbackGraphOption, graphsOptions]);
+
   const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
     if (onGraphSelect) {
       onGraphSelect(value?.value ?? null);
     }
+    setSelectedGraphId(value?.value ?? null);
+    setFallbackGraphOption(value);
     setIsMobileMenuOpen(false);
   };
 
