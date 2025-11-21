@@ -115,11 +115,15 @@ type AdminNotice = {
   message: string;
 };
 
+const GRAPH_UNAVAILABLE_MESSAGE =
+  'Выбранный граф недоступен. Обновите список графов и попробуйте снова.';
+
 const isAnalyticsPanelEnabled =
   (import.meta.env.VITE_ENABLE_ANALYTICS_PANEL ?? 'true').toLowerCase() !== 'false';
 
 function App() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
+  const graphsRef = useRef<GraphSummary[]>([]);
   const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
   const [isGraphsLoading, setIsGraphsLoading] = useState(true);
   const [graphListError, setGraphListError] = useState<string | null>(null);
@@ -162,6 +166,9 @@ function App() {
   const hasPendingPersistRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
   const activeGraphIdRef = useRef<string | null>(null);
+  const updateActiveGraphRef = useRef<
+    (graphId: string | null, options?: { loadSnapshot?: boolean }) => void
+  >();
   const loadedGraphsRef = useRef(new Set<string>());
   const adminNoticeIdRef = useRef(0);
   const moduleDraftPrefillIdRef = useRef(0);
@@ -286,6 +293,10 @@ function App() {
   useEffect(() => {
     activeGraphIdRef.current = activeGraphId;
   }, [activeGraphId]);
+
+  useEffect(() => {
+    graphsRef.current = graphs;
+  }, [graphs]);
 
   const showAdminNotice = useCallback(
     (type: AdminNotice['type'], message: string) => {
@@ -433,7 +444,13 @@ function App() {
   }, []);
 
   const loadSnapshot = useCallback(
-    async (graphId: string, { withOverlay }: { withOverlay?: boolean } = {}) => {
+    async (
+      graphId: string,
+      {
+        withOverlay,
+        fallbackGraphId
+      }: { withOverlay?: boolean; fallbackGraphId?: string | null } = {}
+    ) => {
       activeSnapshotControllerRef.current?.abort();
 
       const controller = new AbortController();
@@ -466,10 +483,11 @@ function App() {
 
         console.error(`Не удалось загрузить граф ${graphId}`, error);
         const detail = error instanceof Error ? error.message : null;
+        showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
         setSnapshotError(
           detail
-            ? `Не удалось загрузить данные графа (${detail}). Используются локальные данные.`
-            : 'Не удалось загрузить данные графа. Используются локальные данные.'
+            ? `Не удалось загрузить данные графа (${detail}). Выберите другой граф или попробуйте ещё раз.`
+            : 'Не удалось загрузить данные графа. Выберите другой граф или попробуйте ещё раз.'
         );
         setIsSyncAvailable(false);
         const syncErrorMessage = detail
@@ -479,6 +497,21 @@ function App() {
           state: 'error',
           message: syncErrorMessage
         });
+
+        if (fallbackGraphId !== undefined && updateActiveGraphRef.current) {
+          const availableGraphs = graphsRef.current;
+          const fallbackId =
+            fallbackGraphId && availableGraphs.some((graph) => graph.id === fallbackGraphId)
+              ? fallbackGraphId
+              : null;
+
+          if (fallbackId) {
+            const shouldReloadFallback = !loadedGraphsRef.current.has(fallbackId);
+            updateActiveGraphRef.current(fallbackId, { loadSnapshot: shouldReloadFallback });
+          } else {
+            updateActiveGraphRef.current(null, { loadSnapshot: false });
+          }
+        }
       } finally {
         const isCurrentRequest = activeSnapshotControllerRef.current === controller;
 
@@ -495,7 +528,7 @@ function App() {
         }
       }
     },
-    [applySnapshot]
+    [applySnapshot, showAdminNotice]
   );
 
   const updateActiveGraph = useCallback(
@@ -518,6 +551,12 @@ function App() {
         return;
       }
 
+      const isValidTarget = graphsRef.current.some((graph) => graph.id === graphId);
+      if (!isValidTarget) {
+        showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
+        return;
+      }
+
       if (previousGraphId === graphId) {
         return;
       }
@@ -534,15 +573,17 @@ function App() {
 
       if (shouldLoadSnapshot) {
         setIsSnapshotLoading(true);
-        void loadSnapshot(graphId, { withOverlay: true });
+        void loadSnapshot(graphId, { withOverlay: true, fallbackGraphId: previousGraphId });
       } else {
         setIsSnapshotLoading(false);
       }
 
       setGraphRenderEpoch((value) => value + 1);
     },
-    [loadSnapshot]
+    [loadSnapshot, showAdminNotice]
   );
+
+  updateActiveGraphRef.current = updateActiveGraph;
 
   const refreshGraphs = useCallback(
     async (
