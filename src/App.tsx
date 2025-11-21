@@ -333,7 +333,7 @@ function App() {
     const nextDomains = scopes.has('domains') ? snapshot.domains : currentDomains;
     const nextModules = scopes.has('modules') ? snapshot.modules : currentModules;
     const nextArtifacts = scopes.has('artifacts') ? snapshot.artifacts : currentArtifacts;
-    const nextExperts = scopes.has('experts') ? snapshot.experts ?? initialExperts : currentExperts;
+    const nextExperts = scopes.has('experts') ? snapshot.experts ?? [] : currentExperts;
     const nextInitiatives = scopes.has('initiatives') ? snapshot.initiatives ?? [] : currentInitiatives;
 
     const flattenedDomains = flattenDomainTree(nextDomains);
