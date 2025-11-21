@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Text } from '@consta/uikit/Text';
 import { Button } from '@consta/uikit/Button';
-import { ChoiceGroup } from '@consta/uikit/ChoiceGroup';
 import { Select } from '@consta/uikit/Select';
 import { Badge } from '@consta/uikit/Badge';
 import { IconRing } from '@consta/icons/IconRing';
@@ -16,8 +15,6 @@ import { IconHamburger } from '@consta/icons/IconHamburger';
 import { IconClose } from '@consta/icons/IconClose';
 import { IconArrowLeft } from '@consta/icons/IconArrowLeft';
 import { IconArrowRight } from '@consta/icons/IconArrowRight';
-import { IconAdd } from '@consta/icons/IconAdd';
-import { IconTrash } from '@consta/icons/IconTrash';
 import type { GraphSummary } from '../types/graph';
 import styles from './LayoutShell.module.css';
 
@@ -53,11 +50,6 @@ const MENU_ITEMS: Array<{
   { id: 'initiatives', label: 'Инициативы', icon: IconDocFilled },
   { id: 'employee-tasks', label: 'Задачи', icon: IconCheck },
   { id: 'admin', label: 'Администрирование', icon: IconSettings },
-];
-
-const THEME_OPTIONS = [
-  { label: 'Светлая', id: 'light', icon: IconSun },
-  { label: 'Темная', id: 'dark', icon: IconMoon },
 ];
 
 export const LayoutShell: React.FC<LayoutShellProps> = ({
@@ -242,21 +234,25 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
         
         {!isCollapsed && (
           <div className={styles.sidebarFooter}>
-             <div className={styles.themeRow}>
-               <Text size="xs" view="secondary">Тема</Text>
-               <ChoiceGroup
+            <div className={styles.themeRow}>
+              <Text size="xs" view="secondary">Тема</Text>
+              <div className={styles.themeButtons}>
+                <Button
                   size="xs"
-                  items={THEME_OPTIONS}
-                  value={THEME_OPTIONS.find((item) => item.id === themeMode)}
-                  getItemLabel={(item) => item.label}
-                  onChange={({ value }) => {
-                    if (value) onSetThemeMode(value.id as ThemeMode);
-                  }}
-                  multiple={false}
-                  name="ThemeSelector"
-                  view="ghost"
-               />
-             </div>
+                  view={themeMode === 'light' ? 'primary' : 'ghost'}
+                  iconLeft={IconSun}
+                  label="Светлая"
+                  onClick={() => onSetThemeMode('light')}
+                />
+                <Button
+                  size="xs"
+                  view={themeMode === 'dark' ? 'primary' : 'ghost'}
+                  iconLeft={IconMoon}
+                  label="Темная"
+                  onClick={() => onSetThemeMode('dark')}
+                />
+              </div>
+            </div>
             <Text size="xs" view="secondary">
               v0.1.0
             </Text>

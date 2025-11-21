@@ -90,6 +90,30 @@ import GraphPersistenceControls from './components/GraphPersistenceControls';
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
 const MAX_LAYOUT_SPAN = 1800;
+const buildDefaultGraphCopyOptions = () =>
+  new Set<GraphDataScope>(['domains', 'modules', 'artifacts', 'experts', 'initiatives']);
+
+const LOCAL_GRAPH_ID = 'local-graph';
+const LOCAL_GRAPH_NAME = 'Локальные данные';
+const LOCAL_GRAPH_SUMMARY: GraphSummary = {
+  id: LOCAL_GRAPH_ID,
+  name: LOCAL_GRAPH_NAME,
+  isDefault: true,
+  createdAt: '1970-01-01T00:00:00.000Z'
+};
+
+function buildLocalSnapshot(): GraphSnapshotPayload {
+  return {
+    version: GRAPH_SNAPSHOT_VERSION,
+    exportedAt: undefined,
+    domains: initialDomainTree,
+    modules: initialModules,
+    artifacts: initialArtifacts,
+    experts: initialExperts,
+    initiatives: initialInitiatives,
+    layout: undefined
+  };
+}
 
 const StatsDashboard = lazy(async () => ({
   default: (await import('./components/StatsDashboard')).default
@@ -113,11 +137,15 @@ type AdminNotice = {
   message: string;
 };
 
+const GRAPH_UNAVAILABLE_MESSAGE =
+  'Выбранный граф недоступен. Обновите список графов и попробуйте снова.';
+
 const isAnalyticsPanelEnabled =
   (import.meta.env.VITE_ENABLE_ANALYTICS_PANEL ?? 'true').toLowerCase() !== 'false';
 
 function App() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
+  const graphsRef = useRef<GraphSummary[]>([]);
   const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
   const [isGraphsLoading, setIsGraphsLoading] = useState(true);
   const [graphListError, setGraphListError] = useState<string | null>(null);
@@ -160,6 +188,10 @@ function App() {
   const hasPendingPersistRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
   const activeGraphIdRef = useRef<string | null>(null);
+  const failedGraphLoadsRef = useRef(new Set<string>());
+  const updateActiveGraphRef = useRef<
+    (graphId: string | null, options?: { loadSnapshot?: boolean }) => void
+  >();
   const loadedGraphsRef = useRef(new Set<string>());
   const adminNoticeIdRef = useRef(0);
   const moduleDraftPrefillIdRef = useRef(0);
@@ -180,29 +212,45 @@ function App() {
     [sidebarBaseHeight]
   );
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
+
+  useEffect(() => {
     const saved = localStorage.getItem('app-theme');
-    if (saved === 'light' || saved === 'dark') {
-      return saved;
+    if (saved === 'light') {
+      setThemeMode('light');
+      return;
     }
-    return 'light';
-  });
+
+    if (saved !== 'light') {
+      localStorage.setItem('app-theme', 'light');
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('app-theme', themeMode);
+  }, [themeMode]);
 
   const handleSetThemeMode = useCallback((mode: ThemeMode) => {
     setThemeMode(mode);
-    localStorage.setItem('app-theme', mode);
   }, []);
 
 
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
-  const [graphCopyOptions, setGraphCopyOptions] = useState<
-    Set<'domains' | 'modules' | 'artifacts' | 'experts' | 'initiatives'>
-  >(() => new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
+  const [graphCopyOptions, setGraphCopyOptions] = useState<Set<GraphDataScope>>(
+    buildDefaultGraphCopyOptions
+  );
   const [isGraphActionInProgress, setIsGraphActionInProgress] = useState(false);
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
+  const handleGraphSourceIdChange = useCallback((value: string | null) => {
+    setGraphSourceIdDraft(value);
+
+    if (value === null) {
+      setGraphCopyOptions(buildDefaultGraphCopyOptions());
+    }
+  }, []);
   const handleUpdateExpertSkills = useCallback((expertId: string, skills: ExpertSkill[]) => {
     setExpertProfiles((prev) =>
       prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
@@ -269,6 +317,10 @@ function App() {
     activeGraphIdRef.current = activeGraphId;
   }, [activeGraphId]);
 
+  useEffect(() => {
+    graphsRef.current = graphs;
+  }, [graphs]);
+
   const showAdminNotice = useCallback(
     (type: AdminNotice['type'], message: string) => {
       adminNoticeIdRef.current += 1;
@@ -324,7 +376,7 @@ function App() {
     const nextDomains = scopes.has('domains') ? snapshot.domains : currentDomains;
     const nextModules = scopes.has('modules') ? snapshot.modules : currentModules;
     const nextArtifacts = scopes.has('artifacts') ? snapshot.artifacts : currentArtifacts;
-    const nextExperts = scopes.has('experts') ? snapshot.experts ?? initialExperts : currentExperts;
+    const nextExperts = scopes.has('experts') ? snapshot.experts ?? [] : currentExperts;
     const nextInitiatives = scopes.has('initiatives') ? snapshot.initiatives ?? [] : currentInitiatives;
 
     const flattenedDomains = flattenDomainTree(nextDomains);
@@ -415,7 +467,13 @@ function App() {
   }, []);
 
   const loadSnapshot = useCallback(
-    async (graphId: string, { withOverlay }: { withOverlay?: boolean } = {}) => {
+    async (
+      graphId: string,
+      {
+        withOverlay,
+        fallbackGraphId
+      }: { withOverlay?: boolean; fallbackGraphId?: string | null } = {}
+    ) => {
       activeSnapshotControllerRef.current?.abort();
 
       const controller = new AbortController();
@@ -428,11 +486,25 @@ function App() {
       }
 
       try {
+        if (graphId === LOCAL_GRAPH_ID) {
+          applySnapshot(buildLocalSnapshot());
+          loadedGraphsRef.current.add(graphId);
+          failedGraphLoadsRef.current.delete(graphId);
+          setSnapshotError(null);
+          setIsSyncAvailable(false);
+          setSyncStatus({
+            state: 'idle',
+            message: 'Работаем с локальными данными. Изменения не сохраняются.'
+          });
+          return;
+        }
+
         const snapshot = await fetchGraphSnapshot(graphId, controller.signal);
         if (controller.signal.aborted || activeGraphIdRef.current !== graphId) {
           return;
         }
         applySnapshot(snapshot);
+        failedGraphLoadsRef.current.delete(graphId);
         loadedGraphsRef.current.add(graphId);
         skipNextSyncRef.current = true;
         setSnapshotError(null);
@@ -448,10 +520,11 @@ function App() {
 
         console.error(`Не удалось загрузить граф ${graphId}`, error);
         const detail = error instanceof Error ? error.message : null;
+        showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
         setSnapshotError(
           detail
-            ? `Не удалось загрузить данные графа (${detail}). Используются локальные данные.`
-            : 'Не удалось загрузить данные графа. Используются локальные данные.'
+            ? `Не удалось загрузить данные графа (${detail}). Выберите другой граф или попробуйте ещё раз.`
+            : 'Не удалось загрузить данные графа. Выберите другой граф или попробуйте ещё раз.'
         );
         setIsSyncAvailable(false);
         const syncErrorMessage = detail
@@ -461,6 +534,26 @@ function App() {
           state: 'error',
           message: syncErrorMessage
         });
+
+        failedGraphLoadsRef.current.add(graphId);
+
+        if (fallbackGraphId !== undefined && updateActiveGraphRef.current) {
+          const fallbackId =
+            fallbackGraphId && graphs.some((graph) => graph.id === fallbackGraphId)
+              ? fallbackGraphId
+              : null;
+
+          if (fallbackId) {
+            if (failedGraphLoadsRef.current.has(fallbackId)) {
+              updateActiveGraphRef.current(null, { loadSnapshot: false });
+              return;
+            }
+            const shouldReloadFallback = !loadedGraphsRef.current.has(fallbackId);
+            updateActiveGraphRef.current(fallbackId, { loadSnapshot: shouldReloadFallback });
+          } else {
+            updateActiveGraphRef.current(null, { loadSnapshot: false });
+          }
+        }
       } finally {
         const isCurrentRequest = activeSnapshotControllerRef.current === controller;
 
@@ -477,7 +570,7 @@ function App() {
         }
       }
     },
-    [applySnapshot]
+    [applySnapshot, graphs, showAdminNotice]
   );
 
   const updateActiveGraph = useCallback(
@@ -500,6 +593,12 @@ function App() {
         return;
       }
 
+      const isValidTarget = graphs.some((graph) => graph.id === graphId);
+      if (!isValidTarget) {
+        showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
+        return;
+      }
+
       if (previousGraphId === graphId) {
         return;
       }
@@ -516,15 +615,17 @@ function App() {
 
       if (shouldLoadSnapshot) {
         setIsSnapshotLoading(true);
-        void loadSnapshot(graphId, { withOverlay: true });
+        void loadSnapshot(graphId, { withOverlay: true, fallbackGraphId: previousGraphId });
       } else {
         setIsSnapshotLoading(false);
       }
 
       setGraphRenderEpoch((value) => value + 1);
     },
-    [loadSnapshot]
+    [graphs, loadSnapshot, showAdminNotice]
   );
+
+  updateActiveGraphRef.current = updateActiveGraph;
 
   const refreshGraphs = useCallback(
     async (
@@ -571,13 +672,26 @@ function App() {
         }
 
         setGraphListError(message);
-        setGraphs([]);
-        updateActiveGraph(null, { loadSnapshot: false });
+
+        const fallbackGraphs = [LOCAL_GRAPH_SUMMARY];
+        setGraphs(fallbackGraphs);
+        loadedGraphsRef.current = new Set([LOCAL_GRAPH_ID]);
+
+        if (activeGraphIdRef.current !== LOCAL_GRAPH_ID) {
+          updateActiveGraph(LOCAL_GRAPH_ID, { loadSnapshot: false });
+        }
+
+        applySnapshot(buildLocalSnapshot());
+        setIsSyncAvailable(false);
+        setSyncStatus({
+          state: 'error',
+          message: 'Нет связи с сервером. Изменения не сохранятся.'
+        });
       } finally {
         setIsGraphsLoading(false);
       }
     },
-    [updateActiveGraph]
+    [updateActiveGraph, applySnapshot]
   );
 
   useEffect(() => {
@@ -2979,11 +3093,29 @@ function App() {
       return;
     }
 
-    const includeDomains = graphCopyOptions.has('domains');
-    const includeModules = graphCopyOptions.has('modules');
-    const includeArtifacts = graphCopyOptions.has('artifacts');
-    const includeExperts = graphCopyOptions.has('experts');
-    const includeInitiatives = graphCopyOptions.has('initiatives');
+    if (graphSourceIdDraft && !graphs.some((graph) => graph.id === graphSourceIdDraft)) {
+      setGraphActionStatus({
+        type: 'error',
+        message: 'Выбранный источник графа больше недоступен. Выберите другой граф.'
+      });
+      setGraphSourceIdDraft(null);
+      setGraphCopyOptions(buildDefaultGraphCopyOptions());
+      return;
+    }
+
+    const effectiveCopyOptions = graphSourceIdDraft
+      ? graphCopyOptions
+      : buildDefaultGraphCopyOptions();
+
+    if (!graphSourceIdDraft) {
+      setGraphCopyOptions(effectiveCopyOptions);
+    }
+
+    const includeDomains = effectiveCopyOptions.has('domains');
+    const includeModules = effectiveCopyOptions.has('modules');
+    const includeArtifacts = effectiveCopyOptions.has('artifacts');
+    const includeExperts = effectiveCopyOptions.has('experts');
+    const includeInitiatives = effectiveCopyOptions.has('initiatives');
 
     if (
       graphSourceIdDraft &&
@@ -3197,7 +3329,7 @@ function App() {
         graphName={graphNameDraft}
         onGraphNameChange={(val) => setGraphNameDraft(val)}
         sourceGraphId={graphSourceIdDraft}
-        onSourceGraphIdChange={setGraphSourceIdDraft}
+        onSourceGraphIdChange={handleGraphSourceIdChange}
         copyOptions={graphCopyOptions}
         onCopyOptionsChange={setGraphCopyOptions}
         isSubmitting={isGraphActionInProgress}
