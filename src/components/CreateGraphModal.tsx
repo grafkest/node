@@ -77,7 +77,17 @@ export const CreateGraphModal: React.FC<CreateGraphModalProps> = ({
             getItemKey={(item) => item.value}
             placeholder="Создать пустой граф"
             disabled={isSubmitting || graphOptions.length <= 0}
-            onChange={(option) => onSourceGraphIdChange(option?.value ?? null)}
+            onChange={(option) => {
+              const nextSourceId = option?.value ?? null;
+
+              onSourceGraphIdChange(nextSourceId);
+
+              if (nextSourceId === null) {
+                onCopyOptionsChange(
+                  new Set<GraphCopyOption>(['domains', 'modules', 'artifacts', 'experts', 'initiatives'])
+                );
+              }
+            }}
             width="full"
           />
 
@@ -117,7 +127,7 @@ export const CreateGraphModal: React.FC<CreateGraphModalProps> = ({
           <Text size="xs" view="secondary">
             {sourceGraphId
               ? 'Выберите, какие данные скопировать из выбранного графа.'
-              : 'Если источник не выбран, граф создаётся пустым.'}
+              : 'Если источник не выбран, граф создаётся с данными по умолчанию.'}
           </Text>
 
           {status && (

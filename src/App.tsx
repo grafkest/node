@@ -90,6 +90,8 @@ import GraphPersistenceControls from './components/GraphPersistenceControls';
 const allStatuses: ModuleStatus[] = ['production', 'in-dev', 'deprecated'];
 const initialProducts = buildProductList(initialModules);
 const MAX_LAYOUT_SPAN = 1800;
+const buildDefaultGraphCopyOptions = () =>
+  new Set<GraphDataScope>(['domains', 'modules', 'artifacts', 'experts', 'initiatives']);
 
 const StatsDashboard = lazy(async () => ({
   default: (await import('./components/StatsDashboard')).default
@@ -205,13 +207,20 @@ function App() {
 
   const [graphNameDraft, setGraphNameDraft] = useState('');
   const [graphSourceIdDraft, setGraphSourceIdDraft] = useState<string | null>(null);
-  const [graphCopyOptions, setGraphCopyOptions] = useState<
-    Set<'domains' | 'modules' | 'artifacts' | 'experts' | 'initiatives'>
-  >(() => new Set(['domains', 'modules', 'artifacts', 'experts', 'initiatives']));
+  const [graphCopyOptions, setGraphCopyOptions] = useState<Set<GraphDataScope>>(
+    buildDefaultGraphCopyOptions
+  );
   const [isGraphActionInProgress, setIsGraphActionInProgress] = useState(false);
   const [graphActionStatus, setGraphActionStatus] = useState<
     { type: 'success' | 'error'; message: string } | null
   >(null);
+  const handleGraphSourceIdChange = useCallback((value: string | null) => {
+    setGraphSourceIdDraft(value);
+
+    if (value === null) {
+      setGraphCopyOptions(buildDefaultGraphCopyOptions());
+    }
+  }, []);
   const handleUpdateExpertSkills = useCallback((expertId: string, skills: ExpertSkill[]) => {
     setExpertProfiles((prev) =>
       prev.map((expert) => (expert.id === expertId ? { ...expert, skills } : expert))
@@ -2988,11 +2997,19 @@ function App() {
       return;
     }
 
-    const includeDomains = graphCopyOptions.has('domains');
-    const includeModules = graphCopyOptions.has('modules');
-    const includeArtifacts = graphCopyOptions.has('artifacts');
-    const includeExperts = graphCopyOptions.has('experts');
-    const includeInitiatives = graphCopyOptions.has('initiatives');
+    const effectiveCopyOptions = graphSourceIdDraft
+      ? graphCopyOptions
+      : buildDefaultGraphCopyOptions();
+
+    if (!graphSourceIdDraft) {
+      setGraphCopyOptions(effectiveCopyOptions);
+    }
+
+    const includeDomains = effectiveCopyOptions.has('domains');
+    const includeModules = effectiveCopyOptions.has('modules');
+    const includeArtifacts = effectiveCopyOptions.has('artifacts');
+    const includeExperts = effectiveCopyOptions.has('experts');
+    const includeInitiatives = effectiveCopyOptions.has('initiatives');
 
     if (
       graphSourceIdDraft &&
@@ -3206,7 +3223,7 @@ function App() {
         graphName={graphNameDraft}
         onGraphNameChange={(val) => setGraphNameDraft(val)}
         sourceGraphId={graphSourceIdDraft}
-        onSourceGraphIdChange={setGraphSourceIdDraft}
+        onSourceGraphIdChange={handleGraphSourceIdChange}
         copyOptions={graphCopyOptions}
         onCopyOptionsChange={setGraphCopyOptions}
         isSubmitting={isGraphActionInProgress}
