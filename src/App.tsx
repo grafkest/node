@@ -123,6 +123,7 @@ const isAnalyticsPanelEnabled =
 
 function App() {
   const [graphs, setGraphs] = useState<GraphSummary[]>([]);
+  const graphsRef = useRef<GraphSummary[]>([]);
   const [activeGraphId, setActiveGraphId] = useState<string | null>(null);
   const [isGraphsLoading, setIsGraphsLoading] = useState(true);
   const [graphListError, setGraphListError] = useState<string | null>(null);
@@ -292,6 +293,10 @@ function App() {
   useEffect(() => {
     activeGraphIdRef.current = activeGraphId;
   }, [activeGraphId]);
+
+  useEffect(() => {
+    graphsRef.current = graphs;
+  }, [graphs]);
 
   const showAdminNotice = useCallback(
     (type: AdminNotice['type'], message: string) => {
