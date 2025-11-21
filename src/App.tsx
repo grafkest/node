@@ -529,7 +529,14 @@ function App() {
 
         console.error(`Не удалось загрузить граф ${graphId}`, error);
         const detail = error instanceof Error ? error.message : null;
-        showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
+        // Показываем уведомление только если граф был явно выбран пользователем и не является локальным
+        if (
+          graphId !== LOCAL_GRAPH_ID &&
+          activeGraphIdRef.current === graphId &&
+          activeGraphIdRef.current !== null
+        ) {
+          showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
+        }
         setSnapshotError(
           detail
             ? `Не удалось загрузить данные графа (${detail}). Выберите другой граф или попробуйте ещё раз.`
@@ -610,7 +617,10 @@ function App() {
 
       const isValidTarget = graphs.some((graph) => graph.id === graphId);
       if (!isValidTarget) {
-        showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
+        // Показываем уведомление только если граф был явно выбран пользователем и не является локальным
+        if (graphId !== LOCAL_GRAPH_ID && activeGraphIdRef.current === graphId && graphId !== null) {
+          showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
+        }
         return;
       }
 
@@ -707,7 +717,10 @@ function App() {
         const currentActiveId = activeGraphIdRef.current;
         const shouldPreserveSelection = preferredGraphId !== null && preferredGraphId !== undefined;
 
-        if (shouldPreserveSelection && preferredGraphId && currentActiveId === preferredGraphId) {
+        // Всегда переключаемся на локальный граф при ошибке, если нет активного графа или если не сохраняем выбор
+        const shouldSwitchToLocal = !currentActiveId || (!shouldPreserveSelection && currentActiveId !== LOCAL_GRAPH_ID);
+
+        if (shouldPreserveSelection && preferredGraphId && currentActiveId === preferredGraphId && !shouldSwitchToLocal) {
           // Сохраняем выбранный граф, даже если список не загрузился
           // Пользователь может попробовать загрузить его вручную
           setIsSyncAvailable(false);
@@ -717,10 +730,15 @@ function App() {
           });
           // Не переключаемся на локальный граф, сохраняем текущий выбор
         } else {
-          // Только если нет явно указанного графа, переключаемся на локальный
+          // Переключаемся на локальный граф при ошибке загрузки списка
           const fallbackGraphs = [LOCAL_GRAPH_SUMMARY];
           setGraphs(fallbackGraphs);
           loadedGraphsRef.current = new Set([LOCAL_GRAPH_ID]);
+
+          // Очищаем уведомление о недоступности графа, так как переключаемся на локальный
+          if (adminNotice?.message === GRAPH_UNAVAILABLE_MESSAGE) {
+            setAdminNotice(null);
+          }
 
           if (activeGraphIdRef.current !== LOCAL_GRAPH_ID) {
             updateActiveGraph(LOCAL_GRAPH_ID, { loadSnapshot: false });
