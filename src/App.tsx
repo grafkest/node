@@ -170,6 +170,7 @@ function App() {
   }, []);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const [layoutNormalizationRequest, setLayoutNormalizationRequest] = useState(0);
+  const [graphRenderEpoch, setGraphRenderEpoch] = useState(0);
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
@@ -407,6 +408,7 @@ function App() {
       setLayoutNormalizationRequest((prev) => prev + 1);
     }
     hasLoadedSnapshotRef.current = true;
+    setGraphRenderEpoch((prev) => prev + 1);
     if (!shouldRequestLayoutNormalization) {
       hasPendingPersistRef.current = false;
     }
@@ -518,6 +520,8 @@ function App() {
       } else {
         setIsSnapshotLoading(false);
       }
+
+      setGraphRenderEpoch((value) => value + 1);
     },
     [loadSnapshot]
   );
@@ -596,6 +600,7 @@ function App() {
     }
 
     void loadSnapshot(graphId, { withOverlay: false });
+    setGraphRenderEpoch((prev) => prev + 1);
   }, [themeMode, loadSnapshot]);
 
   const handleRetryLoadSnapshot = useCallback(() => {
@@ -3323,7 +3328,7 @@ function App() {
                 artifacts={graphArtifacts}
                 initiatives={graphInitiatives}
                 links={filteredLinks}
-                graphVersion={activeGraphId ?? 'local'}
+                graphVersion={`${activeGraphId ?? 'local'}:${graphRenderEpoch}`}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}
