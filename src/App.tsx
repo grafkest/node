@@ -93,6 +93,28 @@ const MAX_LAYOUT_SPAN = 1800;
 const buildDefaultGraphCopyOptions = () =>
   new Set<GraphDataScope>(['domains', 'modules', 'artifacts', 'experts', 'initiatives']);
 
+const LOCAL_GRAPH_ID = 'local-graph';
+const LOCAL_GRAPH_NAME = 'Локальные данные';
+const LOCAL_GRAPH_SUMMARY: GraphSummary = {
+  id: LOCAL_GRAPH_ID,
+  name: LOCAL_GRAPH_NAME,
+  isDefault: true,
+  createdAt: '1970-01-01T00:00:00.000Z'
+};
+
+function buildLocalSnapshot(): GraphSnapshotPayload {
+  return {
+    version: GRAPH_SNAPSHOT_VERSION,
+    exportedAt: undefined,
+    domains: initialDomainTree,
+    modules: initialModules,
+    artifacts: initialArtifacts,
+    experts: initialExperts,
+    initiatives: initialInitiatives,
+    layout: undefined
+  };
+}
+
 const StatsDashboard = lazy(async () => ({
   default: (await import('./components/StatsDashboard')).default
 }));
@@ -464,6 +486,19 @@ function App() {
       }
 
       try {
+        if (graphId === LOCAL_GRAPH_ID) {
+          applySnapshot(buildLocalSnapshot());
+          loadedGraphsRef.current.add(graphId);
+          failedGraphLoadsRef.current.delete(graphId);
+          setSnapshotError(null);
+          setIsSyncAvailable(false);
+          setSyncStatus({
+            state: 'idle',
+            message: 'Работаем с локальными данными. Изменения не сохраняются.'
+          });
+          return;
+        }
+
         const snapshot = await fetchGraphSnapshot(graphId, controller.signal);
         if (controller.signal.aborted || activeGraphIdRef.current !== graphId) {
           return;
@@ -637,13 +672,26 @@ function App() {
         }
 
         setGraphListError(message);
-        setGraphs([]);
-        updateActiveGraph(null, { loadSnapshot: false });
+
+        const fallbackGraphs = [LOCAL_GRAPH_SUMMARY];
+        setGraphs(fallbackGraphs);
+        loadedGraphsRef.current = new Set([LOCAL_GRAPH_ID]);
+
+        if (activeGraphIdRef.current !== LOCAL_GRAPH_ID) {
+          updateActiveGraph(LOCAL_GRAPH_ID, { loadSnapshot: false });
+        }
+
+        applySnapshot(buildLocalSnapshot());
+        setIsSyncAvailable(false);
+        setSyncStatus({
+          state: 'error',
+          message: 'Нет связи с сервером. Изменения не сохранятся.'
+        });
       } finally {
         setIsGraphsLoading(false);
       }
     },
-    [updateActiveGraph]
+    [updateActiveGraph, applySnapshot]
   );
 
   useEffect(() => {
