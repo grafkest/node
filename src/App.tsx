@@ -166,6 +166,7 @@ function App() {
   const hasPendingPersistRef = useRef(false);
   const activeSnapshotControllerRef = useRef<AbortController | null>(null);
   const activeGraphIdRef = useRef<string | null>(null);
+  const failedGraphLoadsRef = useRef(new Set<string>());
   const updateActiveGraphRef = useRef<
     (graphId: string | null, options?: { loadSnapshot?: boolean }) => void
   >();
@@ -468,6 +469,7 @@ function App() {
           return;
         }
         applySnapshot(snapshot);
+        failedGraphLoadsRef.current.delete(graphId);
         loadedGraphsRef.current.add(graphId);
         skipNextSyncRef.current = true;
         setSnapshotError(null);
@@ -498,6 +500,8 @@ function App() {
           message: syncErrorMessage
         });
 
+        failedGraphLoadsRef.current.add(graphId);
+
         if (fallbackGraphId !== undefined && updateActiveGraphRef.current) {
           const fallbackId =
             fallbackGraphId && graphs.some((graph) => graph.id === fallbackGraphId)
@@ -505,6 +509,10 @@ function App() {
               : null;
 
           if (fallbackId) {
+            if (failedGraphLoadsRef.current.has(fallbackId)) {
+              updateActiveGraphRef.current(null, { loadSnapshot: false });
+              return;
+            }
             const shouldReloadFallback = !loadedGraphsRef.current.has(fallbackId);
             updateActiveGraphRef.current(fallbackId, { loadSnapshot: shouldReloadFallback });
           } else {
