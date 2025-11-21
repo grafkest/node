@@ -121,14 +121,15 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
       setFallbackGraphOption({ label: 'Выбранный граф', value: activeGraphId });
     }
     setSelectedGraphId(activeGraphId);
-  }, [activeGraphId, fallbackGraphOption, graphsOptions]);
+  }, [activeGraphId, graphsOptions]);
 
-  const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
+  const handleGraphSelectChange = (value: { label: string; value: string } | null) => {
+    const item = value;
     if (onGraphSelect) {
-      onGraphSelect(value?.value ?? null);
+      onGraphSelect(item?.value ?? null);
     }
-    setSelectedGraphId(value?.value ?? null);
-    setFallbackGraphOption(value);
+    setSelectedGraphId(item?.value ?? null);
+    setFallbackGraphOption(item);
     setIsMobileMenuOpen(false);
   };
 
@@ -195,7 +196,7 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
               size="s"
               items={graphsOptions}
               value={currentGraphOption}
-              placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
+              placeholder={isGraphListLoading ? 'Загрузка...' : currentGraphOption ? undefined : 'Выберите граф'}
               getItemLabel={(item) => item.label}
               getItemKey={(item) => item.value}
               disabled={isGraphListLoading}

@@ -102,6 +102,8 @@ const LOCAL_GRAPH_SUMMARY: GraphSummary = {
   createdAt: '1970-01-01T00:00:00.000Z'
 };
 
+const STORAGE_KEY_ACTIVE_GRAPH_ID = 'nedra-active-graph-id';
+
 function buildLocalSnapshot(): GraphSnapshotPayload {
   return {
     version: GRAPH_SNAPSHOT_VERSION,
@@ -318,6 +320,14 @@ function App() {
   }, [areFiltersOpen, isDomainTreeOpen]);
   useEffect(() => {
     activeGraphIdRef.current = activeGraphId;
+    // Сохраняем выбранный граф в localStorage
+    if (typeof window !== 'undefined') {
+      if (activeGraphId) {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_GRAPH_ID, activeGraphId);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_ACTIVE_GRAPH_ID);
+      }
+    }
   }, [activeGraphId]);
 
   useEffect(() => {
@@ -522,6 +532,10 @@ function App() {
           state: 'idle',
           message: 'Данные синхронизированы с сервером.'
         });
+        // Устанавливаем флаг загрузки в false сразу после успешной загрузки
+        if (withOverlay && activeGraphIdRef.current === graphId) {
+          setIsSnapshotLoading(false);
+        }
       } catch (error) {
         if (controller.signal.aborted || activeGraphIdRef.current !== graphId) {
           return;
@@ -683,14 +697,29 @@ function App() {
 
         const currentActiveId = activeGraphIdRef.current;
         const nextActiveId = (() => {
+          // 1. Если передан preferredGraphId и он существует в списке - используем его
           if (preferredGraphId && list.some((graph) => graph.id === preferredGraphId)) {
             return preferredGraphId;
           }
+          // 2. Если нужно сохранить выбор и текущий граф существует - используем его
           if (preserveSelection && currentActiveId && list.some((graph) => graph.id === currentActiveId)) {
             return currentActiveId;
           }
-          const fallback = list.find((graph) => graph.isDefault) ?? list[0] ?? null;
-          return fallback ? fallback.id : null;
+          // 3. Пытаемся восстановить из localStorage (только если не preserveSelection)
+          if (!preserveSelection && typeof window !== 'undefined') {
+            const savedGraphId = localStorage.getItem(STORAGE_KEY_ACTIVE_GRAPH_ID);
+            if (savedGraphId && list.some((graph) => graph.id === savedGraphId)) {
+              return savedGraphId;
+            }
+          }
+          // 4. По умолчанию выбираем основной граф (isDefault), если его нет - первый в списке
+          // Это гарантирует, что при первом заходе всегда будет выбран граф
+          const defaultGraph = list.find((graph) => graph.isDefault);
+          if (defaultGraph) {
+            return defaultGraph.id;
+          }
+          // Если основного графа нет, выбираем первый доступный
+          return list[0]?.id ?? null;
         })();
 
         if (nextActiveId) {
@@ -759,7 +788,11 @@ function App() {
   );
 
   useEffect(() => {
-    void refreshGraphs(null, { preserveSelection: false });
+    // Восстанавливаем сохраненный граф из localStorage при первой загрузке
+    const savedGraphId = typeof window !== 'undefined' 
+      ? localStorage.getItem(STORAGE_KEY_ACTIVE_GRAPH_ID) 
+      : null;
+    void refreshGraphs(savedGraphId ?? null, { preserveSelection: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3169,19 +3202,12 @@ function App() {
       return;
     }
 
-    const effectiveCopyOptions = graphSourceIdDraft
-      ? graphCopyOptions
-      : buildDefaultGraphCopyOptions();
-
-    if (!graphSourceIdDraft) {
-      setGraphCopyOptions(effectiveCopyOptions);
-    }
-
-    const includeDomains = effectiveCopyOptions.has('domains');
-    const includeModules = effectiveCopyOptions.has('modules');
-    const includeArtifacts = effectiveCopyOptions.has('artifacts');
-    const includeExperts = effectiveCopyOptions.has('experts');
-    const includeInitiatives = effectiveCopyOptions.has('initiatives');
+    // Если источник не выбран, создаем полностью пустой граф
+    const includeDomains = graphSourceIdDraft ? graphCopyOptions.has('domains') : false;
+    const includeModules = graphSourceIdDraft ? graphCopyOptions.has('modules') : false;
+    const includeArtifacts = graphSourceIdDraft ? graphCopyOptions.has('artifacts') : false;
+    const includeExperts = graphSourceIdDraft ? graphCopyOptions.has('experts') : false;
+    const includeInitiatives = graphSourceIdDraft ? graphCopyOptions.has('initiatives') : false;
 
     if (
       graphSourceIdDraft &&
