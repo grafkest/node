@@ -356,7 +356,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
             size="s"
             items={graphsOptions}
             value={currentGraphOption}
-            placeholder={isGraphListLoading ? 'Загрузка...' : 'Выберите граф'}
+            placeholder={isGraphListLoading ? 'Загрузка...' : currentGraphOption ? undefined : 'Выберите граф'}
             getItemLabel={(item) => item.label}
             getItemKey={(item) => item.value}
             disabled={isGraphListLoading || isReloading}
