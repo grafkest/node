@@ -128,6 +128,11 @@ function App() {
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
   const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
   const [expertProfiles, setExpertProfiles] = useState(initialExperts);
+  const domainDataRef = useRef(domainData);
+  const moduleDataRef = useRef(moduleData);
+  const artifactDataRef = useRef(artifactData);
+  const initiativeDataRef = useRef(initiativeData);
+  const expertProfilesRef = useRef(expertProfiles);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
   );
@@ -165,6 +170,7 @@ function App() {
   }, []);
   const [layoutPositions, setLayoutPositions] = useState<Record<string, GraphLayoutNodePosition>>({});
   const [layoutNormalizationRequest, setLayoutNormalizationRequest] = useState(0);
+  const [graphRenderEpoch, setGraphRenderEpoch] = useState(0);
   const layoutSnapshot = useMemo<GraphLayoutSnapshot>(
     () => ({ nodes: layoutPositions }),
     [layoutPositions]
@@ -284,110 +290,129 @@ function App() {
     }
   }, [companyFilter, companies]);
 
-  const applySnapshot = useCallback(
-    (snapshot: GraphSnapshotPayload) => {
-      const scopes = new Set<GraphDataScope>(
-        snapshot.scopesIncluded ?? ['domains', 'modules', 'artifacts', 'experts', 'initiatives']
-      );
+  useEffect(() => {
+    domainDataRef.current = domainData;
+  }, [domainData]);
 
-      const nextDomains = scopes.has('domains') ? snapshot.domains : domainData;
-      const nextModules = scopes.has('modules') ? snapshot.modules : moduleData;
-      const nextArtifacts = scopes.has('artifacts') ? snapshot.artifacts : artifactData;
-      const nextExperts = scopes.has('experts') ? snapshot.experts ?? initialExperts : expertProfiles;
-      const nextInitiatives = scopes.has('initiatives') ? snapshot.initiatives ?? [] : initiativeData;
+  useEffect(() => {
+    moduleDataRef.current = moduleData;
+  }, [moduleData]);
 
-      const flattenedDomains = flattenDomainTree(nextDomains);
-      const domainIds = flattenedDomains.map((domain) => domain.id);
-      const activeNodeIds = new Set<string>([...domainIds]);
-      nextModules.forEach((module) => activeNodeIds.add(module.id));
-      nextArtifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
-      nextInitiatives.forEach((initiative) => activeNodeIds.add(initiative.id));
+  useEffect(() => {
+    artifactDataRef.current = artifactData;
+  }, [artifactData]);
 
-      setDomainData(nextDomains);
-      setModuleDataState(recalculateReuseScores(nextModules));
-      setArtifactData(nextArtifacts);
-      setInitiativeData(nextInitiatives);
-      setExpertProfiles(nextExperts);
-      setSelectedNode(null);
-      setSearch('');
-      setStatusFilters(new Set(allStatuses));
-      setProductFilter(buildProductList(nextModules));
-      setCompanyFilter(null);
-      setSelectedDomains(new Set(domainIds));
-      let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
-      let shouldRequestLayoutNormalization = false;
-      setLayoutPositions((prev) => {
-        const serverPositions = snapshot.layout?.nodes ?? {};
-        const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
-        const hasExistingLayout = hasLoadedSnapshotRef.current && Object.keys(prev).length > 0;
+  useEffect(() => {
+    initiativeDataRef.current = initiativeData;
+  }, [initiativeData]);
 
-        if (!hasExistingLayout) {
-          if (layoutsEqual(prev, prunedServerPositions)) {
-            resolvedLayoutPositions = prev;
-            return prev;
-          }
-          const { positions: normalizedInitial, changed: initialAdjusted } = normalizeLayoutPositions(
-            prunedServerPositions
-          );
-          if (initialAdjusted) {
-            shouldRequestLayoutNormalization = true;
-            resolvedLayoutPositions = normalizedInitial;
-            return normalizedInitial;
-          }
-          resolvedLayoutPositions = prunedServerPositions;
-          return prunedServerPositions;
+  useEffect(() => {
+    expertProfilesRef.current = expertProfiles;
+  }, [expertProfiles]);
+
+  const applySnapshot = useCallback((snapshot: GraphSnapshotPayload) => {
+    const scopes = new Set<GraphDataScope>(
+      snapshot.scopesIncluded ?? ['domains', 'modules', 'artifacts', 'experts', 'initiatives']
+    );
+
+    const currentDomains = domainDataRef.current;
+    const currentModules = moduleDataRef.current;
+    const currentArtifacts = artifactDataRef.current;
+    const currentExperts = expertProfilesRef.current;
+    const currentInitiatives = initiativeDataRef.current;
+
+    const nextDomains = scopes.has('domains') ? snapshot.domains : currentDomains;
+    const nextModules = scopes.has('modules') ? snapshot.modules : currentModules;
+    const nextArtifacts = scopes.has('artifacts') ? snapshot.artifacts : currentArtifacts;
+    const nextExperts = scopes.has('experts') ? snapshot.experts ?? initialExperts : currentExperts;
+    const nextInitiatives = scopes.has('initiatives') ? snapshot.initiatives ?? [] : currentInitiatives;
+
+    const flattenedDomains = flattenDomainTree(nextDomains);
+    const domainIds = flattenedDomains.map((domain) => domain.id);
+    const activeNodeIds = new Set<string>([...domainIds]);
+    nextModules.forEach((module) => activeNodeIds.add(module.id));
+    nextArtifacts.forEach((artifact) => activeNodeIds.add(artifact.id));
+    nextInitiatives.forEach((initiative) => activeNodeIds.add(initiative.id));
+
+    setDomainData(nextDomains);
+    setModuleDataState(recalculateReuseScores(nextModules));
+    setArtifactData(nextArtifacts);
+    setInitiativeData(nextInitiatives);
+    setExpertProfiles(nextExperts);
+    setSelectedNode(null);
+    setSearch('');
+    setStatusFilters(new Set(allStatuses));
+    setProductFilter(buildProductList(nextModules));
+    setCompanyFilter(null);
+    setSelectedDomains(new Set(domainIds));
+    let resolvedLayoutPositions: Record<string, GraphLayoutNodePosition> | null = null;
+    let shouldRequestLayoutNormalization = false;
+    setLayoutPositions((prev) => {
+      const serverPositions = snapshot.layout?.nodes ?? {};
+      const prunedServerPositions = pruneLayoutPositions(serverPositions, activeNodeIds);
+      const hasExistingLayout = hasLoadedSnapshotRef.current && Object.keys(prev).length > 0;
+
+      if (!hasExistingLayout) {
+        if (layoutsEqual(prev, prunedServerPositions)) {
+          resolvedLayoutPositions = prev;
+          return prev;
         }
-
-        const merged: Record<string, GraphLayoutNodePosition> = {};
-        activeNodeIds.forEach((id) => {
-          const previousPosition = prev[id];
-          if (previousPosition) {
-            merged[id] = previousPosition;
-            return;
-          }
-
-          const serverPosition = prunedServerPositions[id];
-          if (serverPosition) {
-            merged[id] = serverPosition;
-          }
-        });
-
-        let nextLayout = layoutsEqual(prev, merged) ? prev : merged;
-        const layoutNodeCount = Object.keys(nextLayout).length;
-        if (layoutNodeCount !== activeNodeIds.size) {
-          shouldRequestLayoutNormalization = true;
-        }
-
-        const { positions: normalizedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
-          nextLayout
+        const { positions: normalizedInitial, changed: initialAdjusted } = normalizeLayoutPositions(
+          prunedServerPositions
         );
 
-        if (layoutAdjusted) {
-          shouldRequestLayoutNormalization = true;
-          resolvedLayoutPositions = normalizedLayout;
-          return normalizedLayout;
+        resolvedLayoutPositions = normalizedInitial;
+        shouldRequestLayoutNormalization = shouldRequestLayoutNormalization || initialAdjusted;
+        return normalizedInitial;
+      }
+
+      const merged = { ...prev } as Record<string, GraphLayoutNodePosition>;
+      Object.entries(prunedServerPositions).forEach(([id, serverPosition]) => {
+        const layoutPosition = prev[id];
+        if (layoutPosition) {
+          merged[id] = { ...layoutPosition };
         }
 
-        resolvedLayoutPositions = nextLayout;
-        return nextLayout;
+        if (serverPosition) {
+          merged[id] = serverPosition;
+        }
       });
-      const nextLayoutPositions = resolvedLayoutPositions ?? {};
-      const needsEngineCapture = needsEngineLayoutCapture(nextLayoutPositions, activeNodeIds);
-      shouldCaptureEngineLayoutRef.current = needsEngineCapture;
-      if (needsEngineCapture) {
+
+      let nextLayout = layoutsEqual(prev, merged) ? prev : merged;
+      const layoutNodeCount = Object.keys(nextLayout).length;
+      if (layoutNodeCount !== activeNodeIds.size) {
         shouldRequestLayoutNormalization = true;
       }
-      if (shouldRequestLayoutNormalization) {
-        hasPendingPersistRef.current = true;
-        setLayoutNormalizationRequest((prev) => prev + 1);
+
+      const { positions: normalizedLayout, changed: layoutAdjusted } = normalizeLayoutPositions(
+        nextLayout
+      );
+
+      if (layoutAdjusted) {
+        shouldRequestLayoutNormalization = true;
+        resolvedLayoutPositions = normalizedLayout;
+        return normalizedLayout;
       }
-      hasLoadedSnapshotRef.current = true;
-      if (!shouldRequestLayoutNormalization) {
-        hasPendingPersistRef.current = false;
-      }
-    },
-    [artifactData, domainData, expertProfiles, initiativeData, moduleData]
-  );
+
+      resolvedLayoutPositions = nextLayout;
+      return nextLayout;
+    });
+    const nextLayoutPositions = resolvedLayoutPositions ?? {};
+    const needsEngineCapture = needsEngineLayoutCapture(nextLayoutPositions, activeNodeIds);
+    shouldCaptureEngineLayoutRef.current = needsEngineCapture;
+    if (needsEngineCapture) {
+      shouldRequestLayoutNormalization = true;
+    }
+    if (shouldRequestLayoutNormalization) {
+      hasPendingPersistRef.current = true;
+      setLayoutNormalizationRequest((prev) => prev + 1);
+    }
+    hasLoadedSnapshotRef.current = true;
+    setGraphRenderEpoch((prev) => prev + 1);
+    if (!shouldRequestLayoutNormalization) {
+      hasPendingPersistRef.current = false;
+    }
+  }, []);
 
   const loadSnapshot = useCallback(
     async (graphId: string, { withOverlay }: { withOverlay?: boolean } = {}) => {
@@ -495,6 +520,8 @@ function App() {
       } else {
         setIsSnapshotLoading(false);
       }
+
+      setGraphRenderEpoch((value) => value + 1);
     },
     [loadSnapshot]
   );
@@ -565,6 +592,16 @@ function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const graphId = activeGraphIdRef.current;
+    if (!graphId) {
+      return;
+    }
+
+    void loadSnapshot(graphId, { withOverlay: false });
+    setGraphRenderEpoch((prev) => prev + 1);
+  }, [themeMode, loadSnapshot]);
 
   const handleRetryLoadSnapshot = useCallback(() => {
     const graphId = activeGraphIdRef.current;
@@ -3291,7 +3328,7 @@ function App() {
                 artifacts={graphArtifacts}
                 initiatives={graphInitiatives}
                 links={filteredLinks}
-                graphVersion={activeGraphId ?? 'local'}
+                graphVersion={`${activeGraphId ?? 'local'}:${graphRenderEpoch}`}
                 onSelect={handleSelectNode}
                 highlightedNode={selectedNode?.id ?? null}
                 visibleDomainIds={relevantDomainIds}

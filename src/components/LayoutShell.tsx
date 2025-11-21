@@ -105,9 +105,9 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
     [graphs, activeGraphId]
   );
 
-  const handleGraphSelectChange = (option: { label: string; value: string } | null) => {
+  const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
     if (onGraphSelect) {
-      onGraphSelect(option?.value ?? null);
+      onGraphSelect(value?.value ?? null);
     }
     setIsMobileMenuOpen(false);
   };
@@ -219,10 +219,10 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
                <ChoiceGroup
                   size="xs"
                   items={THEME_OPTIONS}
-                  value={THEME_OPTIONS.find(t => t.id === themeMode)}
+                  value={THEME_OPTIONS.find((item) => item.id === themeMode)}
                   getItemLabel={(item) => item.label}
-                  onChange={(item) => {
-                    if (item) onSetThemeMode(item.id as ThemeMode);
+                  onChange={({ value }) => {
+                    if (value) onSetThemeMode(value.id as ThemeMode);
                   }}
                   multiple={false}
                   name="ThemeSelector"
