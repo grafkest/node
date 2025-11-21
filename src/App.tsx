@@ -192,6 +192,9 @@ function App() {
   const updateActiveGraphRef = useRef<
     (graphId: string | null, options?: { loadSnapshot?: boolean }) => void
   >();
+  const loadSnapshotRef = useRef<
+    (graphId: string, options?: { withOverlay?: boolean; fallbackGraphId?: string | null }) => Promise<void>
+  >();
   const loadedGraphsRef = useRef(new Set<string>());
   const adminNoticeIdRef = useRef(0);
   const moduleDraftPrefillIdRef = useRef(0);
@@ -474,6 +477,12 @@ function App() {
         fallbackGraphId
       }: { withOverlay?: boolean; fallbackGraphId?: string | null } = {}
     ) => {
+      // Защита от циклов: не пытаться загружать граф, если он уже в списке неудачных
+      if (graphId !== LOCAL_GRAPH_ID && failedGraphLoadsRef.current.has(graphId)) {
+        console.warn(`Пропуск загрузки графа ${graphId}: уже в списке неудачных попыток`);
+        return;
+      }
+
       activeSnapshotControllerRef.current?.abort();
 
       const controller = new AbortController();
@@ -537,6 +546,7 @@ function App() {
 
         failedGraphLoadsRef.current.add(graphId);
 
+        // Ограничение попыток fallback: не переключаться, если fallback тоже неудачен
         if (fallbackGraphId !== undefined && updateActiveGraphRef.current) {
           const fallbackId =
             fallbackGraphId && graphs.some((graph) => graph.id === fallbackGraphId)
@@ -544,10 +554,13 @@ function App() {
               : null;
 
           if (fallbackId) {
+            // Если fallback уже в списке неудачных, не пытаться переключаться
             if (failedGraphLoadsRef.current.has(fallbackId)) {
+              console.warn(`Пропуск fallback на граф ${fallbackId}: уже в списке неудачных попыток`);
               updateActiveGraphRef.current(null, { loadSnapshot: false });
               return;
             }
+            // Переключаться на fallback только если он еще не загружался или уже успешно загружен
             const shouldReloadFallback = !loadedGraphsRef.current.has(fallbackId);
             updateActiveGraphRef.current(fallbackId, { loadSnapshot: shouldReloadFallback });
           } else {
@@ -573,6 +586,8 @@ function App() {
     [applySnapshot, graphs, showAdminNotice]
   );
 
+  loadSnapshotRef.current = loadSnapshot;
+
   const updateActiveGraph = useCallback(
     (graphId: string | null, options: { loadSnapshot?: boolean } = {}) => {
       const { loadSnapshot: shouldLoadSnapshot = graphId !== null } = options;
@@ -596,6 +611,20 @@ function App() {
       const isValidTarget = graphs.some((graph) => graph.id === graphId);
       if (!isValidTarget) {
         showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
+        return;
+      }
+
+      // Дополнительная проверка: не пытаться загружать граф, если он уже в списке неудачных
+      // (кроме локального графа, который всегда доступен)
+      if (graphId !== LOCAL_GRAPH_ID && shouldLoadSnapshot && failedGraphLoadsRef.current.has(graphId)) {
+        console.warn(`Пропуск загрузки графа ${graphId}: уже в списке неудачных попыток`);
+        setSnapshotError(`Граф недоступен. Попробуйте выбрать другой граф или обновить список.`);
+        setIsSyncAvailable(false);
+        setSyncStatus({
+          state: 'error',
+          message: 'Граф недоступен. Выберите другой граф или попробуйте ещё раз.'
+        });
+        setIsSnapshotLoading(false);
         return;
       }
 
@@ -673,20 +702,37 @@ function App() {
 
         setGraphListError(message);
 
-        const fallbackGraphs = [LOCAL_GRAPH_SUMMARY];
-        setGraphs(fallbackGraphs);
-        loadedGraphsRef.current = new Set([LOCAL_GRAPH_ID]);
+        // При создании нового графа (preferredGraphId установлен) не переключаться на локальный автоматически
+        // Сохраняем текущий выбор, если он был указан явно
+        const currentActiveId = activeGraphIdRef.current;
+        const shouldPreserveSelection = preferredGraphId !== null && preferredGraphId !== undefined;
 
-        if (activeGraphIdRef.current !== LOCAL_GRAPH_ID) {
-          updateActiveGraph(LOCAL_GRAPH_ID, { loadSnapshot: false });
+        if (shouldPreserveSelection && preferredGraphId && currentActiveId === preferredGraphId) {
+          // Сохраняем выбранный граф, даже если список не загрузился
+          // Пользователь может попробовать загрузить его вручную
+          setIsSyncAvailable(false);
+          setSyncStatus({
+            state: 'error',
+            message: 'Нет связи с сервером. Изменения не сохранятся.'
+          });
+          // Не переключаемся на локальный граф, сохраняем текущий выбор
+        } else {
+          // Только если нет явно указанного графа, переключаемся на локальный
+          const fallbackGraphs = [LOCAL_GRAPH_SUMMARY];
+          setGraphs(fallbackGraphs);
+          loadedGraphsRef.current = new Set([LOCAL_GRAPH_ID]);
+
+          if (activeGraphIdRef.current !== LOCAL_GRAPH_ID) {
+            updateActiveGraph(LOCAL_GRAPH_ID, { loadSnapshot: false });
+          }
+
+          applySnapshot(buildLocalSnapshot());
+          setIsSyncAvailable(false);
+          setSyncStatus({
+            state: 'error',
+            message: 'Нет связи с сервером. Изменения не сохранятся.'
+          });
         }
-
-        applySnapshot(buildLocalSnapshot());
-        setIsSyncAvailable(false);
-        setSyncStatus({
-          state: 'error',
-          message: 'Нет связи с сервером. Изменения не сохранятся.'
-        });
       } finally {
         setIsGraphsLoading(false);
       }
@@ -696,7 +742,8 @@ function App() {
 
   useEffect(() => {
     void refreshGraphs(null, { preserveSelection: false });
-  }, [refreshGraphs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -709,13 +756,14 @@ function App() {
 
   useEffect(() => {
     const graphId = activeGraphIdRef.current;
-    if (!graphId) {
+    if (!graphId || !loadSnapshotRef.current) {
       return;
     }
 
-    void loadSnapshot(graphId, { withOverlay: false });
+    void loadSnapshotRef.current(graphId, { withOverlay: false });
     setGraphRenderEpoch((prev) => prev + 1);
-  }, [themeMode, loadSnapshot]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeMode]);
 
   const handleRetryLoadSnapshot = useCallback(() => {
     const graphId = activeGraphIdRef.current;
