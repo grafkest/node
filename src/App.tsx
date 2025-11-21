@@ -2997,6 +2997,16 @@ function App() {
       return;
     }
 
+    if (graphSourceIdDraft && !graphs.some((graph) => graph.id === graphSourceIdDraft)) {
+      setGraphActionStatus({
+        type: 'error',
+        message: 'Выбранный источник графа больше недоступен. Выберите другой граф.'
+      });
+      setGraphSourceIdDraft(null);
+      setGraphCopyOptions(buildDefaultGraphCopyOptions());
+      return;
+    }
+
     const effectiveCopyOptions = graphSourceIdDraft
       ? graphCopyOptions
       : buildDefaultGraphCopyOptions();
