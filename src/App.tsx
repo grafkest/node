@@ -499,9 +499,8 @@ function App() {
         });
 
         if (fallbackGraphId !== undefined && updateActiveGraphRef.current) {
-          const availableGraphs = graphsRef.current;
           const fallbackId =
-            fallbackGraphId && availableGraphs.some((graph) => graph.id === fallbackGraphId)
+            fallbackGraphId && graphs.some((graph) => graph.id === fallbackGraphId)
               ? fallbackGraphId
               : null;
 
@@ -528,7 +527,7 @@ function App() {
         }
       }
     },
-    [applySnapshot, showAdminNotice]
+    [applySnapshot, graphs, showAdminNotice]
   );
 
   const updateActiveGraph = useCallback(
@@ -551,7 +550,7 @@ function App() {
         return;
       }
 
-      const isValidTarget = graphsRef.current.some((graph) => graph.id === graphId);
+      const isValidTarget = graphs.some((graph) => graph.id === graphId);
       if (!isValidTarget) {
         showAdminNotice('error', GRAPH_UNAVAILABLE_MESSAGE);
         return;
@@ -580,7 +579,7 @@ function App() {
 
       setGraphRenderEpoch((value) => value + 1);
     },
-    [loadSnapshot, showAdminNotice]
+    [graphs, loadSnapshot, showAdminNotice]
   );
 
   updateActiveGraphRef.current = updateActiveGraph;
