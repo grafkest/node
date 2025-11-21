@@ -101,12 +101,7 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   const currentGraphOption = useMemo(
     () =>
       graphsOptions.find((option) => option.value === (selectedGraphId ?? activeGraphId)) ??
-      (fallbackGraphOption?.value === (selectedGraphId ?? activeGraphId)
-        ? fallbackGraphOption
-        : null) ??
-      (selectedGraphId ?? activeGraphId
-        ? { label: 'Выбранный граф', value: selectedGraphId ?? activeGraphId! }
-        : null),
+      fallbackGraphOption,
     [graphsOptions, activeGraphId, fallbackGraphOption, selectedGraphId]
   );
 
@@ -123,17 +118,25 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
     }
 
     const option = graphsOptions.find((item) => item.value === activeGraphId);
+
     if (option) {
       setFallbackGraphOption(option);
+      setSelectedGraphId(option.value);
+      return;
+    }
+
+    if (!fallbackGraphOption || fallbackGraphOption.value !== activeGraphId) {
+      setFallbackGraphOption({ label: 'Выбранный граф', value: activeGraphId });
     }
     setSelectedGraphId(activeGraphId);
-  }, [activeGraphId, graphsOptions]);
+  }, [activeGraphId, fallbackGraphOption, graphsOptions]);
 
   const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
     if (onGraphSelect) {
       onGraphSelect(value?.value ?? null);
     }
     setSelectedGraphId(value?.value ?? null);
+    setFallbackGraphOption(value);
     setIsMobileMenuOpen(false);
   };
 
