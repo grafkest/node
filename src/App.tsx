@@ -185,12 +185,16 @@ function App() {
     if (saved === 'light' || saved === 'dark') {
       return saved;
     }
+    localStorage.setItem('app-theme', 'light');
     return 'light';
   });
 
+  useEffect(() => {
+    localStorage.setItem('app-theme', themeMode);
+  }, [themeMode]);
+
   const handleSetThemeMode = useCallback((mode: ThemeMode) => {
     setThemeMode(mode);
-    localStorage.setItem('app-theme', mode);
   }, []);
 
 
