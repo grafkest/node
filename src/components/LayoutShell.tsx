@@ -55,10 +55,7 @@ const MENU_ITEMS: Array<{
   { id: 'admin', label: 'Администрирование', icon: IconSettings },
 ];
 
-const THEME_OPTIONS = [
-  { label: 'Светлая', id: 'light', icon: IconSun },
-  { label: 'Темная', id: 'dark', icon: IconMoon },
-];
+const THEME_OPTIONS: ThemeMode[] = ['light', 'dark'];
 
 export const LayoutShell: React.FC<LayoutShellProps> = ({
   currentView,
@@ -247,10 +244,13 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
                <ChoiceGroup
                   size="xs"
                   items={THEME_OPTIONS}
-                  value={THEME_OPTIONS.find((item) => item.id === themeMode)}
-                  getItemLabel={(item) => item.label}
+                  value={themeMode}
+                  getItemLabel={(item) => (item === 'light' ? 'Светлая' : 'Темная')}
+                  getItemIcon={(item) => (item === 'light' ? IconSun : IconMoon)}
                   onChange={({ value }) => {
-                    if (value) onSetThemeMode(value.id as ThemeMode);
+                    if (value) {
+                      onSetThemeMode(value);
+                    }
                   }}
                   multiple={false}
                   name="ThemeSelector"
