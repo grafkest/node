@@ -95,15 +95,32 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
     [graphs]
   );
 
+  const [fallbackGraphOption, setFallbackGraphOption] = useState<{ label: string; value: string } | null>(null);
+
   const currentGraphOption = useMemo(
-    () => graphsOptions.find((option) => option.value === activeGraphId) ?? null,
-    [graphsOptions, activeGraphId]
+    () =>
+      graphsOptions.find((option) => option.value === activeGraphId) ??
+      (fallbackGraphOption?.value === activeGraphId ? fallbackGraphOption : null) ??
+      (activeGraphId ? { label: 'Выбранный граф', value: activeGraphId } : null),
+    [graphsOptions, activeGraphId, fallbackGraphOption]
   );
 
   const activeGraph = useMemo(
     () => graphs?.find((graph) => graph.id === activeGraphId),
     [graphs, activeGraphId]
   );
+
+  React.useEffect(() => {
+    if (!activeGraphId) {
+      setFallbackGraphOption(null);
+      return;
+    }
+
+    const option = graphsOptions.find((item) => item.value === activeGraphId);
+    if (option) {
+      setFallbackGraphOption(option);
+    }
+  }, [activeGraphId, graphsOptions]);
 
   const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
     if (onGraphSelect) {
