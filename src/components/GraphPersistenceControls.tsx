@@ -280,9 +280,9 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     }
   }, [onImportFromGraph, sourceGraphId, copyOptions, graphs]);
 
-  const handleGraphSelectChange = (option: { label: string; value: string } | null) => {
+  const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
     if (onGraphSelect) {
-      onGraphSelect(option?.value ?? null);
+      onGraphSelect(value?.value ?? null);
     }
   };
 

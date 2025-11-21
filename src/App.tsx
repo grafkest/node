@@ -566,6 +566,15 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const graphId = activeGraphIdRef.current;
+    if (!graphId) {
+      return;
+    }
+
+    void loadSnapshot(graphId, { withOverlay: false });
+  }, [themeMode, loadSnapshot]);
+
   const handleRetryLoadSnapshot = useCallback(() => {
     const graphId = activeGraphIdRef.current;
     if (!graphId) {
