@@ -157,6 +157,7 @@ export function createGraph(options: {
     database.run('INSERT INTO graphs (id, name, is_default, created_at, updated_at) VALUES (?, ?, 0, ?, NULL)', [graphId, sanitizedName, now]);
 
     if (options.sourceGraphId) {
+      console.log(`Creating graph ${graphId} as copy of ${options.sourceGraphId}`);
       const sourceSnapshot = loadSnapshot(options.sourceGraphId);
       const snapshot: GraphSnapshotPayload = {
         version: sourceSnapshot.version ?? GRAPH_SNAPSHOT_VERSION,
@@ -174,6 +175,7 @@ export function createGraph(options: {
       writeSnapshot(database, graphId, snapshot);
       updateGraphTimestamp(graphId, snapshot.exportedAt ?? now, database);
     } else {
+      console.log(`Creating empty graph ${graphId}`);
       updateGraphTimestamp(graphId, now, database);
     }
 

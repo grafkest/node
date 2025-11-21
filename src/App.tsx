@@ -522,6 +522,10 @@ function App() {
           state: 'idle',
           message: 'Данные синхронизированы с сервером.'
         });
+        // Устанавливаем флаг загрузки в false сразу после успешной загрузки
+        if (withOverlay && activeGraphIdRef.current === graphId) {
+          setIsSnapshotLoading(false);
+        }
       } catch (error) {
         if (controller.signal.aborted || activeGraphIdRef.current !== graphId) {
           return;
@@ -3169,19 +3173,12 @@ function App() {
       return;
     }
 
-    const effectiveCopyOptions = graphSourceIdDraft
-      ? graphCopyOptions
-      : buildDefaultGraphCopyOptions();
-
-    if (!graphSourceIdDraft) {
-      setGraphCopyOptions(effectiveCopyOptions);
-    }
-
-    const includeDomains = effectiveCopyOptions.has('domains');
-    const includeModules = effectiveCopyOptions.has('modules');
-    const includeArtifacts = effectiveCopyOptions.has('artifacts');
-    const includeExperts = effectiveCopyOptions.has('experts');
-    const includeInitiatives = effectiveCopyOptions.has('initiatives');
+    // Если источник не выбран, создаем полностью пустой граф
+    const includeDomains = graphSourceIdDraft ? graphCopyOptions.has('domains') : false;
+    const includeModules = graphSourceIdDraft ? graphCopyOptions.has('modules') : false;
+    const includeArtifacts = graphSourceIdDraft ? graphCopyOptions.has('artifacts') : false;
+    const includeExperts = graphSourceIdDraft ? graphCopyOptions.has('experts') : false;
+    const includeInitiatives = graphSourceIdDraft ? graphCopyOptions.has('initiatives') : false;
 
     if (
       graphSourceIdDraft &&

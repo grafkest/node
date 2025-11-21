@@ -45,15 +45,18 @@
 
 .noticeSuccess {
   background: var(--color-bg-success);
+  color: var(--color-typo-primary);
 }
 
 .noticeSuccessMessage {
-  color: var(--color-bg-success);
+  color: var(--color-typo-primary);
+  font-weight: 500;
 }
 
 .noticeError {
   background: var(--color-bg-alert);
   border-bottom-color: var(--color-bg-border);
+  color: var(--color-typo-primary);
 }
 
 .header {
