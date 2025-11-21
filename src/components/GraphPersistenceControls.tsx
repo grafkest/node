@@ -281,12 +281,14 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
     }
   }, [onImportFromGraph, sourceGraphId, copyOptions, graphs]);
 
-  const handleGraphSelectChange = ({ value }: { value: { label: string; value: string } | null }) => {
+  const handleGraphSelectChange = (value: { label: string; value: string } | null) => {
+    const item = value;
+    const selectedId = item?.value ?? null;
+    setSelectedGraphId(selectedId);
+    setFallbackGraphOption(item);
     if (onGraphSelect) {
-      onGraphSelect(value?.value ?? null);
+      onGraphSelect(selectedId);
     }
-    setSelectedGraphId(value?.value ?? null);
-    setFallbackGraphOption(value);
   };
 
   const graphsOptions = useMemo(
@@ -314,6 +316,12 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
       return;
     }
 
+    // Синхронизируем только если selectedGraphId не совпадает с activeGraphId
+    // Это позволяет пользователю выбирать граф без немедленного перезаписывания
+    if (selectedGraphId === activeGraphId) {
+      return;
+    }
+
     const option = graphsOptions.find((item) => item.value === activeGraphId);
     if (option) {
       setFallbackGraphOption(option);
@@ -325,7 +333,7 @@ const GraphPersistenceControls: React.FC<GraphPersistenceControlsProps> = ({
       setFallbackGraphOption({ label: 'Выбранный граф', value: activeGraphId });
     }
     setSelectedGraphId(activeGraphId);
-  }, [activeGraphId, fallbackGraphOption, graphsOptions]);
+  }, [activeGraphId, graphsOptions]);
 
   const formattedLastUpdated = useMemo(() => {
     if (!lastUpdated) {
