@@ -359,12 +359,17 @@ const GraphView: React.FC<GraphViewProps> = ({
     return nextNodes;
   }, [domainNodes, artifactNodes, moduleNodes, initiativeNodes, layoutPositions]);
 
+  const graphLinks = useMemo<ForceLink[]>(
+    () => links.map((link) => ({ ...link })),
+    [links]
+  );
+
   const graphData = useMemo(
     () => ({
       nodes,
-      links
+      links: graphLinks
     }),
-    [nodes, links]
+    [graphLinks, nodes]
   );
 
   const nodeTypeMap = useMemo(() => {
