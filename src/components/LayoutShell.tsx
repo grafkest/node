@@ -3,10 +3,10 @@ import { Text } from '@consta/uikit/Text';
 import { Button } from '@consta/uikit/Button';
 import { Select } from '@consta/uikit/Select';
 import { Badge } from '@consta/uikit/Badge';
-import { IconRing } from '@consta/icons/IconRing';
-import { IconAreaChart } from '@consta/icons/IconAreaChart';
+import { IconNodes } from '@consta/icons/IconNodes';
+import { IconLineAndBarChart } from '@consta/icons/IconLineAndBarChart';
 import { IconUser } from '@consta/icons/IconUser';
-import { IconDocFilled } from '@consta/icons/IconDocFilled';
+import { IconFlagFilled } from '@consta/icons/IconFlagFilled';
 import { IconCheck } from '@consta/icons/IconCheck';
 import { IconSettings } from '@consta/icons/IconSettings';
 import { IconMoon } from '@consta/icons/IconMoon';
@@ -44,10 +44,10 @@ const MENU_ITEMS: Array<{
   label: string;
   icon: React.ElementType;
 }> = [
-  { id: 'graph', label: 'Граф', icon: IconRing },
-  { id: 'stats', label: 'Статистика', icon: IconAreaChart },
+  { id: 'graph', label: 'Граф', icon: IconNodes },
+  { id: 'stats', label: 'Статистика', icon: IconLineAndBarChart },
   { id: 'experts', label: 'Экспертиза', icon: IconUser },
-  { id: 'initiatives', label: 'Инициативы', icon: IconDocFilled },
+  { id: 'initiatives', label: 'Инициативы', icon: IconFlagFilled },
   { id: 'employee-tasks', label: 'Задачи', icon: IconCheck },
   { id: 'admin', label: 'Администрирование', icon: IconSettings },
 ];
