@@ -99,161 +99,6 @@ type SelectOption<Value extends string> = {
   value: Value;
 };
 
-const mockEmployees: EmployeeWorkload[] = [
-  {
-    id: 'emp-1',
-    fullName: 'Андреева М. И.',
-    position: 'UX-исследователь',
-    rank: 1,
-    workload: 0.78,
-    availability: 'Свободна с 8 июля',
-    focus: 'Приоритет — пользовательские исследования',
-    tasks: [
-      {
-        id: 'task-1',
-        name: 'Расчёт юнит-экономики',
-        start: '2024-01-08',
-        end: '2024-02-23',
-        initiativeId: 'initiative-digital-2025',
-        kind: 'project',
-        badge: 'Проект'
-      },
-      {
-        id: 'task-2',
-        name: 'Аналитика маршрутов клиента',
-        start: '2024-03-04',
-        end: '2024-04-26',
-        initiativeId: 'initiative-digital-2025',
-        kind: 'project',
-        badge: 'Проект'
-      },
-      {
-        id: 'task-3',
-        name: 'Интервью по продукту Сервис X',
-        start: '2024-05-06',
-        end: '2024-07-05',
-        initiativeId: 'initiative-drone-monitoring',
-        kind: 'out-of-project',
-        badge: 'Вне проекта',
-        description: 'Оценка экспертизы для нового направления'
-      }
-    ]
-  },
-  {
-    id: 'emp-2',
-    fullName: 'Дмитриев К. Л.',
-    position: 'Продуктовый аналитик',
-    rank: 2,
-    workload: 0.64,
-    availability: 'Свободен с 15 июля',
-    focus: 'Фокус — аналитика продуктовых метрик',
-    tasks: [
-      {
-        id: 'task-4',
-        name: 'Актуализация проекта «Цифровой профиль»',
-        start: '2024-01-15',
-        end: '2024-03-01',
-        initiativeId: 'initiative-smart-wells',
-        kind: 'project',
-        badge: 'Проект'
-      },
-      {
-        id: 'task-5',
-        name: 'Поддержка витрины показателей',
-        start: '2024-03-11',
-        end: '2024-05-17',
-        initiativeId: 'initiative-smart-wells',
-        kind: 'project',
-        badge: 'Проект'
-      },
-      {
-        id: 'task-6',
-        name: 'Концепция расчёта LTV',
-        start: '2024-05-27',
-        end: '2024-07-12',
-        initiativeId: 'initiative-sustainable-drilling',
-        kind: 'out-of-project',
-        badge: 'Вне проекта'
-      }
-    ]
-  },
-  {
-    id: 'emp-3',
-    fullName: 'Котова Д. А.',
-    position: 'Менеджер проекта',
-    rank: 3,
-    workload: 0.88,
-    availability: 'Свободна с 19 августа',
-    focus: 'Работает с кросс-командными поставками',
-    tasks: [
-      {
-        id: 'task-7',
-        name: 'Расширение экосистемы партнёров',
-        start: '2024-01-22',
-        end: '2024-03-29',
-        initiativeId: 'initiative-digital-2025',
-        kind: 'project',
-        badge: 'Проект'
-      },
-      {
-        id: 'task-8',
-        name: 'Интеграция API поставщиков',
-        start: '2024-04-08',
-        end: '2024-06-21',
-        initiativeId: 'initiative-smart-wells',
-        kind: 'project',
-        badge: 'Проект'
-      },
-      {
-        id: 'task-9',
-        name: 'Запуск пилота «Экспресс-логистика»',
-        start: '2024-07-01',
-        end: '2024-08-16',
-        initiativeId: 'initiative-drone-monitoring',
-        kind: 'out-of-project',
-        badge: 'Вне проекта'
-      }
-    ]
-  },
-  {
-    id: 'emp-4',
-    fullName: 'Маркелов Я. О.',
-    position: 'Аналитик данных',
-    rank: 4,
-    workload: 0.54,
-    availability: 'Свободен с 29 июля',
-    focus: 'Подходит на задачи по ML и BI',
-    tasks: [
-      {
-        id: 'task-10',
-        name: 'Миграция отчётности',
-        start: '2024-01-29',
-        end: '2024-03-15',
-        initiativeId: 'initiative-smart-wells',
-        kind: 'training',
-        badge: 'Развитие'
-      },
-      {
-        id: 'task-11',
-        name: 'Подготовка витрин ML',
-        start: '2024-03-25',
-        end: '2024-05-31',
-        initiativeId: 'initiative-digital-2025',
-        kind: 'project',
-        badge: 'Проект'
-      },
-      {
-        id: 'task-12',
-        name: 'Разработка модели прогноза спроса',
-        start: '2024-06-10',
-        end: '2024-07-26',
-        initiativeId: 'initiative-sustainable-drilling',
-        kind: 'out-of-project',
-        badge: 'Вне проекта'
-      }
-    ]
-  }
-];
 
 const priorityOptions: SelectOption<TaskPriority>[] = [
   { label: 'Низкий', value: 'low' },
@@ -1105,14 +950,7 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
   }, [experts]);
 
   const employees = useMemo(() => {
-    const existingIds = new Set(mockEmployees.map((employee) => employee.id));
-    const merged = [...mockEmployees];
-    dynamicEmployees.forEach((employee) => {
-      if (!existingIds.has(employee.id)) {
-        merged.push(employee);
-      }
-    });
-    return merged;
+    return dynamicEmployees;
   }, [dynamicEmployees]);
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
   const [timelineMode, setTimelineMode] = useState<TimelineMode>(timelineModeTabs[0]);
@@ -1129,6 +967,23 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
   }));
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTasks((prev) => {
+      const availableEmployeeIds = new Set(employees.map((employee) => employee.id));
+      let changed = false;
+
+      const normalized = prev.map((task) => {
+        if (task.assigneeId && !availableEmployeeIds.has(task.assigneeId)) {
+          changed = true;
+          return { ...task, assigneeId: null };
+        }
+        return task;
+      });
+
+      return changed ? normalized : prev;
+    });
+  }, [employees]);
 
   const taskMap = useMemo(() => {
     const map = new Map<string, TaskListItem>();
