@@ -553,10 +553,14 @@ const yearLabelFormatter = new Intl.DateTimeFormat('ru-RU', {
 const formatWeekLabel = (start: Date, endInclusive: Date): string => {
   const startLabel = capitalize(weekFormatter.format(start));
   const endLabel = capitalize(weekFormatter.format(endInclusive));
+  const startYear = start.getFullYear();
+  const endYear = endInclusive.getFullYear();
+  const yearLabel = startYear === endYear ? `${startYear}` : `${startYear}/${endYear}`;
+
   if (startLabel === endLabel) {
-    return startLabel;
+    return `${startLabel} (${yearLabel})`;
   }
-  return `${startLabel} – ${endLabel}`;
+  return `${startLabel} – ${endLabel} (${yearLabel})`;
 };
 
 type PeriodOption = {

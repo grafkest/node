@@ -152,10 +152,13 @@ const capitalize = (value: string): string => {
 const formatWeekLabel = (start: Date, endInclusive: Date): string => {
   const startLabel = capitalize(weekFormatter.format(start));
   const endLabel = capitalize(weekFormatter.format(endInclusive));
+  const startYear = start.getFullYear();
+  const endYear = endInclusive.getFullYear();
+  const yearLabel = startYear === endYear ? `${startYear}` : `${startYear}/${endYear}`;
   if (startLabel === endLabel) {
-    return startLabel;
+    return `${startLabel} (${yearLabel})`;
   }
-  return `${startLabel} – ${endLabel}`;
+  return `${startLabel} – ${endLabel} (${yearLabel})`;
 };
 
 const toDate = (value: Date | string): Date => {
@@ -265,6 +268,10 @@ const buildYearOptions = (baseStart: Date, minDate: Date, maxDate: Date): Period
     });
   }
   return options;
+};
+
+const findPeriodContainingDate = (options: PeriodOption[], target: Date): PeriodOption | null => {
+  return options.find((option) => target >= option.start && target < option.end) ?? null;
 };
 
 const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks, startDate }) => {
@@ -401,26 +408,30 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks, star
     [baseStart, maxTaskEnd, minTaskStart]
   );
 
-  const [selectedPeriods, setSelectedPeriods] = useState<Record<TimelineScale, string | null>>(() => ({
-    week: periodOptions.week[0]?.value ?? null,
-    month: periodOptions.month[0]?.value ?? null,
-    year: periodOptions.year[0]?.value ?? null
-  }));
+  const [selectedPeriods, setSelectedPeriods] = useState<Record<TimelineScale, string | null>>(() => {
+    const now = new Date();
+    return {
+      week: findPeriodContainingDate(periodOptions.week, now)?.value ?? periodOptions.week[0]?.value ?? null,
+      month: findPeriodContainingDate(periodOptions.month, now)?.value ?? periodOptions.month[0]?.value ?? null,
+      year: findPeriodContainingDate(periodOptions.year, now)?.value ?? periodOptions.year[0]?.value ?? null
+    };
+  });
 
   useEffect(() => {
+    const now = new Date();
     setSelectedPeriods((prev) => ({
       week:
         prev.week && periodOptions.week.some((option) => option.value === prev.week)
           ? prev.week
-          : periodOptions.week[0]?.value ?? null,
+          : findPeriodContainingDate(periodOptions.week, now)?.value ?? periodOptions.week[0]?.value ?? null,
       month:
         prev.month && periodOptions.month.some((option) => option.value === prev.month)
           ? prev.month
-          : periodOptions.month[0]?.value ?? null,
+          : findPeriodContainingDate(periodOptions.month, now)?.value ?? periodOptions.month[0]?.value ?? null,
       year:
         prev.year && periodOptions.year.some((option) => option.value === prev.year)
           ? prev.year
-          : periodOptions.year[0]?.value ?? null
+          : findPeriodContainingDate(periodOptions.year, now)?.value ?? periodOptions.year[0]?.value ?? null
     }));
   }, [periodOptions]);
 
