@@ -683,9 +683,9 @@ function App() {
   const refreshGraphs = useCallback(
     async (
       preferredGraphId?: string | null,
-      options: { preserveSelection?: boolean } = {}
+      options: { preserveSelection?: boolean; preferDefault?: boolean } = {}
     ) => {
-      const { preserveSelection = true } = options;
+      const { preserveSelection = true, preferDefault = false } = options;
       setIsGraphsLoading(true);
       try {
         const list = await fetchGraphSummaries();
@@ -705,14 +705,21 @@ function App() {
           if (preserveSelection && currentActiveId && list.some((graph) => graph.id === currentActiveId)) {
             return currentActiveId;
           }
-          // 3. Пытаемся восстановить из localStorage (только если не preserveSelection)
-          if (!preserveSelection && typeof window !== 'undefined') {
+          // 3. Если нужно принудительно выбрать основной граф, делаем это до восстановления из localStorage
+          if (preferDefault) {
+            const defaultGraph = list.find((graph) => graph.isDefault);
+            if (defaultGraph) {
+              return defaultGraph.id;
+            }
+          }
+          // 4. Пытаемся восстановить из localStorage (только если не preserveSelection и не запрошен основной граф)
+          if (!preserveSelection && !preferDefault && typeof window !== 'undefined') {
             const savedGraphId = localStorage.getItem(STORAGE_KEY_ACTIVE_GRAPH_ID);
             if (savedGraphId && list.some((graph) => graph.id === savedGraphId)) {
               return savedGraphId;
             }
           }
-          // 4. По умолчанию выбираем основной граф (isDefault), если его нет - первый в списке
+          // 5. По умолчанию выбираем основной граф (isDefault), если его нет - первый в списке
           // Это гарантирует, что при первом заходе всегда будет выбран граф
           const defaultGraph = list.find((graph) => graph.isDefault);
           if (defaultGraph) {
@@ -788,11 +795,8 @@ function App() {
   );
 
   useEffect(() => {
-    // Восстанавливаем сохраненный граф из localStorage при первой загрузке
-    const savedGraphId = typeof window !== 'undefined' 
-      ? localStorage.getItem(STORAGE_KEY_ACTIVE_GRAPH_ID) 
-      : null;
-    void refreshGraphs(savedGraphId ?? null, { preserveSelection: false });
+    // При первой загрузке и обновлении страницы автоматически выбираем основной граф
+    void refreshGraphs(null, { preserveSelection: false, preferDefault: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
