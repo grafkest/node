@@ -678,14 +678,10 @@ const GraphView: React.FC<GraphViewProps> = ({
       return;
     }
 
-    const margin = 48;
-    const needsPan =
-      screenCoords.x < margin ||
-      screenCoords.x > width - margin ||
-      screenCoords.y < margin ||
-      screenCoords.y > height - margin;
+    const isOutsideViewport =
+      screenCoords.x < 0 || screenCoords.x > width || screenCoords.y < 0 || screenCoords.y > height;
 
-    if (needsPan) {
+    if (isOutsideViewport) {
       graph.centerAt(target.x, target.y, 400);
       const zoomValue =
         typeof graph.zoom === 'function' ? (graph.zoom() as number) : cameraStateRef.current?.zoom ?? 1;
