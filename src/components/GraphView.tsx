@@ -673,13 +673,19 @@ const GraphView: React.FC<GraphViewProps> = ({
     }
 
     const graph = graphRef.current;
-    const screenCoords = graph.graph2ScreenCoords?.(target.x, target.y);
-    if (!screenCoords) {
+    const topLeft = graph.screen2GraphCoords?.(0, 0);
+    const bottomRight = graph.screen2GraphCoords?.(width, height);
+    if (!topLeft || !bottomRight) {
       return;
     }
 
+    const minX = Math.min(topLeft.x, bottomRight.x);
+    const maxX = Math.max(topLeft.x, bottomRight.x);
+    const minY = Math.min(topLeft.y, bottomRight.y);
+    const maxY = Math.max(topLeft.y, bottomRight.y);
+
     const isOutsideViewport =
-      screenCoords.x < 0 || screenCoords.x > width || screenCoords.y < 0 || screenCoords.y > height;
+      target.x < minX || target.x > maxX || target.y < minY || target.y > maxY;
 
     if (isOutsideViewport) {
       graph.centerAt(target.x, target.y, 400);
