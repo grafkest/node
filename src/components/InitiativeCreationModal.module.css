@@ -1,7 +1,7 @@
 .modal {
-  width: calc(100vw - 32px);
+  width: calc(100vw - var(--layout-sidebar-offset, 0px) - 32px);
   max-width: none;
-  margin: 16px auto;
+  margin: 16px 16px 16px calc(var(--layout-sidebar-offset, 0px) + 16px);
 }
 
 .container {
