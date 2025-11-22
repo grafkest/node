@@ -629,7 +629,7 @@ function App() {
         return;
       }
 
-      const isValidTarget = graphs.some((graph) => graph.id === graphId);
+      const isValidTarget = graphsRef.current.some((graph) => graph.id === graphId);
       if (!isValidTarget) {
         // Показываем уведомление только если граф был явно выбран пользователем и не является локальным
         if (graphId !== LOCAL_GRAPH_ID && activeGraphIdRef.current === graphId && graphId !== null) {
@@ -675,7 +675,7 @@ function App() {
 
       setGraphRenderEpoch((value) => value + 1);
     },
-    [graphs, loadSnapshot, showAdminNotice]
+    [loadSnapshot, showAdminNotice]
   );
 
   updateActiveGraphRef.current = updateActiveGraph;
@@ -689,6 +689,7 @@ function App() {
       setIsGraphsLoading(true);
       try {
         const list = await fetchGraphSummaries();
+        graphsRef.current = list;
         setGraphs(list);
         setGraphListError(null);
         loadedGraphsRef.current = new Set(
@@ -768,6 +769,7 @@ function App() {
         } else {
           // Переключаемся на локальный граф при ошибке загрузки списка
           const fallbackGraphs = [LOCAL_GRAPH_SUMMARY];
+          graphsRef.current = fallbackGraphs;
           setGraphs(fallbackGraphs);
           loadedGraphsRef.current = new Set([LOCAL_GRAPH_ID]);
 
