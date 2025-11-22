@@ -504,6 +504,8 @@ const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.get
 
 const startOfYear = (date: Date): Date => new Date(date.getFullYear(), 0, 1);
 
+const TIMELINE_PERIOD_START = startOfDay(new Date(2025, 9, 1));
+
 const detailDateFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
   month: 'long',
@@ -571,7 +573,9 @@ type PeriodOption = {
 };
 
 const buildWeekOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
-  const earliest = startOfWeek(addDays(minDate, -7));
+  const startBoundary = minDate < TIMELINE_PERIOD_START ? TIMELINE_PERIOD_START : minDate;
+  const earliestCandidate = startOfWeek(addDays(startBoundary, -7));
+  const earliest = earliestCandidate < TIMELINE_PERIOD_START ? TIMELINE_PERIOD_START : earliestCandidate;
   const latest = startOfWeek(addDays(maxDate, 7));
   const options: PeriodOption[] = [];
   let cursor = earliest;
@@ -602,7 +606,11 @@ const buildWeekOptions = (baseStart: Date, minDate: Date, maxDate: Date): Period
 };
 
 const buildMonthOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
-  const earliest = startOfMonth(addMonths(minDate, -1));
+  const startBoundary = minDate < TIMELINE_PERIOD_START ? TIMELINE_PERIOD_START : minDate;
+  const earliestCandidate = startOfMonth(addMonths(startBoundary, -1));
+  const earliest = earliestCandidate < TIMELINE_PERIOD_START
+    ? startOfMonth(TIMELINE_PERIOD_START)
+    : earliestCandidate;
   const latest = startOfMonth(addMonths(maxDate, 1));
   const options: PeriodOption[] = [];
   let cursor = earliest;
@@ -633,7 +641,9 @@ const buildMonthOptions = (baseStart: Date, minDate: Date, maxDate: Date): Perio
 };
 
 const buildYearOptions = (baseStart: Date, minDate: Date, maxDate: Date): PeriodOption[] => {
-  const earliest = startOfYear(addYears(minDate, -1));
+  const startBoundary = minDate < TIMELINE_PERIOD_START ? TIMELINE_PERIOD_START : minDate;
+  const earliestCandidate = startOfYear(addYears(startBoundary, -1));
+  const earliest = earliestCandidate < TIMELINE_PERIOD_START ? startOfYear(TIMELINE_PERIOD_START) : earliestCandidate;
   const latest = startOfYear(addYears(maxDate, 1));
   const options: PeriodOption[] = [];
   let cursor = earliest;
@@ -1058,10 +1068,7 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
     return map;
   }, [tasks, teamTaskWindows]);
 
-  const baseStart = useMemo(() => {
-    const now = new Date();
-    return startOfDay(new Date(now.getFullYear(), 0, 1));
-  }, []);
+  const baseStart = TIMELINE_PERIOD_START;
 
   const timelineDateTasks = useMemo(() => {
     const projectTasks = employees.flatMap((employee) =>
@@ -1083,14 +1090,27 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
     if (timelineDateTasks.length === 0) {
       return baseStart;
     }
-    return timelineDateTasks.reduce((min, task) => (task.start < min ? task.start : min), timelineDateTasks[0].start);
+    const minDate = timelineDateTasks.reduce(
+      (min, task) => (task.start < min ? task.start : min),
+      timelineDateTasks[0].start
+    );
+    return minDate < TIMELINE_PERIOD_START ? TIMELINE_PERIOD_START : minDate;
   }, [baseStart, timelineDateTasks]);
 
   const maxTaskEnd = useMemo(() => {
+    const now = startOfDay(new Date());
     if (timelineDateTasks.length === 0) {
-      return baseStart;
+      return now > baseStart ? now : baseStart;
     }
-    return timelineDateTasks.reduce((max, task) => (task.end > max ? task.end : max), timelineDateTasks[0].end);
+    const maxDate = timelineDateTasks.reduce(
+      (max, task) => (task.end > max ? task.end : max),
+      timelineDateTasks[0].end
+    );
+    const clampedMax = maxDate < TIMELINE_PERIOD_START ? TIMELINE_PERIOD_START : maxDate;
+    if (clampedMax < now) {
+      return now;
+    }
+    return clampedMax;
   }, [baseStart, timelineDateTasks]);
 
   const periodOptions = useMemo(
