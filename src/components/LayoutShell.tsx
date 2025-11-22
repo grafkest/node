@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Text } from '@consta/uikit/Text';
 import { Button } from '@consta/uikit/Button';
 import { Select } from '@consta/uikit/Select';
@@ -52,6 +52,10 @@ const MENU_ITEMS: Array<{
   { id: 'admin', label: 'Администрирование', icon: IconSettings },
 ];
 
+const SIDEBAR_WIDTH = 280;
+const SIDEBAR_WIDTH_COLLAPSED = 80;
+const MOBILE_BREAKPOINT = 768;
+
 export const LayoutShell: React.FC<LayoutShellProps> = ({
   currentView,
   onViewChange,
@@ -73,6 +77,23 @@ export const LayoutShell: React.FC<LayoutShellProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const graphDropdownRef = useRef<HTMLDivElement | null>(null);
   const [selectedGraphId, setSelectedGraphId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateSidebarOffset = () => {
+      const isMobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+      const width = isMobile ? 0 : isCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH;
+      document.documentElement.style.setProperty('--layout-sidebar-offset', `${width}px`);
+    };
+
+    updateSidebarOffset();
+
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+    mediaQuery.addEventListener('change', updateSidebarOffset);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateSidebarOffset);
+    };
+  }, [isCollapsed]);
 
   const handleViewChange = (view: ViewMode) => {
     onViewChange(view);
