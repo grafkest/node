@@ -165,6 +165,14 @@
   justify-content: flex-start;
 }
 
+.sidebarCollapsed .menuButton {
+  justify-content: center;
+}
+
+.sidebarCollapsed .menuButton :global(.Button-Icon_left) {
+  margin: 0;
+}
+
 .mobileMenuButton {
   display: none;
   background: none;
