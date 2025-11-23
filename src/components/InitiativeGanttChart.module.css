@@ -42,6 +42,56 @@
   gap: 12px;
 }
 
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.compactCard {
+  border: 1px solid var(--color-bg-border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--color-bg-secondary);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.cardTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.blockerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .legendItem {
   display: flex;
   align-items: center;
