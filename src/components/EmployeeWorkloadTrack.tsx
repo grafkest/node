@@ -133,6 +133,17 @@ const relationLabels: Record<TaskRelationType, string> = {
   methodology: 'Методологическая активность'
 };
 
+const mapRelationToKind = (relation: TaskRelation): WorkloadKind => {
+  switch (relation.type) {
+    case 'external':
+      return 'out-of-project';
+    case 'methodology':
+      return 'training';
+    default:
+      return 'project';
+  }
+};
+
 const defaultTaskDraft: TaskDraft = {
   name: '',
   priority: 'medium',
@@ -722,6 +733,7 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
       }
       const relationInitiativeId =
         task.relation.type === 'initiative' ? task.relation.targetId ?? undefined : undefined;
+      const kind = mapRelationToKind(task.relation);
       const entry = map.get(task.assigneeId) ?? [];
       entry.push({
         id: task.id,
@@ -729,7 +741,7 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
         start: formatIsoDate(window.start),
         end: formatIsoDate(window.end),
         initiativeId: relationInitiativeId,
-        kind: 'project',
+        kind,
         badge: 'Команда',
         description: task.description
       });
