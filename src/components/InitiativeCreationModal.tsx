@@ -2304,6 +2304,18 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                             : rawStartDate && !Number.isNaN(rawStartDate.getTime())
                                               ? startDateFormatter.format(rawStartDate)
                                               : null;
+                                          const startModeOption =
+                                            startModeOptions.find(
+                                              (option) => option.value === assignment.startMode
+                                            ) ?? startModeOptions[0];
+                                          const referenceItems = assignmentReferenceOptions.filter(
+                                            (option) => option.value !== assignment.id
+                                          );
+                                          const referenceValue =
+                                            referenceItems.find(
+                                              (option) => option.value === assignment.startAfterId
+                                            ) ?? null;
+                                          const dateValue = assignment.startDate ?? '';
                                           const finishDate =
                                             schedule?.startDate && computedDuration > 0
                                               ? addDays(schedule.startDate, computedDuration - 1)
