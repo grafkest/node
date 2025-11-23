@@ -172,7 +172,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
       </div>
 
       <div className={styles.section}>
-         <Text size="xs" weight="bold" transform="uppercase" view="secondary" className={styles.sectionTitle}>
+        <Text size="xs" weight="bold" transform="uppercase" view="secondary" className={styles.sectionTitle}>
           Настройки графа
         </Text>
         <Switch
@@ -183,27 +183,25 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           className={styles.switch}
         />
       </div>
-      
-      {(search || productFilter.length > 0 || companyFilter || !statuses.every(s => activeStatuses.has(s))) && (
-        <div className={styles.resetSection}>
-             <Button
-              size="s"
-              view="ghost"
-              width="full"
-              label="Сбросить все фильтры"
-              onClick={() => {
-                onSearchChange('');
-                onProductChange([]);
-                onCompanyChange(null);
-                statuses.forEach((status) => {
-                  if (!activeStatuses.has(status)) {
-                    onToggleStatus(status);
-                  }
-                });
-              }}
-            />
-        </div>
-      )}
+
+      <div className={styles.resetSection}>
+        <Button
+          size="s"
+          view="ghost"
+          width="full"
+          label="Сбросить все фильтры"
+          onClick={() => {
+            onSearchChange('');
+            onProductChange(products);
+            onCompanyChange(null);
+            statuses.forEach((status) => {
+              if (!activeStatuses.has(status)) {
+                onToggleStatus(status);
+              }
+            });
+          }}
+        />
+      </div>
     </div>
   );
 };
