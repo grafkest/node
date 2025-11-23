@@ -193,7 +193,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
               label="Сбросить все фильтры"
               onClick={() => {
                 onSearchChange('');
-                onProductChange([]);
+                onProductChange(products);
                 onCompanyChange(null);
                 statuses.forEach((status) => {
                   if (!activeStatuses.has(status)) {
