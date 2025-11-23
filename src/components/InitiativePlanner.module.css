@@ -321,12 +321,20 @@
   word-break: break-word;
   text-align: left;
   max-width: 100%;
+  height: auto;
+  align-items: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .riskTag :global(.Badge-Label) {
   white-space: normal;
   text-align: left;
   line-height: 1.3;
+}
+
+.riskTag :global(.Badge-Main) {
+  align-items: flex-start;
 }
 
 .riskSection {
