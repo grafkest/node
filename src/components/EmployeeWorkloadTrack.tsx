@@ -150,20 +150,6 @@ const defaultTaskDraft: TaskDraft = {
   relatedInitiativeId: defaultInitiativeOptions[0]?.value ?? null
 };
 
-const parseDateValue = (value: string): Date | null => {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const addDays = (date: Date, days: number): Date => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-};
-
 const addMonths = (date: Date, months: number): Date => {
   const result = new Date(date);
   result.setMonth(result.getMonth() + months, 1);
@@ -174,12 +160,6 @@ const addMonths = (date: Date, months: number): Date => {
 const addYears = (date: Date, years: number): Date => {
   const result = new Date(date);
   result.setFullYear(result.getFullYear() + years, 0, 1);
-  result.setHours(0, 0, 0, 0);
-  return result;
-};
-
-const startOfDay = (date: Date): Date => {
-  const result = new Date(date);
   result.setHours(0, 0, 0, 0);
   return result;
 };
