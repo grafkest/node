@@ -825,10 +825,14 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       return;
     }
 
+    if (focusedSkill) {
+      return;
+    }
+
     if (!selectedExpertId || !filteredExperts.some((expert) => expert.id === selectedExpertId)) {
       setSelectedExpertId(filteredExperts[0].id);
     }
-  }, [filteredExperts, selectedExpertId]);
+  }, [filteredExperts, focusedSkill, selectedExpertId]);
 
   useEffect(() => {
     if (isSkillEditorOpen && selectedExpert && (!skillEditorExpert || skillEditorExpert.id !== selectedExpert.id)) {
@@ -1896,6 +1900,16 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     moduleNameMap
   ]);
 
+  const focusedSkillExperts = useMemo(() => {
+    if (!focusedSkill) {
+      return [];
+    }
+
+    return focusedSkill.expertIds
+      .map((expertId) => expertById.get(expertId) ?? null)
+      .filter((expert): expert is ExpertProfile => Boolean(expert));
+  }, [expertById, focusedSkill]);
+
   const handleSelectExpert = useCallback((expertId: string) => {
     setSelectedExpertId(expertId);
     setFocusedSkill(null);
@@ -2859,16 +2873,59 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         )}
 
         <aside className={styles.detailsPane}>
-          {selectedExpert ? (
-          <ExpertDetails
-            expert={selectedExpert}
-            moduleNameMap={moduleNameMap}
-            moduleDomainMap={moduleDomainMap}
-            domainNameMap={domainNameMap}
-            roles={selectedExpertRoles}
-            onEditSkills={handleOpenSkillEditor}
-            onEditSoftSkills={handleOpenSoftSkillEditor}
-          />
+          {focusedSkill ? (
+            <Card className={styles.focusCard} verticalSpace="m" horizontalSpace="l" shadow={false}>
+              <Text size="xs" view="secondary">
+                {skillTypeLabel[focusedSkill.type]}
+              </Text>
+              <Text size="s" weight="semibold">
+                {focusedSkill.label}
+              </Text>
+              <Text size="xs" view="ghost">
+                Экспертов: {focusedSkillExperts.length}
+              </Text>
+              {focusedSkillExperts.length > 0 ? (
+                <ul className={styles.detailList}>
+                  {focusedSkillExperts.map((expert) => (
+                    <li key={expert.id} className={styles.detailListItem}>
+                      <div className={styles.expertCardHeader}>
+                        <Text size="s" weight="semibold">
+                          {expert.fullName}
+                        </Text>
+                        <Text size="xs" view="secondary">
+                          {expert.title}
+                        </Text>
+                      </div>
+                      <div className={styles.badgeGroup}>
+                        <Badge size="xs" view="stroked" status="system" label={`${expert.experienceYears} лет опыта`} />
+                        <Badge size="xs" view="stroked" status="system" label={expert.location} />
+                      </div>
+                      <Button
+                        size="xs"
+                        view={expert.id === selectedExpertId ? 'primary' : 'ghost'}
+                        label="Открыть профиль"
+                        onClick={() => handleSelectExpert(expert.id)}
+                        className={styles.focusExpertButton}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Text size="xs" view="ghost">
+                  Нет экспертов с этим навыком в текущей выборке.
+                </Text>
+              )}
+            </Card>
+          ) : selectedExpert ? (
+            <ExpertDetails
+              expert={selectedExpert}
+              moduleNameMap={moduleNameMap}
+              moduleDomainMap={moduleDomainMap}
+              domainNameMap={domainNameMap}
+              roles={selectedExpertRoles}
+              onEditSkills={handleOpenSkillEditor}
+              onEditSoftSkills={handleOpenSoftSkillEditor}
+            />
           ) : (
             <div className={styles.placeholder}>
               <Text size="s" view="secondary">
