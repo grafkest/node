@@ -575,6 +575,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
   const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft(DEFAULT_ROLE)]);
+  const [collapsedWorkIds, setCollapsedWorkIds] = useState<string[]>([]);
   const [approvalStages, setApprovalStages] = useState<ApprovalStageDraft[]>([
     createApprovalStageDraft()
   ]);
@@ -1058,6 +1059,10 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     () => buildAssignmentSchedule(works, initiativeStartDate?.trim() ? initiativeStartDate : null),
     [works, initiativeStartDate]
   );
+
+  useEffect(() => {
+    setCollapsedWorkIds((prev) => prev.filter((id) => works.some((work) => work.id === id)));
+  }, [works]);
 
   const ganttTasks = useMemo<InitiativeGanttTask[]>(
     () =>
@@ -1582,8 +1587,17 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
     handleAssignmentTaskChange(workId, assignmentId, trimmed, true);
   };
 
+  const toggleWorkCollapse = (workId: string) => {
+    setCollapsedWorkIds((prev) =>
+      prev.includes(workId) ? prev.filter((id) => id !== workId) : [...prev, workId]
+    );
+  };
+
   const handleAddWork = () => {
-    setWorks((prev) => [...prev, createWorkDraft(primaryRole, prev.length * 5)]);
+    setWorks((prev) => {
+      setCollapsedWorkIds(prev.map((work) => work.id));
+      return [...prev, createWorkDraft(primaryRole, prev.length * 5)];
+    });
   };
 
   const handleApprovalStageChange = (
@@ -2081,6 +2095,11 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                         ? Math.max(displayStart + 1, workEnd)
                         : displayStart + 1;
                       const workDuration = hasAssignments ? Math.max(1, displayEnd - displayStart) : 0;
+                      const isCollapsed = collapsedWorkIds.includes(work.id);
+                      const workTitle = work.title.trim() || 'Новая работа';
+                      const periodLabel = hasAssignments
+                        ? `Д${displayStart + 1} – Д${displayEnd} · ${workDuration} дн.`
+                        : 'Период не определён';
 
                       return (
                         <Card
@@ -2089,89 +2108,118 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                           verticalSpace="l"
                           horizontalSpace="l"
                         >
-                          <div className={styles.workHeader}>
-                            <TextField
-                              size="s"
-                              label="Название работы"
-                              placeholder="Например, Подготовка данных"
-                              value={work.title}
-                              onChange={(value) => handleWorkChange(work.id, { title: value ?? '' })}
-                            />
-                            <Button
-                              size="s"
-                              view="ghost"
-                              label="Удалить"
-                              onClick={() => handleRemoveWork(work.id)}
-                              disabled={works.length <= 1}
-                            />
-                          </div>
-                          <TextField
-                            size="s"
-                            label="Описание"
-                            value={work.description}
-                            onChange={(value) => handleWorkChange(work.id, { description: value ?? '' })}
-                            type="textarea"
-                            minRows={2}
-                          />
-                          <TextField
-                            size="s"
-                            label="Допущения / ограничения"
-                            value={work.assumptions}
-                            onChange={(value) => handleWorkChange(work.id, { assumptions: value ?? '' })}
-                            type="textarea"
-                            minRows={2}
-                          />
-                          <div className={styles.gridTwoCols}>
-                            <TextField
-                              size="s"
-                              label="Ответственный за этап"
-                              placeholder="ФИО или роль"
-                              value={work.owner}
-                              onChange={(value) => handleWorkChange(work.id, { owner: value ?? '' })}
-                            />
-                            <TextField
-                              size="s"
-                              label="Период / таймфрейм"
-                              placeholder="Например, Q1 2025"
-                              value={work.timeframe}
-                              onChange={(value) =>
-                                handleWorkChange(work.id, { timeframe: value ?? '' })
-                              }
-                            />
-                          </div>
-                          <Select<SelectOption<InitiativeWorkItemStatus>>
-                            size="s"
-                            label="Статус этапа"
-                            items={workItemStatusOptions}
-                            value={
-                              workItemStatusOptions.find((option) => option.value === work.status) ??
-                              workItemStatusOptions[0]
-                            }
-                            getItemLabel={(item) => item.label}
-                            getItemKey={(item) => item.value}
-                            onChange={(option) =>
-                              option && handleWorkChange(work.id, { status: option.value })
-                            }
-                          />
-                          <Text size="xs" view="secondary" className={styles.workTiming}>
-                            {hasAssignments
-                              ? `Период: Д${displayStart + 1} – Д${displayEnd} · Длительность: ${workDuration} дн.`
-                              : 'Назначьте сотрудников, чтобы определить период работы.'}
-                          </Text>
-                          <div className={styles.assignmentList}>
-                            <div className={styles.assignmentHeader}>
-                              <Text size="xs" view="secondary">
-                                Назначьте роли и выберите задачи для сотрудников.
+                          <div className={styles.workSummary}>
+                            <div
+                              className={styles.workSummaryInfo}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => toggleWorkCollapse(work.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  toggleWorkCollapse(work.id);
+                                }
+                              }}
+                            >
+                              <Text size="s" weight="semibold" className={styles.workSummaryTitle}>
+                                {workTitle}
                               </Text>
+                              <Text size="xs" view="secondary" className={styles.workSummaryPeriod}>
+                                {periodLabel}
+                              </Text>
+                            </div>
+                            <div className={styles.workHeaderActions}>
                               <Button
-                                size="xs"
+                                size="s"
                                 view="ghost"
-                                label="Добавить сотрудника"
-                                onClick={() => handleAddAssignment(work.id)}
+                                label={isCollapsed ? 'Развернуть' : 'Свернуть'}
+                                onClick={() => toggleWorkCollapse(work.id)}
+                              />
+                              <Button
+                                size="s"
+                                view="ghost"
+                                label="Удалить"
+                                onClick={() => handleRemoveWork(work.id)}
+                                disabled={works.length <= 1}
                               />
                             </div>
-                            <div className={styles.assignmentGrid}>
-                              {work.assignments.map((assignment, index) => {
+                          </div>
+                          {!isCollapsed && (
+                            <>
+                              <TextField
+                                size="s"
+                                label="Название работы"
+                                placeholder="Например, Подготовка данных"
+                                value={work.title}
+                                onChange={(value) => handleWorkChange(work.id, { title: value ?? '' })}
+                              />
+                              <TextField
+                                size="s"
+                                label="Описание"
+                                value={work.description}
+                                onChange={(value) => handleWorkChange(work.id, { description: value ?? '' })}
+                                type="textarea"
+                                minRows={2}
+                              />
+                              <TextField
+                                size="s"
+                                label="Допущения / ограничения"
+                                value={work.assumptions}
+                                onChange={(value) => handleWorkChange(work.id, { assumptions: value ?? '' })}
+                                type="textarea"
+                                minRows={2}
+                              />
+                              <div className={styles.gridTwoCols}>
+                                <TextField
+                                  size="s"
+                                  label="Ответственный за этап"
+                                  placeholder="ФИО или роль"
+                                  value={work.owner}
+                                  onChange={(value) => handleWorkChange(work.id, { owner: value ?? '' })}
+                                />
+                                <TextField
+                                  size="s"
+                                  label="Период / таймфрейм"
+                                  placeholder="Например, Q1 2025"
+                                  value={work.timeframe}
+                                  onChange={(value) =>
+                                    handleWorkChange(work.id, { timeframe: value ?? '' })
+                                  }
+                                />
+                              </div>
+                              <Select<SelectOption<InitiativeWorkItemStatus>>
+                                size="s"
+                                label="Статус этапа"
+                                items={workItemStatusOptions}
+                                value={
+                                  workItemStatusOptions.find((option) => option.value === work.status) ??
+                                  workItemStatusOptions[0]
+                                }
+                                getItemLabel={(item) => item.label}
+                                getItemKey={(item) => item.value}
+                                onChange={(option) =>
+                                  option && handleWorkChange(work.id, { status: option.value })
+                                }
+                              />
+                              <Text size="xs" view="secondary" className={styles.workTiming}>
+                                {hasAssignments
+                                  ? `Период: Д${displayStart + 1} – Д${displayEnd} · Длительность: ${workDuration} дн.`
+                                  : 'Назначьте сотрудников, чтобы определить период работы.'}
+                              </Text>
+                              <div className={styles.assignmentList}>
+                                <div className={styles.assignmentHeader}>
+                                  <Text size="xs" view="secondary">
+                                    Назначьте роли и выберите задачи для сотрудников.
+                                  </Text>
+                                  <Button
+                                    size="xs"
+                                    view="ghost"
+                                    label="Добавить сотрудника"
+                                    onClick={() => handleAddAssignment(work.id)}
+                                  />
+                                </div>
+                                <div className={styles.assignmentGrid}>
+                                  {work.assignments.map((assignment, index) => {
                                 const roleOption =
                                   roleOptions.find((option) => option.value === assignment.role) ?? {
                                     label: primaryRole,
