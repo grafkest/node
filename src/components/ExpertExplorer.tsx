@@ -1979,9 +1979,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         expertIds: relatedExperts.map((expert) => expert.id)
       });
 
-      if (relatedExperts.length === 1) {
-        handleSelectExpert(relatedExperts[0].id);
-      }
+      setSelectedExpertId(null);
     },
     [
       filteredExperts,
