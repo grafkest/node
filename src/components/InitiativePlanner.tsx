@@ -3,6 +3,7 @@ import { Button } from '@consta/uikit/Button';
 import { Card } from '@consta/uikit/Card';
 import { Select } from '@consta/uikit/Select';
 import { Steps } from '@consta/uikit/Steps';
+import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import clsx from 'clsx';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,6 +15,7 @@ import type {
   InitiativeStatus,
   ModuleNode
 } from '../data';
+import type { TaskListItem } from '../types/tasks';
 import InitiativeCreationModal from './InitiativeCreationModal';
 import InitiativeGanttChart, {
   type InitiativeGanttBlocker,
@@ -25,6 +27,7 @@ import type { InitiativeCreationRequest } from '../types/initiativeCreation';
 import { buildCreationRequestFromInitiative } from '../utils/initiativePlanner';
 import styles from './InitiativePlanner.module.css';
 import { getSkillNameById } from '../data/skills';
+import { resolveTaskScheduleWindow, startOfDay } from '../utils/employeeTasks';
 
 type SelectItem<Value extends string> = {
   label: string;
@@ -37,6 +40,7 @@ type InitiativePlannerProps = {
   domains: DomainNode[];
   modules: ModuleNode[];
   domainNameMap: Record<string, string>;
+  employeeTasks: TaskListItem[];
   onTogglePin: (initiativeId: string, roleId: string, expertId: string) => void;
   onAddRisk: (
     initiativeId: string,
@@ -96,12 +100,22 @@ const severityBadgeMeta: Record<InitiativeRisk['severity'], { label: string; sta
   high: { label: 'Высокий', status: 'error' }
 };
 
+type TimelineSource = 'initiative' | 'employee';
+
+const timelineSourceTabs: Array<{ label: string; value: TimelineSource }> = [
+  { label: 'Инициативы', value: 'initiative' },
+  { label: 'Задачи сотрудников', value: 'employee' }
+];
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
 const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   initiatives,
   experts,
   domains,
   modules,
   domainNameMap,
+  employeeTasks,
   onTogglePin,
   onAddRisk,
   onRemoveRisk,
@@ -121,6 +135,7 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
   const [modalInitialDraft, setModalInitialDraft] = useState<InitiativeCreationRequest | null>(null);
   const [isModalSubmitting, setIsModalSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [timelineSource, setTimelineSource] = useState<TimelineSource>('initiative');
   const lastInitiativeIdRef = useRef<string | null>(null);
   const lastRoleIdsRef = useRef<Set<string>>(new Set());
 
@@ -188,6 +203,85 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
     });
     return map;
   }, [experts]);
+
+  const timelineBaseStart = useMemo(() => {
+    if (selectedInitiative?.startDate) {
+      return startOfDay(new Date(selectedInitiative.startDate));
+    }
+    return startOfDay(new Date());
+  }, [selectedInitiative]);
+
+  const employeeTaskMap = useMemo(
+    () => new Map(employeeTasks.map((task) => [task.id, task])),
+    [employeeTasks]
+  );
+
+  const employeeTimelineTasks = useMemo<InitiativeGanttTask[]>(() => {
+    if (!selectedInitiative) {
+      return [];
+    }
+
+    return employeeTasks
+      .filter(
+        (task) =>
+          task.assigneeId &&
+          task.relation.type === 'initiative' &&
+          task.relation.targetId === selectedInitiative.id
+      )
+      .map((task) => {
+        const window = resolveTaskScheduleWindow(task, employeeTaskMap);
+        if (!window) {
+          return null;
+        }
+        const startDay = Math.max(
+          0,
+          Math.round((window.start.getTime() - timelineBaseStart.getTime()) / DAY_MS)
+        );
+        const durationDays = Math.max(
+          1,
+          Math.round((window.end.getTime() - window.start.getTime()) / DAY_MS) + 1
+        );
+        const expert = task.assigneeId ? expertMap.get(task.assigneeId) : undefined;
+        const assigneeName = expert?.fullName ?? task.assigneeId ?? 'Исполнитель не выбран';
+
+        return {
+          id: `employee-${task.id}`,
+          name: task.name,
+          role: expert?.title ?? 'Участник инициативы',
+          projectId: selectedInitiative.id,
+          projectName: selectedInitiative.name,
+          workId: 'employee-task',
+          workName: 'Задачи сотрудников',
+          startDay,
+          durationDays,
+          effortDays: durationDays,
+          effortHours: durationDays * 8,
+          minUnits: 1,
+          maxUnits: 1,
+          canSplit: false,
+          parallelAllowed: true,
+          durationMode: 'fixed-effort',
+          constraints: undefined,
+          priority: 1,
+          wipLimitTag: 'employee-tasks',
+          assignedExpert: assigneeName,
+          resources:
+            task.assigneeId && assigneeName
+              ? [
+                  {
+                    id: task.assigneeId,
+                    name: assigneeName,
+                    role: expert?.title ?? 'Эксперт',
+                    units: 1
+                  }
+                ]
+              : [],
+          blockers: [],
+          scenarioBranch: 'Задачи сотрудников'
+        } satisfies InitiativeGanttTask;
+      })
+      .filter((task): task is InitiativeGanttTask => Boolean(task));
+  }, [employeeTaskMap, employeeTasks, expertMap, selectedInitiative, timelineBaseStart]);
 
   const timelineTasks = useMemo<InitiativeGanttTask[]>(() => {
     if (!selectedInitiative) {
@@ -263,6 +357,11 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
       return workTasks;
     });
   }, [expertMap, selectedInitiative]);
+
+  const displayedTimelineTasks = useMemo(
+    () => (timelineSource === 'initiative' ? timelineTasks : employeeTimelineTasks),
+    [employeeTimelineTasks, timelineSource, timelineTasks]
+  );
 
   const handleOpenCreate = () => {
     setModalMode('create');
@@ -394,6 +493,13 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
       </section>
     );
   }
+
+  const activeTimelineTab =
+    timelineSourceTabs.find((tab) => tab.value === timelineSource) ?? timelineSourceTabs[0];
+  const timelineEmptyText =
+    timelineSource === 'employee'
+      ? 'Назначьте задачи сотрудникам во вкладке «Задачи» или выберите исполнителя.'
+      : 'Диаграмма появится после добавления работ по ролям.';
 
   const handleOpenEdit = () => {
     if (!selectedInitiative) {
@@ -664,14 +770,22 @@ const InitiativePlanner: React.FC<InitiativePlannerProps> = ({
                 План работ
               </Text>
               <Text size="xs" view="secondary">
-                {timelineTasks.length > 0
-                  ? `Задач в расписании: ${timelineTasks.length}`
-                  : 'Диаграмма появится после добавления работ по ролям.'}
+                {displayedTimelineTasks.length > 0
+                  ? `Задач в расписании: ${displayedTimelineTasks.length}`
+                  : timelineEmptyText}
               </Text>
             </div>
+            <Tabs
+              size="s"
+              items={timelineSourceTabs}
+              value={activeTimelineTab}
+              getItemKey={(item) => item.value}
+              getItemLabel={(item) => item.label}
+              onChange={(item) => item && setTimelineSource(item.value)}
+            />
             <div className={styles.timelineBody}>
               <InitiativeGanttChart
-                tasks={timelineTasks}
+                tasks={displayedTimelineTasks}
                 startDate={selectedInitiative.startDate}
               />
             </div>

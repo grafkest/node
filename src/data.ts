@@ -2606,6 +2606,28 @@ const initiativeExtras: Record<string, InitiativeExtra> = {
         role: 'Архитектор',
         required: 1,
         pinnedExpertIds: ['expert-raisa-chistyakova'],
+        workItems: [
+          {
+            id: 'dtwin-arch-pipeline',
+            title: 'Архитектура потоков телеметрии',
+            description: 'Схема доставки данных и требования к отказоустойчивости.',
+            startDay: 0,
+            durationDays: 18,
+            effortDays: 18,
+            tasks: ['streaming-pipelines'],
+            assignedExpertId: 'expert-raisa-chistyakova'
+          },
+          {
+            id: 'dtwin-arch-quality',
+            title: 'Контроль качества и каталогизация',
+            description: 'Метрики потерь данных и управление справочниками.',
+            startDay: 12,
+            durationDays: 12,
+            effortDays: 12,
+            tasks: ['data-governance'],
+            assignedExpertId: 'expert-viktoria-berezhnaya'
+          }
+        ],
         candidates: [
           {
             expertId: 'expert-raisa-chistyakova',
@@ -2648,6 +2670,28 @@ const initiativeExtras: Record<string, InitiativeExtra> = {
         role: 'Backend',
         required: 2,
         pinnedExpertIds: [],
+        workItems: [
+          {
+            id: 'dtwin-backend-stream',
+            title: 'Настройка пайплайнов',
+            description: 'Подготовка ETL и потоковой обработки для телеметрии.',
+            startDay: 5,
+            durationDays: 14,
+            effortDays: 14,
+            tasks: ['streaming-pipelines'],
+            assignedExpertId: 'expert-viktoria-berezhnaya'
+          },
+          {
+            id: 'dtwin-backend-api',
+            title: 'Интерфейсы SCADA',
+            description: 'Интеграция с диспетчерскими сервисами и тестирование API.',
+            startDay: 18,
+            durationDays: 10,
+            effortDays: 10,
+            tasks: ['Интеграция SCADA'],
+            assignedExpertId: 'expert-anton-vlasov'
+          }
+        ],
         candidates: [
           {
             expertId: 'expert-viktoria-berezhnaya',
