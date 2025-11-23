@@ -149,21 +149,6 @@ const ensurePositiveDuration = (start: number, end: number): number => {
   return diff > 0 ? diff : MS_IN_DAY;
 };
 
-const assignLanesWithinGroup = (tasks: NormalizedTask[]): { assignments: Map<string, number>; laneCount: number } => {
-  const sorted = tasks.slice().sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
-  const laneEndTimes: number[] = [];
-  const assignments = new Map<string, number>();
-
-  sorted.forEach((task) => {
-    const availableLane = laneEndTimes.findIndex((endTime) => endTime <= task.startTime);
-    const laneIndex = availableLane === -1 ? laneEndTimes.length : availableLane;
-    laneEndTimes[laneIndex] = Math.max(task.endTime, laneEndTimes[laneIndex] ?? 0);
-    assignments.set(task.id, laneIndex);
-  });
-
-  return { assignments, laneCount: laneEndTimes.length || (tasks.length > 0 ? 1 : 0) };
-};
-
 const buildLaneLayout = (tasks: NormalizedTask[]): LaneLayout => {
   const assignments = new Map<string, TaskLanePlacement>();
   const groups = Object.fromEntries(
@@ -175,25 +160,47 @@ const buildLaneLayout = (tasks: NormalizedTask[]): LaneLayout => {
   kindPriority.forEach((kind) => {
     const kindTasks = tasks.filter((task) => task.kind === kind);
     const overlapCounts = new Map<string, number>();
+    const slotAssignments = new Map<string, number>();
+    const active: { id: string; endTime: number; slotIndex: number }[] = [];
+    const availableSlots: number[] = [];
 
-    kindTasks.forEach((task) => {
-      const overlapCount = kindTasks.reduce((count, candidate) => {
-        if (candidate.id === task.id) {
-          return count + 1;
+    const sorted = kindTasks.slice().sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
+    let laneWidthFactor = 1;
+
+    sorted.forEach((task) => {
+      // release slots that have ended
+      for (let index = active.length - 1; index >= 0; index -= 1) {
+        if (active[index].endTime <= task.startTime) {
+          availableSlots.push(active[index].slotIndex);
+          active.splice(index, 1);
         }
-        const isOverlap = candidate.startTime < task.endTime && candidate.endTime > task.startTime;
-        return isOverlap ? count + 1 : count;
-      }, 0);
-      overlapCounts.set(task.id, Math.max(1, overlapCount));
+      }
+
+      let slotIndex: number;
+      if (availableSlots.length > 0) {
+        availableSlots.sort((a, b) => a - b);
+        slotIndex = availableSlots.shift() as number;
+      } else {
+        slotIndex = active.length;
+      }
+
+      const currentOverlap = active.length + 1;
+      overlapCounts.set(task.id, currentOverlap);
+      slotAssignments.set(task.id, slotIndex);
+      laneWidthFactor = Math.max(laneWidthFactor, currentOverlap);
+
+      active.forEach((activeTask) => {
+        overlapCounts.set(activeTask.id, Math.max(overlapCounts.get(activeTask.id) ?? 1, currentOverlap));
+      });
+
+      active.push({ id: task.id, endTime: task.endTime, slotIndex });
     });
 
-    const { assignments: kindAssignments, laneCount } = assignLanesWithinGroup(kindTasks);
-    const laneWidthFactor = Math.max(1, laneCount);
     groups[kind] = { offset: laneOffset, laneWidthFactor };
     maxLaneWidthFactor = Math.max(maxLaneWidthFactor, laneWidthFactor);
 
     kindTasks.forEach((task) => {
-      const slotIndex = kindAssignments.get(task.id) ?? 0;
+      const slotIndex = slotAssignments.get(task.id) ?? 0;
       const overlapCount = overlapCounts.get(task.id) ?? laneWidthFactor;
       assignments.set(task.id, { laneOffset, slotIndex, overlapCount, laneWidthFactor });
     });
