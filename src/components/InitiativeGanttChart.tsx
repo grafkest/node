@@ -295,6 +295,7 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks, star
 
   const [scale, setScale] = useState<TimelineScaleTab>(timelineScaleTabs[1]);
   const [panelView, setPanelView] = useState<PanelTab>(panelTabs[0]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const groups = useMemo(() => {
     if (tasks.length === 0) {
@@ -541,6 +542,25 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks, star
       });
   }, [baseStart, tasks]);
 
+  useEffect(() => {
+    setSelectedTaskId((prev) => {
+      if (prev && taskCards.some((task) => task.id === prev)) {
+        return prev;
+      }
+      return taskCards[0]?.id ?? null;
+    });
+  }, [taskCards]);
+
+  const selectedTask = useMemo(() => {
+    if (taskCards.length === 0) {
+      return null;
+    }
+    if (selectedTaskId) {
+      return taskCards.find((task) => task.id === selectedTaskId) ?? taskCards[0];
+    }
+    return taskCards[0];
+  }, [selectedTaskId, taskCards]);
+
   if (tasks.length === 0) {
     return (
       <div className={styles.emptyState}>
@@ -673,74 +693,76 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks, star
                 );
               })}
             </div>
-          ) : (
+          ) : selectedTask ? (
             <div className={styles.cardGrid}>
-              {taskCards.map((task) => (
-                <div key={task.id} className={`${cardStyles.card} ${styles.compactCard}`}>
-                  <div className={styles.cardHeader}>
-                    <div className={styles.cardTitle}>
-                      <Text size="s" weight="semibold">
-                        {task.name}
-                      </Text>
-                      <Text size="2xs" view="secondary">
-                        {task.projectName ?? 'Проект не указан'}
-                      </Text>
-                    </div>
-                    <Badge
-                      size="xs"
-                      view="filled"
-                      status="system"
-                      label={task.role ? `Роль ${task.role}` : 'Роль не указана'}
-                    />
-                  </div>
-                  <div className={styles.cardMeta}>
-                    {task.workName && (
-                      <Text size="2xs" view="secondary">
-                        Работа: {task.workName}
-                      </Text>
-                    )}
-                    <Text size="2xs" view="secondary">
-                      Трудозатраты: {task.effortDays ?? '—'} дн. · Длительность: {task.durationDays} дн.
+              <div className={`${cardStyles.card} ${styles.compactCard}`}>
+                <div className={styles.cardHeader}>
+                  <div className={styles.cardTitle}>
+                    <Text size="s" weight="semibold">
+                      {selectedTask.name}
                     </Text>
                     <Text size="2xs" view="secondary">
-                      Период: {task.dateRangeLabel}
+                      {selectedTask.projectName ?? 'Проект не указан'}
                     </Text>
-                    {task.assignedExpert ? (
-                      <Text size="2xs" view="secondary">
-                        Исполнитель: {task.assignedExpert}
-                      </Text>
-                    ) : (
-                      <Text size="2xs" view="alert">
-                        Исполнитель не назначен
-                      </Text>
-                    )}
-                    {typeof task.minUnits === 'number' && typeof task.maxUnits === 'number' && (
-                      <Text size="2xs" view="secondary">
-                        Нагрузка: {task.minUnits}–{task.maxUnits} FTE
-                      </Text>
-                    )}
-                    {task.constraints && task.constraints.length > 0 && (
-                      <Text size="2xs" view="secondary">
-                        Ограничения: {task.constraints.join(', ')}
-                      </Text>
-                    )}
                   </div>
-                  {task.activeBlockers.length > 0 && (
-                    <div className={styles.blockerList}>
-                      {task.activeBlockers.map((blocker) => (
-                        <Badge
-                          key={blocker.id}
-                          size="xs"
-                          status="warning"
-                          view="filled"
-                          label={`Блокер: ${blocker.reason}`}
-                        />
-                      ))}
-                    </div>
+                  <Badge
+                    size="xs"
+                    view="filled"
+                    status="system"
+                    label={selectedTask.role ? `Роль ${selectedTask.role}` : 'Роль не указана'}
+                  />
+                </div>
+                <div className={styles.cardMeta}>
+                  {selectedTask.workName && (
+                    <Text size="2xs" view="secondary">
+                      Работа: {selectedTask.workName}
+                    </Text>
+                  )}
+                  <Text size="2xs" view="secondary">
+                    Трудозатраты: {selectedTask.effortDays ?? '—'} дн. · Длительность: {selectedTask.durationDays} дн.
+                  </Text>
+                  <Text size="2xs" view="secondary">
+                    Период: {selectedTask.dateRangeLabel}
+                  </Text>
+                  {selectedTask.assignedExpert ? (
+                    <Text size="2xs" view="secondary">
+                      Исполнитель: {selectedTask.assignedExpert}
+                    </Text>
+                  ) : (
+                    <Text size="2xs" view="alert">
+                      Исполнитель не назначен
+                    </Text>
+                  )}
+                  {typeof selectedTask.minUnits === 'number' && typeof selectedTask.maxUnits === 'number' && (
+                    <Text size="2xs" view="secondary">
+                      Нагрузка: {selectedTask.minUnits}–{selectedTask.maxUnits} FTE
+                    </Text>
+                  )}
+                  {selectedTask.constraints && selectedTask.constraints.length > 0 && (
+                    <Text size="2xs" view="secondary">
+                      Ограничения: {selectedTask.constraints.join(', ')}
+                    </Text>
                   )}
                 </div>
-              ))}
+                {selectedTask.activeBlockers.length > 0 && (
+                  <div className={styles.blockerList}>
+                    {selectedTask.activeBlockers.map((blocker) => (
+                      <Badge
+                        key={blocker.id}
+                        size="xs"
+                        status="warning"
+                        view="filled"
+                        label={`Блокер: ${blocker.reason}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+          ) : (
+            <Text size="s" view="secondary">
+              Выберите задачу на диаграмме, чтобы увидеть описание.
+            </Text>
           )}
         </div>
       </div>
@@ -769,6 +791,11 @@ const InitiativeGanttChart: React.FC<InitiativeGanttChartProps> = ({ tasks, star
         scale={scale.value}
         rows={timelineRows}
         viewRange={resolvedViewRange}
+        selectedTaskId={selectedTaskId}
+        onTaskClick={({ task }) => {
+          setSelectedTaskId(task.id);
+          setPanelView(panelTabs[1]);
+        }}
       />
     </div>
   );
