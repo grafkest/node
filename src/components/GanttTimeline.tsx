@@ -51,7 +51,6 @@ const kindPriority: GanttTimelineTaskKind[] = ['project', 'out-of-project', 'tra
 
 const TIMELINE_INSET = 12;
 const LANE_HEIGHT = 72;
-const TASK_VERTICAL_OFFSET = 8;
 
 const capitalize = (value: string): string => {
   if (!value) {
@@ -109,13 +108,21 @@ type NormalizedRow = {
 
 type LaneGroupLayout = {
   offset: number;
-  lanes: number;
+  laneWidthFactor: number;
+};
+
+type TaskLanePlacement = {
+  laneOffset: number;
+  slotIndex: number;
+  overlapCount: number;
+  laneWidthFactor: number;
 };
 
 type LaneLayout = {
-  assignments: Map<string, number>;
+  assignments: Map<string, TaskLanePlacement>;
   laneCount: number;
   groups: Record<GanttTimelineTaskKind, LaneGroupLayout>;
+  maxLaneWidthFactor: number;
 };
 
 const formatPeriod = (start: Date, end: Date): string => {
@@ -142,7 +149,7 @@ const ensurePositiveDuration = (start: number, end: number): number => {
   return diff > 0 ? diff : MS_IN_DAY;
 };
 
-const assignLanesWithinGroup = (tasks: NormalizedTask[]): LaneLayout => {
+const assignLanesWithinGroup = (tasks: NormalizedTask[]): { assignments: Map<string, number>; laneCount: number } => {
   const sorted = tasks.slice().sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
   const laneEndTimes: number[] = [];
   const assignments = new Map<string, number>();
@@ -158,29 +165,45 @@ const assignLanesWithinGroup = (tasks: NormalizedTask[]): LaneLayout => {
 };
 
 const buildLaneLayout = (tasks: NormalizedTask[]): LaneLayout => {
-  const assignments = new Map<string, number>();
+  const assignments = new Map<string, TaskLanePlacement>();
   const groups = Object.fromEntries(
-    kindPriority.map((kind) => [kind, { offset: 0, lanes: 1 } satisfies LaneGroupLayout])
+    kindPriority.map((kind) => [kind, { offset: 0, laneWidthFactor: 1 } satisfies LaneGroupLayout])
   ) as Record<GanttTimelineTaskKind, LaneGroupLayout>;
   let laneOffset = 0;
+  let maxLaneWidthFactor = 1;
 
   kindPriority.forEach((kind) => {
     const kindTasks = tasks.filter((task) => task.kind === kind);
-    const { assignments: kindAssignments, laneCount } = assignLanesWithinGroup(kindTasks);
-    const lanes = Math.max(1, laneCount);
-    groups[kind] = { offset: laneOffset, lanes };
+    const overlapCounts = new Map<string, number>();
 
     kindTasks.forEach((task) => {
-      const laneIndex = kindAssignments.get(task.id) ?? 0;
-      assignments.set(task.id, laneOffset + laneIndex);
+      const overlapCount = kindTasks.reduce((count, candidate) => {
+        if (candidate.id === task.id) {
+          return count + 1;
+        }
+        const isOverlap = candidate.startTime < task.endTime && candidate.endTime > task.startTime;
+        return isOverlap ? count + 1 : count;
+      }, 0);
+      overlapCounts.set(task.id, Math.max(1, overlapCount));
     });
 
-    laneOffset += lanes;
+    const { assignments: kindAssignments, laneCount } = assignLanesWithinGroup(kindTasks);
+    const laneWidthFactor = Math.max(1, laneCount);
+    groups[kind] = { offset: laneOffset, laneWidthFactor };
+    maxLaneWidthFactor = Math.max(maxLaneWidthFactor, laneWidthFactor);
+
+    kindTasks.forEach((task) => {
+      const slotIndex = kindAssignments.get(task.id) ?? 0;
+      const overlapCount = overlapCounts.get(task.id) ?? laneWidthFactor;
+      assignments.set(task.id, { laneOffset, slotIndex, overlapCount, laneWidthFactor });
+    });
+
+    laneOffset += 1;
   });
 
   const laneCount = Math.max(laneOffset, kindPriority.length);
 
-  return { assignments, laneCount, groups };
+  return { assignments, laneCount, groups, maxLaneWidthFactor };
 };
 
 const computeViewRange = (allTasks: NormalizedTask[], scale: TimelineScale): { viewStart: Date; viewEnd: Date } => {
@@ -415,7 +438,13 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
           return (
             <div key={row.id} className={timelineStyles.row}>
               {row.sidebar}
-              <div className={timelineStyles.timelineCell} style={{ minHeight }}>
+              <div
+                className={timelineStyles.timelineCell}
+                style={{
+                  minHeight,
+                  ['--lane-width-factor' as string]: laneLayout.maxLaneWidthFactor
+                }}
+              >
                 <div className={timelineStyles.timelineLane}>
                   {kindPriority.map((kind) => {
                     const group = laneLayout.groups[kind];
@@ -424,7 +453,7 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
                         key={`${row.id}-${kind}`}
                         className={timelineStyles.laneSection}
                         data-kind={kind}
-                        style={{ height: `${group.lanes * LANE_HEIGHT}px` }}
+                        style={{ minWidth: `${group.laneWidthFactor * 100}%` }}
                       />
                     );
                   })}
@@ -437,7 +466,11 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
                   />
                 )}
                 {row.tasks.map((task) => {
-                  const laneIndex = laneLayout.assignments.get(task.id) ?? 0;
+                  const placement = laneLayout.assignments.get(task.id);
+                  const laneOffset = placement?.laneOffset ?? 0;
+                  const slotIndex = placement?.slotIndex ?? 0;
+                  const overlapCount = placement?.overlapCount ?? 1;
+                  const laneWidthFactor = placement?.laneWidthFactor ?? 1;
                   const clampedStart = Math.max(task.startTime, viewStartTime);
                   const clampedEnd = Math.min(task.endTime, viewEndTime);
                   if (clampedEnd <= viewStartTime || clampedStart >= viewEndTime) {
@@ -448,7 +481,9 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
                   const segmentUnits = Math.max(endUnits - offsetUnits, 0);
                   const offset = (offsetUnits / scaledTimelineDuration) * 100;
                   const width = Math.max((segmentUnits / scaledTimelineDuration) * 100, 2);
-                  const top = TIMELINE_INSET + TASK_VERTICAL_OFFSET + laneIndex * LANE_HEIGHT;
+                  const slotWidth = (width * laneWidthFactor) / overlapCount;
+                  const slotOffset = offset + slotWidth * slotIndex;
+                  const top = TIMELINE_INSET + laneOffset * LANE_HEIGHT;
                   const startDate = new Date(task.startTime);
                   const endDate = new Date(task.endTime - MS_IN_DAY);
                   const periodLabel = formatPeriod(startDate, endDate);
@@ -462,7 +497,7 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
                       data-kind={task.kind}
                       data-selected={isSelected ? 'true' : 'false'}
                       data-clickable={isInteractive ? 'true' : 'false'}
-                      style={{ left: `${offset}%`, width: `${width}%`, top }}
+                      style={{ left: `${slotOffset}%`, width: `${slotWidth}%`, top }}
                       role={isInteractive ? 'button' : undefined}
                       tabIndex={isInteractive ? 0 : undefined}
                       onClick={

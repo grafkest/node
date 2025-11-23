@@ -53,11 +53,14 @@
 
 .timelineCell {
   position: relative;
+  --lane-height: 72px;
+  --lane-width-factor: 1;
   border-radius: 12px;
   border: 1px solid var(--color-bg-border);
   background: var(--color-bg-secondary);
   padding: 12px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   min-height: 112px;
 }
 
@@ -70,12 +73,15 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 100%;
+  width: calc(100% * var(--lane-width-factor));
 }
 
 .laneSection {
   flex: 0 0 auto;
   border-bottom: 1px solid var(--color-bg-border);
   background: rgba(37, 110, 255, 0.04);
+  height: var(--lane-height);
 }
 
 .laneSection[data-kind='out-of-project'] {
@@ -101,6 +107,8 @@
   box-shadow: 0 8px 18px rgba(17, 43, 96, 0.12);
   min-width: 0;
   max-width: none;
+  height: calc(var(--lane-height) - 16px);
+  justify-content: center;
 }
 
 .task[data-clickable='true'] {
