@@ -83,6 +83,9 @@ import {
   type RolePlanningDraft
 } from './utils/initiativeMatching';
 import { preparePlannerModuleSelections } from './utils/initiativePlanner';
+import { initialEmployeeTasks } from './data/employeeTasks';
+import type { TaskListItem } from './types/tasks';
+import { loadStoredTasks, persistStoredTasks } from './utils/employeeTasks';
 import { LayoutShell } from './components/LayoutShell';
 import { CreateGraphModal } from './components/CreateGraphModal';
 import GraphPersistenceControls from './components/GraphPersistenceControls';
@@ -158,11 +161,17 @@ function App() {
   const [artifactData, setArtifactData] = useState<ArtifactNode[]>(initialArtifacts);
   const [initiativeData, setInitiativeData] = useState<Initiative[]>(initialInitiatives);
   const [expertProfiles, setExpertProfiles] = useState(initialExperts);
+  const [employeeTasks, setEmployeeTasks] = useState<TaskListItem[]>(() =>
+    loadStoredTasks() ?? initialEmployeeTasks
+  );
   const domainDataRef = useRef(domainData);
   const moduleDataRef = useRef(moduleData);
   const artifactDataRef = useRef(artifactData);
   const initiativeDataRef = useRef(initiativeData);
   const expertProfilesRef = useRef(expertProfiles);
+  useEffect(() => {
+    persistStoredTasks(employeeTasks);
+  }, [employeeTasks]);
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(
     () => new Set(flattenDomainTree(initialDomainTree).map((domain) => domain.id))
   );
@@ -3632,6 +3641,7 @@ function App() {
           domains={domainData}
           modules={moduleData}
           domainNameMap={domainNameMap}
+          employeeTasks={employeeTasks}
           onTogglePin={handleToggleInitiativePin}
           onAddRisk={handleAddInitiativeRisk}
           onRemoveRisk={handleRemoveInitiativeRisk}
@@ -3647,7 +3657,12 @@ function App() {
         aria-hidden={!isEmployeeTasksActive}
         style={{ display: isEmployeeTasksActive ? undefined : 'none' }}
       >
-        <EmployeeWorkloadTrack experts={expertProfiles} initiatives={initiativeData} />
+        <EmployeeWorkloadTrack
+          experts={expertProfiles}
+          initiatives={initiativeData}
+          tasks={employeeTasks}
+          onTasksChange={setEmployeeTasks}
+        />
       </main>
       <main
         className={styles.creationMain}
