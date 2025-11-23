@@ -3465,10 +3465,8 @@ function App() {
             >
               <Text
                 size="s"
-                view={adminNotice.type === 'error' ? 'alert' : 'success'}
-                className={
-                  adminNotice.type === 'success' ? styles.noticeSuccessMessage : undefined
-                }
+                view="primary"
+                className={styles.noticeMessage}
               >
                 {adminNotice.message}
               </Text>
