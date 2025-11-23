@@ -1,4 +1,3 @@
-import { Badge } from '@consta/uikit/Badge';
 import { Text } from '@consta/uikit/Text';
 import React, { useMemo } from 'react';
 import timelineStyles from './GanttTimeline.module.css';
@@ -484,25 +483,14 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({
                           : undefined
                       }
                     >
-                      <Text size="xs" weight="semibold" className={timelineStyles.taskName} truncate>
-                        {task.original.name}
-                      </Text>
-                      <div className={timelineStyles.taskMetaRow}>
-                        <Badge
-                          size="xs"
-                          status={task.kind === 'project' ? 'system' : task.kind === 'training' ? 'success' : 'warning'}
-                          label={task.original.badge}
-                          className={timelineStyles.taskBadge}
-                        />
+                      <div className={timelineStyles.taskHeader}>
+                        <Text size="xs" weight="semibold" className={timelineStyles.taskName} truncate>
+                          {task.original.name}
+                        </Text>
                         <Text size="2xs" view="secondary" className={timelineStyles.taskPeriod}>
                           {periodLabel}
                         </Text>
                       </div>
-                      {task.original.description && (
-                        <Text size="2xs" view="secondary" className={timelineStyles.taskDescription}>
-                          {task.original.description}
-                        </Text>
-                      )}
                     </div>
                   );
                 })}
