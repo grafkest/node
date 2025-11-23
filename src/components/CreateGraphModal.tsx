@@ -70,7 +70,7 @@ export const CreateGraphModal: React.FC<CreateGraphModalProps> = ({
           onlyIcon
           label="Закрыть"
           onClick={onClose}
-          style={{ alignSelf: 'flex-start' }}
+          style={{ alignSelf: 'flex-end' }}
         />
         <Text size="l" weight="bold">
           Создание нового графа

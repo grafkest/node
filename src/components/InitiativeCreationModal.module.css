@@ -47,11 +47,13 @@
 .headerMain {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 16px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
 }
 
 .closeButton {
-  margin-top: -4px;
+  align-self: flex-start;
 }
 
 .stepInfo {

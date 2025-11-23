@@ -1680,15 +1680,6 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
         <div className={styles.container}>
           <header className={styles.header}>
             <div className={styles.headerMain}>
-              <Button
-                size="s"
-                view="clear"
-                iconLeft={IconClose}
-                onlyIcon
-                label="Закрыть"
-                onClick={onClose}
-                className={styles.closeButton}
-              />
               <div className={styles.stepInfo}>
                 <Text size="l" weight="bold">
                   {modalTitle}
@@ -1700,14 +1691,23 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   {currentStepDescription}
                 </Text>
               </div>
+              <Select<SelectOption<InitiativeStatus>>
+                size="s"
+                items={statusOptions}
+                value={statusOptions.find((option) => option.value === status) ?? statusOptions[0]}
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.value}
+                onChange={(option) => option && setStatus(option.value)}
+              />
             </div>
-            <Select<SelectOption<InitiativeStatus>>
+            <Button
               size="s"
-              items={statusOptions}
-              value={statusOptions.find((option) => option.value === status) ?? statusOptions[0]}
-              getItemLabel={(item) => item.label}
-              getItemKey={(item) => item.value}
-              onChange={(option) => option && setStatus(option.value)}
+              view="clear"
+              iconLeft={IconClose}
+              onlyIcon
+              label="Закрыть"
+              onClick={onClose}
+              className={styles.closeButton}
             />
           </header>
           {errorMessage && (
