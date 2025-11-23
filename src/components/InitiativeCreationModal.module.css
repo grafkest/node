@@ -168,6 +168,45 @@
   gap: 12px;
 }
 
+.workSummary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.workSummaryInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.workSummaryInfo:focus-visible {
+  outline: 2px solid var(--color-bg-border);
+  outline-offset: 2px;
+}
+
+.workSummaryTitle {
+  word-break: break-word;
+}
+
+.workSummaryPeriod {
+  white-space: nowrap;
+}
+
+.workHeaderActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .workTiming {
   display: flex;
   flex-wrap: wrap;
