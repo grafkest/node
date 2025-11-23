@@ -226,6 +226,20 @@
   flex-wrap: wrap;
 }
 
+.confirmModal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  max-width: 360px;
+}
+
+.confirmModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;

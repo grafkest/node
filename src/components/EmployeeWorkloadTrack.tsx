@@ -2,6 +2,7 @@
 import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Card } from '@consta/uikit/Card';
+import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import type { SelectProps } from '@consta/uikit/Select';
 import { Tabs } from '@consta/uikit/Tabs';
@@ -671,6 +672,16 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
   }));
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<TaskListItem | null>(null);
+
+  const resetTaskDraft = useCallback(() => {
+    setTaskDraft(() => ({
+      ...defaultTaskDraft,
+      relatedInitiativeId: initiativeOptions[0]?.value ?? null
+    }));
+    setEditingTaskId(null);
+    setFormError(null);
+  }, [initiativeOptions]);
 
   useEffect(() => {
     applyTasksChange((prev) => {
@@ -1285,14 +1296,9 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
         ? prev.map((task) => (task.id === editingTaskId ? nextTask : task))
         : [nextTask, ...prev]
     );
-    setTaskDraft(() => ({
-      ...defaultTaskDraft,
-      relatedInitiativeId: initiativeOptions[0]?.value ?? null
-    }));
-    setEditingTaskId(null);
-    setFormError(null);
+    resetTaskDraft();
     setSelectedTaskId(taskId);
-  }, [applyTasksChange, editingTaskId, initiativeOptions, taskDraft]);
+  }, [applyTasksChange, editingTaskId, resetTaskDraft, taskDraft]);
 
   const handleEditTask = useCallback(
     (task: TaskListItem) => {
@@ -1307,13 +1313,33 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
   );
 
   const handleCancelEdit = useCallback(() => {
-    setTaskDraft(() => ({
-      ...defaultTaskDraft,
-      relatedInitiativeId: initiativeOptions[0]?.value ?? null
-    }));
-    setEditingTaskId(null);
-    setFormError(null);
-  }, [initiativeOptions]);
+    resetTaskDraft();
+  }, [resetTaskDraft]);
+
+  const handleRequestDeleteTask = useCallback(() => {
+    if (!editingTaskId) {
+      return;
+    }
+    const task = tasks.find((item) => item.id === editingTaskId);
+    if (task) {
+      setTaskToDelete(task);
+    }
+  }, [editingTaskId, tasks]);
+
+  const handleConfirmDeleteTask = useCallback(() => {
+    if (!taskToDelete) {
+      return;
+    }
+    applyTasksChange((prev) => prev.filter((task) => task.id !== taskToDelete.id));
+    if (editingTaskId === taskToDelete.id) {
+      resetTaskDraft();
+    }
+    setTaskToDelete(null);
+  }, [applyTasksChange, editingTaskId, resetTaskDraft, taskToDelete]);
+
+  const handleCloseDeleteModal = useCallback(() => {
+    setTaskToDelete(null);
+  }, []);
 
   return (
     <div className={styles.wrapper}>
@@ -1648,6 +1674,16 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
                 type="button"
                 size="s"
                 view="secondary"
+                status="alert"
+                label="Удалить задачу"
+                onClick={handleRequestDeleteTask}
+              />
+            )}
+            {editingTaskId && (
+              <Button
+                type="button"
+                size="s"
+                view="secondary"
                 label="Отменить"
                 onClick={handleCancelEdit}
               />
@@ -1964,6 +2000,31 @@ const EmployeeWorkloadTrack: React.FC<EmployeeWorkloadTrackProps> = ({
       </div>
         </Card>
       )}
+      <Modal
+        isOpen={Boolean(taskToDelete)}
+        hasOverlay
+        onClickOutside={handleCloseDeleteModal}
+        onEsc={handleCloseDeleteModal}
+      >
+        <div className={styles.confirmModal}>
+          <Text size="m" weight="semibold">
+            Удалить задачу?
+          </Text>
+          <Text size="s" view="secondary">
+            Вы уверены, что хотите удалить задачу «{taskToDelete?.name}»?
+          </Text>
+          <div className={styles.confirmModalActions}>
+            <Button size="s" view="ghost" label="Отмена" onClick={handleCloseDeleteModal} />
+            <Button
+              size="s"
+              view="primary"
+              status="alert"
+              label="Удалить"
+              onClick={handleConfirmDeleteTask}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
