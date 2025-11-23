@@ -2220,201 +2220,200 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                                 </div>
                                 <div className={styles.assignmentGrid}>
                                   {work.assignments.map((assignment, index) => {
-                                const roleOption =
-                                  roleOptions.find((option) => option.value === assignment.role) ?? {
-                                    label: primaryRole,
-                                    value: primaryRole
-                                  };
-                                const skillOptionsForRole = roleSkillOptions[assignment.role] ?? [];
-                                const selectedTask =
-                                  skillOptionsForRole.find((option) => option.value === assignment.task) ?? null;
-                                return (
-                                <div key={assignment.id} className={styles.assignmentCard}>
-                                  <div className={styles.assignmentRow}>
-                                    <Select<SelectOption<TeamRole>>
-                                      size="s"
-                                      label={`Роль сотрудника ${index + 1}`}
-                                        items={roleOptions}
-                                        value={roleOption}
-                                        getItemLabel={(item) => item.label}
-                                        getItemKey={(item) => item.value}
-                                        onChange={(option) =>
-                                          option && handleAssignmentRoleChange(work.id, assignment.id, option.value)
-                                        }
-                                      />
-                                      <Button
-                                        size="xs"
-                                        view="ghost"
-                                        label="Удалить"
-                                        onClick={() => handleRemoveAssignment(work.id, assignment.id)}
-                                        disabled={work.assignments.length <= 1}
-                                      />
-                                    </div>
-                                    <Combobox<OptionItem>
-                                      size="s"
-                                      items={skillOptionsForRole}
-                                      value={selectedTask}
-                                      getItemLabel={(item) => item.label}
-                                      getItemKey={(item) => item.value}
-                                      placeholder="Выберите задачу из списка навыков"
-                                      label={`Задача для сотрудника ${index + 1}`}
-                                      onChange={(option) =>
-                                        handleAssignmentTaskChange(
-                                          work.id,
-                                          assignment.id,
-                                          option?.value ?? ''
-                                        )
-                                      }
-                                      onCreate={(label) =>
-                                        handleAssignmentTaskCreate(
-                                          assignment.role,
-                                          work.id,
-                                          assignment.id,
-                                          label
-                                        )
-                                      }
-                                      labelForCreate="Добавить новую задачу"
-                                    />
-                                    <TextField
-                                      size="s"
-                                      label="Описание задачи"
-                                      value={assignment.description}
-                                      onChange={(value) =>
-                                        handleAssignmentChange(work.id, assignment.id, {
-                                          description: value ?? ''
-                                        })
-                                      }
-                                      type="textarea"
-                                      minRows={2}
-                                    />
-                                    {(() => {
-                                      const schedule = assignmentSchedule.get(assignment.id);
-                                      const computedStart =
-                                        schedule?.startDay ?? Math.max(0, Math.round(assignment.startDay));
-                                      const computedDuration =
-                                        schedule?.durationDays ?? Math.max(1, Math.round(assignment.durationDays));
-                                      const computedFinish = computedStart + computedDuration;
-                                      const rawStartDate = assignment.startDate
-                                        ? new Date(assignment.startDate)
-                                        : null;
-                                      const startDateDisplay = schedule?.startDate
-                                        ? startDateFormatter.format(schedule.startDate)
-                                        : rawStartDate && !Number.isNaN(rawStartDate.getTime())
-                                          ? startDateFormatter.format(rawStartDate)
-                                          : null;
-                                      const finishDate =
-                                        schedule?.startDate && computedDuration > 0
-                                          ? addDays(schedule.startDate, computedDuration - 1)
-                                          : rawStartDate && !Number.isNaN(rawStartDate.getTime()) && computedDuration > 0
-                                            ? addDays(rawStartDate, computedDuration - 1)
-                                            : null;
-                                      const startModeOption =
-                                        startModeOptions.find((option) => option.value === assignment.startMode) ??
-                                        startModeOptions[0];
-                                      const referenceItems = assignmentReferenceOptions.filter(
-                                        (option) => option.value !== assignment.id
-                                      );
-                                      const referenceValue = referenceItems.find(
-                                        (option) => option.value === assignment.startAfterId
-                                      );
-                                      const fallbackDate =
-                                        initiativeStartDate?.trim() && initiativeStartDate.length > 0
-                                          ? initiativeStartDate
-                                          : new Date().toISOString().slice(0, 10);
-                                      const dateValue = assignment.startDate ?? fallbackDate;
+                                    const roleOption =
+                                      roleOptions.find((option) => option.value === assignment.role) ?? {
+                                        label: primaryRole,
+                                        value: primaryRole
+                                      };
+                                    const skillOptionsForRole = roleSkillOptions[assignment.role] ?? [];
+                                    const selectedTask =
+                                      skillOptionsForRole.find((option) => option.value === assignment.task) ?? null;
 
-                                      return (
-                                        <>
-                                          <div className={styles.assignmentTimingGrid}>
-                                            <Select<SelectOption<AssignmentStartMode>>
-                                              size="s"
-                                              label="Начало работы"
-                                              items={startModeOptions}
-                                              value={startModeOption}
-                                              getItemLabel={(item) => item.label}
-                                              getItemKey={(item) => item.value}
-                                              onChange={(option) =>
-                                                option &&
-                                                handleAssignmentStartModeChange(work.id, assignment.id, option.value)
-                                              }
-                                            />
-                                            {assignment.startMode === 'after-assignment' ? (
-                                              <Select<SelectOption<string>>
-                                                size="s"
-                                                label="После задачи"
-                                                items={referenceItems}
-                                                value={referenceValue ?? null}
-                                                getItemLabel={(item) => item.label}
-                                                getItemKey={(item) => item.value}
-                                                disabled={referenceItems.length === 0}
-                                                onChange={(option) =>
-                                                  handleAssignmentStartAfterChange(
-                                                    work.id,
-                                                    assignment.id,
-                                                    option?.value ?? null
-                                                  )
-                                                }
-                                              />
-                                            ) : assignment.startMode === 'fixed-date' ? (
-                                              <TextField
-                                                size="s"
-                                                label="Дата начала"
-                                                type="date"
-                                                value={dateValue}
-                                                onChange={(value) =>
-                                                  handleAssignmentStartDateChange(
-                                                    work.id,
-                                                    assignment.id,
-                                                    value ?? null
-                                                  )
-                                                }
-                                              />
-                                            ) : (
-                                              <div className={styles.assignmentTimingPlaceholder} />
-                                            )}
-                                            <TextField
-                                              size="s"
-                                              label="Длительность (дней)"
-                                              type="number"
-                                              value={String(assignment.durationDays)}
-                                              onChange={(value) =>
-                                                handleAssignmentChange(work.id, assignment.id, {
-                                                  durationDays: Number(value ?? assignment.durationDays) || 1
-                                                })
-                                              }
-                                            />
-                                            <TextField
-                                              size="s"
-                                              label="Трудозатраты (дней)"
-                                              type="number"
-                                              value={String(assignment.effortDays)}
-                                              onChange={(value) =>
-                                                handleAssignmentChange(work.id, assignment.id, {
-                                                  effortDays: Number(value ?? assignment.effortDays) || 1
-                                                })
-                                              }
-                                            />
-                                          </div>
-                                          <Text size="2xs" view="secondary" className={styles.assignmentTimingHint}>
-                                            Старт: Д{computedStart + 1}
-                                            {startDateDisplay ? ` · ${startDateDisplay}` : ''}
-                                            {` · Завершение: Д${computedFinish}`}
-                                            {finishDate ? ` (${startDateFormatter.format(finishDate)})` : ''}
-                                          </Text>
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
+                                    return (
+                                      <div key={assignment.id} className={styles.assignmentCard}>
+                                        <div className={styles.assignmentRow}>
+                                          <Select<SelectOption<TeamRole>>
+                                            size="s"
+                                            label={`Роль сотрудника ${index + 1}`}
+                                            items={roleOptions}
+                                            value={roleOption}
+                                            getItemLabel={(item) => item.label}
+                                            getItemKey={(item) => item.value}
+                                            onChange={(option) =>
+                                              option && handleAssignmentRoleChange(work.id, assignment.id, option.value)
+                                            }
+                                          />
+                                          <Button
+                                            size="xs"
+                                            view="ghost"
+                                            label="Удалить"
+                                            onClick={() => handleRemoveAssignment(work.id, assignment.id)}
+                                            disabled={work.assignments.length <= 1}
+                                          />
+                                        </div>
+                                        <Combobox<OptionItem>
+                                          size="s"
+                                          items={skillOptionsForRole}
+                                          value={selectedTask}
+                                          getItemLabel={(item) => item.label}
+                                          getItemKey={(item) => item.value}
+                                          placeholder="Выберите задачу из списка навыков"
+                                          label={`Задача для сотрудника ${index + 1}`}
+                                          onChange={(option) =>
+                                            handleAssignmentTaskChange(
+                                              work.id,
+                                              assignment.id,
+                                              option?.value ?? ''
+                                            )
+                                          }
+                                          onCreate={(label) =>
+                                            handleAssignmentTaskCreate(
+                                              assignment.role,
+                                              work.id,
+                                              assignment.id,
+                                              label
+                                            )
+                                          }
+                                          labelForCreate="Добавить новую задачу"
+                                        />
+                                        <TextField
+                                          size="s"
+                                          label="Описание задачи"
+                                          value={assignment.description}
+                                          onChange={(value) =>
+                                            handleAssignmentChange(work.id, assignment.id, {
+                                              description: value ?? ''
+                                            })
+                                          }
+                                          type="textarea"
+                                          minRows={2}
+                                        />
+                                        {(() => {
+                                          const schedule = assignmentSchedule.get(assignment.id);
+                                          const computedStart =
+                                            schedule?.startDay ?? Math.max(0, Math.round(assignment.startDay));
+                                          const computedDuration =
+                                            schedule?.durationDays ??
+                                            Math.max(1, Math.round(assignment.durationDays));
+                                          const computedFinish = computedStart + computedDuration;
+                                          const rawStartDate = assignment.startDate
+                                            ? new Date(assignment.startDate)
+                                            : null;
+                                          const startDateDisplay = schedule?.startDate
+                                            ? startDateFormatter.format(schedule.startDate)
+                                            : rawStartDate && !Number.isNaN(rawStartDate.getTime())
+                                              ? startDateFormatter.format(rawStartDate)
+                                              : null;
+                                          const finishDate =
+                                            schedule?.startDate && computedDuration > 0
+                                              ? addDays(schedule.startDate, computedDuration - 1)
+                                              : rawStartDate && !Number.isNaN(rawStartDate.getTime()) &&
+                                                computedDuration > 0
+                                                ? addDays(rawStartDate, computedDuration - 1)
+                                                : null;
+
+                                          return (
+                                            <>
+                                              <div className={styles.assignmentTimingGrid}>
+                                                <Select<SelectOption<AssignmentStartMode>>
+                                                  size="s"
+                                                  label="Начало работы"
+                                                  items={startModeOptions}
+                                                  value={startModeOption}
+                                                  getItemLabel={(item) => item.label}
+                                                  getItemKey={(item) => item.value}
+                                                  onChange={(option) =>
+                                                    option &&
+                                                    handleAssignmentStartModeChange(
+                                                      work.id,
+                                                      assignment.id,
+                                                      option.value
+                                                    )
+                                                  }
+                                                />
+                                                {assignment.startMode === 'after-assignment' ? (
+                                                  <Select<SelectOption<string>>
+                                                    size="s"
+                                                    label="После задачи"
+                                                    items={referenceItems}
+                                                    value={referenceValue ?? null}
+                                                    getItemLabel={(item) => item.label}
+                                                    getItemKey={(item) => item.value}
+                                                    disabled={referenceItems.length === 0}
+                                                    onChange={(option) =>
+                                                      handleAssignmentStartAfterChange(
+                                                        work.id,
+                                                        assignment.id,
+                                                        option?.value ?? null
+                                                      )
+                                                    }
+                                                  />
+                                                ) : assignment.startMode === 'fixed-date' ? (
+                                                  <TextField
+                                                    size="s"
+                                                    label="Дата начала"
+                                                    type="date"
+                                                    value={dateValue}
+                                                    onChange={(value) =>
+                                                      handleAssignmentStartDateChange(
+                                                        work.id,
+                                                        assignment.id,
+                                                        value ?? null
+                                                      )
+                                                    }
+                                                  />
+                                                ) : (
+                                                  <div className={styles.assignmentTimingPlaceholder} />
+                                                )}
+                                                <TextField
+                                                  size="s"
+                                                  label="Длительность (дней)"
+                                                  type="number"
+                                                  value={String(assignment.durationDays)}
+                                                  onChange={(value) =>
+                                                    handleAssignmentChange(work.id, assignment.id, {
+                                                      durationDays: Number(value ?? assignment.durationDays) || 1
+                                                    })
+                                                  }
+                                                />
+                                                <TextField
+                                                  size="s"
+                                                  label="Трудозатраты (дней)"
+                                                  type="number"
+                                                  value={String(assignment.effortDays)}
+                                                  onChange={(value) =>
+                                                    handleAssignmentChange(work.id, assignment.id, {
+                                                      effortDays: Number(value ?? assignment.effortDays) || 1
+                                                    })
+                                                  }
+                                                />
+                                              </div>
+                                              <Text
+                                                size="2xs"
+                                                view="secondary"
+                                                className={styles.assignmentTimingHint}
+                                              >
+                                                Старт: Д{computedStart + 1}
+                                                {startDateDisplay ? ` · ${startDateDisplay}` : ''}
+                                                {` · Завершение: Д${computedFinish}`}
+                                                {finishDate ? ` (${startDateFormatter.format(finishDate)})` : ''}
+                                              </Text>
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </Card>
                       );
                     })}
                   </div>
                 </div>
-                <div className={styles.ganttColumn}>
+                  <div className={styles.ganttColumn}>
                   <div className={styles.sectionHeader}>
                     <div>
                       <Text size="s" weight="semibold">
