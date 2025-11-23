@@ -6,6 +6,7 @@ import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
+import { IconClose } from '@consta/icons/IconClose';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   DomainNode,
@@ -1678,24 +1679,35 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       >
         <div className={styles.container}>
           <header className={styles.header}>
-            <div className={styles.stepInfo}>
-              <Text size="l" weight="bold">
-                {modalTitle}
-              </Text>
-              <Text size="xs" view="secondary">
-                Шаг {currentStepIndex} из {totalSteps} · {currentStepTitle}
-              </Text>
-              <Text size="s" view="secondary">
-                {currentStepDescription}
-              </Text>
+            <div className={styles.headerMain}>
+              <div className={styles.stepInfo}>
+                <Text size="l" weight="bold">
+                  {modalTitle}
+                </Text>
+                <Text size="xs" view="secondary">
+                  Шаг {currentStepIndex} из {totalSteps} · {currentStepTitle}
+                </Text>
+                <Text size="s" view="secondary">
+                  {currentStepDescription}
+                </Text>
+              </div>
+              <Select<SelectOption<InitiativeStatus>>
+                size="s"
+                items={statusOptions}
+                value={statusOptions.find((option) => option.value === status) ?? statusOptions[0]}
+                getItemLabel={(item) => item.label}
+                getItemKey={(item) => item.value}
+                onChange={(option) => option && setStatus(option.value)}
+              />
             </div>
-            <Select<SelectOption<InitiativeStatus>>
+            <Button
               size="s"
-              items={statusOptions}
-              value={statusOptions.find((option) => option.value === status) ?? statusOptions[0]}
-              getItemLabel={(item) => item.label}
-              getItemKey={(item) => item.value}
-              onChange={(option) => option && setStatus(option.value)}
+              view="clear"
+              iconLeft={IconClose}
+              onlyIcon
+              label="Закрыть"
+              onClick={onClose}
+              className={styles.closeButton}
             />
           </header>
           {errorMessage && (

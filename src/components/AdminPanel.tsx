@@ -7,6 +7,7 @@ import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
+import { IconClose } from '@consta/icons/IconClose';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ArtifactNode,
@@ -4302,6 +4303,15 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       <Modal isOpen={isImportModalOpen && Boolean(importState)} hasOverlay onClose={handleImportClose}>
         {importState && (
           <div className={styles.importModal}>
+            <Button
+              size="s"
+              view="clear"
+              iconLeft={IconClose}
+              onlyIcon
+              label="Закрыть"
+              onClick={handleImportClose}
+              className={styles.modalCloseButton}
+            />
             <Text size="l" weight="semibold">
               Импорт профиля сотрудника
             </Text>

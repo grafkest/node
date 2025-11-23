@@ -3,6 +3,7 @@ import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
+import { IconClose } from '@consta/icons/IconClose';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   type ExpertProfile,
@@ -302,6 +303,15 @@ const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
   return (
     <Modal isOpen={isOpen} hasOverlay onClickOutside={onClose} onEsc={onClose}>
       <div className={styles.root}>
+        <Button
+          size="s"
+          view="clear"
+          iconLeft={IconClose}
+          onlyIcon
+          label="Закрыть"
+          onClick={onClose}
+          className={styles.closeButton}
+        />
         <div className={styles.header}>
           <Text size="l" weight="bold">
             Навыки эксперта
