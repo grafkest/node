@@ -37,6 +37,25 @@ export type SkillDefinition = {
   roles: TeamRole[];
 };
 
+export const slugifySkillId = (name: string): string => {
+  const normalized = name.trim().toLowerCase();
+  const base = normalized
+    .replace(/[^0-9a-zа-яё\s-]+/gi, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+  const fallback = base || 'skill';
+
+  let candidate = fallback;
+  let counter = 1;
+  while (skillRegistry[candidate]) {
+    candidate = `${fallback}-${counter}`;
+    counter += 1;
+  }
+
+  return candidate;
+};
+
 export const defaultTeamRoles: TeamRole[] = [
   'Владелец продукта',
   'Эксперт R&D',
@@ -691,6 +710,46 @@ export const getSkillNameById = (skillId: string): string | undefined => skillRe
 export const findSkillByName = (name: string): SkillDefinition | undefined => {
   const normalized = name.trim().toLowerCase();
   return Object.values(skillRegistry).find((skill) => skill.name.toLowerCase() === normalized);
+};
+
+export const registerAdHocSkill = (
+  name: string,
+  category: Exclude<SkillCategory, 'domain'>,
+  roles: TeamRole[] = []
+): SkillDefinition | null => {
+  const normalizedName = name.trim();
+  if (!normalizedName) {
+    return null;
+  }
+
+  const existing = findSkillByName(normalizedName);
+
+  const normalizedRoles = Array.from(
+    new Set(
+      roles
+        .map((role) => registerRoleValue(role))
+        .filter((role): role is TeamRole => Boolean(role))
+    )
+  );
+
+  const mergedRoles = Array.from(
+    new Set([...(existing?.roles ?? []), ...normalizedRoles])
+  ) as TeamRole[];
+
+  const definition: SkillDefinition = existing
+    ? { ...existing, roles: mergedRoles }
+    : {
+        id: slugifySkillId(normalizedName),
+        name: normalizedName,
+        description: normalizedName,
+        category,
+        sources: [],
+        recommendedLevel: 'P',
+        evidenceStatus: 'claimed',
+        roles: mergedRoles
+      };
+
+  return upsertSkillDefinition(definition);
 };
 
 export const registerRole = (role: TeamRole): TeamRole | null => {

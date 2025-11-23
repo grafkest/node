@@ -3036,6 +3036,8 @@ export {
   subscribeToSkillRegistry,
   getSkillRegistryVersion,
   findSkillByName,
+  registerAdHocSkill,
+  slugifySkillId,
   defaultTeamRoles,
   registerRole,
   renameRole,

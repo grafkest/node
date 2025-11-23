@@ -9,6 +9,7 @@ import {
   getKnownRoles,
   getSkillsByRole,
   registerRole,
+  registerAdHocSkill,
   renameRole,
   setRoleSkills,
   skills
@@ -27,6 +28,8 @@ const RoleCompetencyAdmin: React.FC = () => {
   const [roleNameDraft, setRoleNameDraft] = useState('');
   const [hardSelection, setHardSelection] = useState<string[]>([]);
   const [softSelection, setSoftSelection] = useState<string[]>([]);
+  const [newHardSkillName, setNewHardSkillName] = useState('');
+  const [newSoftSkillName, setNewSoftSkillName] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const sortedSkills = useMemo(() => {
@@ -94,6 +97,31 @@ const RoleCompetencyAdmin: React.FC = () => {
     renameRole(selectedRole, normalized);
     setSelectedRole(normalized as TeamRole);
     setStatusMessage('Название роли обновлено.');
+  };
+
+  const handleAddSkill = (category: 'hard' | 'soft') => {
+    if (!selectedRole) {
+      setStatusMessage('Сначала выберите или создайте роль.');
+      return;
+    }
+
+    const value = category === 'hard' ? newHardSkillName : newSoftSkillName;
+    const definition = registerAdHocSkill(value, category, [selectedRole]);
+
+    if (!definition) {
+      setStatusMessage('Введите название навыка, чтобы добавить его.');
+      return;
+    }
+
+    if (category === 'hard') {
+      setHardSelection((prev) => Array.from(new Set([...prev, definition.id])));
+      setNewHardSkillName('');
+    } else {
+      setSoftSelection((prev) => Array.from(new Set([...prev, definition.id])));
+      setNewSoftSkillName('');
+    }
+
+    setStatusMessage(`Навык «${definition.name}» добавлен для роли ${selectedRole}.`);
   };
 
   const handleSaveSkills = () => {
@@ -216,6 +244,21 @@ const RoleCompetencyAdmin: React.FC = () => {
           <Text size="xs" view="secondary" className={styles.roleHint}>
             Выбрано: {hardSelectionValue.length}
           </Text>
+          <div className={styles.inlineForm}>
+            <TextField
+              size="s"
+              placeholder="Добавить новый hard skill"
+              value={newHardSkillName}
+              onChange={(value) => setNewHardSkillName(value ?? '')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleAddSkill('hard');
+                }
+              }}
+            />
+            <Button size="s" view="secondary" label="Добавить" onClick={() => handleAddSkill('hard')} />
+          </div>
         </div>
         <div className={styles.roleCard}>
           <Text size="s" weight="semibold" className={styles.label}>
@@ -237,6 +280,21 @@ const RoleCompetencyAdmin: React.FC = () => {
           <Text size="xs" view="secondary" className={styles.roleHint}>
             Выбрано: {softSelectionValue.length}
           </Text>
+          <div className={styles.inlineForm}>
+            <TextField
+              size="s"
+              placeholder="Добавить новый soft skill"
+              value={newSoftSkillName}
+              onChange={(value) => setNewSoftSkillName(value ?? '')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleAddSkill('soft');
+                }
+              }}
+            />
+            <Button size="s" view="secondary" label="Добавить" onClick={() => handleAddSkill('soft')} />
+          </div>
         </div>
       </div>
 
