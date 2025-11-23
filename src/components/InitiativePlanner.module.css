@@ -323,6 +323,12 @@
   max-width: 100%;
 }
 
+.riskTag :global(.Badge-Label) {
+  white-space: normal;
+  text-align: left;
+  line-height: 1.3;
+}
+
 .riskSection {
   position: sticky;
   top: 0;
