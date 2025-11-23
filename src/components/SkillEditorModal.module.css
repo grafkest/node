@@ -6,6 +6,10 @@
   max-height: min(80vh, 720px);
 }
 
+.closeButton {
+  align-self: flex-start;
+}
+
 .header {
   display: flex;
   flex-direction: column;

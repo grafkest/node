@@ -6,6 +6,7 @@ import { Modal } from '@consta/uikit/Modal';
 import { Select } from '@consta/uikit/Select';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
+import { IconClose } from '@consta/icons/IconClose';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   DomainNode,
@@ -1678,16 +1679,27 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       >
         <div className={styles.container}>
           <header className={styles.header}>
-            <div className={styles.stepInfo}>
-              <Text size="l" weight="bold">
-                {modalTitle}
-              </Text>
-              <Text size="xs" view="secondary">
-                Шаг {currentStepIndex} из {totalSteps} · {currentStepTitle}
-              </Text>
-              <Text size="s" view="secondary">
-                {currentStepDescription}
-              </Text>
+            <div className={styles.headerMain}>
+              <Button
+                size="s"
+                view="clear"
+                iconLeft={IconClose}
+                onlyIcon
+                label="Закрыть"
+                onClick={onClose}
+                className={styles.closeButton}
+              />
+              <div className={styles.stepInfo}>
+                <Text size="l" weight="bold">
+                  {modalTitle}
+                </Text>
+                <Text size="xs" view="secondary">
+                  Шаг {currentStepIndex} из {totalSteps} · {currentStepTitle}
+                </Text>
+                <Text size="s" view="secondary">
+                  {currentStepDescription}
+                </Text>
+              </div>
             </div>
             <Select<SelectOption<InitiativeStatus>>
               size="s"

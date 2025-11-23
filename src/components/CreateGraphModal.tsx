@@ -6,7 +6,7 @@ import { TextField } from '@consta/uikit/TextField';
 import { Select } from '@consta/uikit/Select';
 import { CheckboxGroup } from '@consta/uikit/CheckboxGroup';
 import { Badge } from '@consta/uikit/Badge';
-import { Layout } from '@consta/uikit/Layout';
+import { IconClose } from '@consta/icons/IconClose';
 
 // Define types locally or import if they are shared (assuming they were local in App.tsx or simple enough)
 type GraphCopyOption = 'domains' | 'modules' | 'artifacts' | 'experts' | 'initiatives';
@@ -52,7 +52,26 @@ export const CreateGraphModal: React.FC<CreateGraphModalProps> = ({
 }) => {
   return (
     <Modal isOpen={isOpen} hasOverlay onClickOutside={onClose} onEsc={onClose} title="Создание графа">
-      <div style={{ width: '100%', maxWidth: 500, padding: 24, display: 'flex', flexDirection: 'column', gap: 24, boxSizing: 'border-box' }}>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 500,
+          padding: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 24,
+          boxSizing: 'border-box'
+        }}
+      >
+        <Button
+          size="s"
+          view="clear"
+          iconLeft={IconClose}
+          onlyIcon
+          label="Закрыть"
+          onClick={onClose}
+          style={{ alignSelf: 'flex-start' }}
+        />
         <Text size="l" weight="bold">
           Создание нового графа
         </Text>
