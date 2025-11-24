@@ -34,7 +34,6 @@ import {
   getSkillNameById,
   getRolesForSkill,
   getSkillsByRole,
-  registerRole,
   registerRoleCompetency,
   registerSkillDefinition,
   skillLevels
@@ -360,10 +359,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     () => ({ [ROOT_DOMAIN_OPTION]: 'Корневой каталог', ...domainLabelMap }),
     [domainLabelMap]
   );
-
-  useEffect(() => {
-    experts.forEach((expert) => registerRole(expert.title));
-  }, [experts]);
 
   const availableRoles = useMemo<TeamRole[]>(
     () => {
