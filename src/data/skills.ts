@@ -37,6 +37,40 @@ export type SkillDefinition = {
   roles: TeamRole[];
 };
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+export const slugifySkillId = (name: string): string => {
+  const normalized = name.trim().toLowerCase();
+  const base = normalized
+    .replace(/[^0-9a-zа-яё\s-]+/gi, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+  const fallback = base || 'skill';
+
+  let candidate = fallback;
+  let counter = 1;
+  while (skillRegistry[candidate]) {
+    candidate = `${fallback}-${counter}`;
+    counter += 1;
+  }
+
+  return candidate;
+};
+
+export const defaultTeamRoles: TeamRole[] = [
+  'Владелец продукта',
+  'Эксперт R&D',
+  'Аналитик',
+  'Backend',
+  'Frontend',
+  'Архитектор',
+  'Тестировщик',
+  'Руководитель проекта',
+  'UX'
+];
+
 export const skillLevels: SkillLevelDescriptor[] = [
   {
     id: 'A',
@@ -530,21 +564,131 @@ type SkillListener = () => void;
 
 const skillRegistry: Record<string, SkillDefinition> = {};
 const roleSkillIndex = new Map<TeamRole, Set<string>>();
+const roleRegistry = new Set<TeamRole>(defaultTeamRoles);
+
+const ROLE_SKILL_STORAGE_KEY = 'role-competency-registry:v1';
 
 let roleToSkillsMap: Record<TeamRole, string[]> = {} as Record<TeamRole, string[]>;
 let registryVersion = 0;
 const registryListeners = new Set<SkillListener>();
 
+type StoredSkillRegistry = {
+  roles: TeamRole[];
+  skills: SkillDefinition[];
+};
+
+const resetRegistry = () => {
+  roleRegistry.clear();
+  roleSkillIndex.clear();
+  Object.keys(skillRegistry).forEach((key) => {
+    delete skillRegistry[key];
+  });
+};
+
+const isStoredSkillDefinition = (value: unknown): value is SkillDefinition => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.description === 'string' &&
+    ['hard', 'soft', 'domain'].includes(candidate.category as string) &&
+    isStringArray(candidate.sources) &&
+    isStringArray(candidate.roles) &&
+    ['A', 'W', 'P', 'Ad', 'E'].includes(candidate.recommendedLevel as string) &&
+    ['claimed', 'screened', 'observed', 'validated', 'refuted'].includes(
+      candidate.evidenceStatus as string
+    )
+  );
+};
+
+const loadRegistryFromStorage = (): StoredSkillRegistry | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(ROLE_SKILL_STORAGE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const snapshot = parsed as Partial<StoredSkillRegistry>;
+
+    if (!Array.isArray(snapshot.skills) || !snapshot.skills.every(isStoredSkillDefinition)) {
+      return null;
+    }
+
+    const roles = Array.isArray(snapshot.roles)
+      ? snapshot.roles.filter((role): role is TeamRole => typeof role === 'string')
+      : [];
+
+    return {
+      roles,
+      skills: snapshot.skills
+    };
+  } catch {
+    return null;
+  }
+};
+
+const normalizeRole = (role: TeamRole): TeamRole | null => {
+  const normalized = role.trim();
+  return normalized ? (normalized as TeamRole) : null;
+};
+
+const registerRoleValue = (role: TeamRole): TeamRole | null => {
+  const normalized = normalizeRole(role);
+  if (!normalized) {
+    return null;
+  }
+  roleRegistry.add(normalized);
+  return normalized;
+};
+
+const persistRegistry = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const payload: StoredSkillRegistry = {
+      roles: Array.from(roleRegistry).sort((a, b) => a.localeCompare(b, 'ru')),
+      skills: Object.values(skillRegistry).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+    };
+
+    window.localStorage.setItem(ROLE_SKILL_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore storage errors
+  }
+};
+
 const rebuildRoleIndex = () => {
   const next: Record<TeamRole, string[]> = {} as Record<TeamRole, string[]>;
+  roleRegistry.forEach((role) => {
+    next[role] = [];
+  });
   roleSkillIndex.forEach((set, role) => {
-    next[role] = Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+    const normalized = normalizeRole(role);
+    if (!normalized) {
+      return;
+    }
+    next[normalized] = Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
   });
   roleToSkillsMap = next;
 };
 
 const notifyRegistryChange = () => {
   registryVersion += 1;
+  persistRegistry();
   registryListeners.forEach((listener) => {
     try {
       listener();
@@ -561,7 +705,7 @@ const normalizeSkillDefinition = (definition: SkillDefinition): SkillDefinition 
   const sources = Array.from(new Set(definition.sources.map((source) => source.trim()))).filter(
     (source) => source.length > 0
   ) as SkillSource[];
-  const roles = Array.from(new Set(definition.roles));
+  const roles = Array.from(new Set(definition.roles.map((role) => normalizeRole(role)).filter(Boolean))) as TeamRole[];
 
   return {
     ...definition,
@@ -579,6 +723,8 @@ const upsertSkillDefinition = (
 ): SkillDefinition => {
   const normalized = normalizeSkillDefinition(definition);
   const previous = skillRegistry[normalized.id];
+
+  normalized.roles.forEach((role) => registerRoleValue(role));
 
   if (previous) {
     previous.roles.forEach((role) => {
@@ -609,20 +755,30 @@ const upsertSkillDefinition = (
   return normalized;
 };
 
-Object.values(initialSkills).forEach((definition) => {
-  upsertSkillDefinition(definition, { silent: true });
-});
+const hydrateRegistry = (snapshot: StoredSkillRegistry | null) => {
+  resetRegistry();
+
+  const baseRoles = snapshot?.roles ?? defaultTeamRoles;
+  baseRoles.forEach((role) => registerRoleValue(role));
+
+  const definitions = snapshot?.skills ?? Object.values(initialSkills);
+  definitions.forEach((definition) => {
+    upsertSkillDefinition(definition, { silent: true });
+  });
+
+  rebuildRoleIndex();
+
+  persistRegistry();
+};
+
+hydrateRegistry(loadRegistryFromStorage());
 
 export const skills = skillRegistry;
 
 export { roleToSkillsMap };
 
 export const getKnownRoles = (): TeamRole[] => {
-  const roles = new Set<TeamRole>();
-  Object.keys(roleToSkillsMap).forEach((role) => {
-    roles.add(role as TeamRole);
-  });
-  return Array.from(roles).sort((a, b) => a.localeCompare(b, 'ru'));
+  return Array.from(roleRegistry).sort((a, b) => a.localeCompare(b, 'ru'));
 };
 
 export const getSkillRegistryVersion = (): number => registryVersion;
@@ -659,4 +815,143 @@ export const getSkillNameById = (skillId: string): string | undefined => skillRe
 export const findSkillByName = (name: string): SkillDefinition | undefined => {
   const normalized = name.trim().toLowerCase();
   return Object.values(skillRegistry).find((skill) => skill.name.toLowerCase() === normalized);
+};
+
+export const registerAdHocSkill = (
+  name: string,
+  category: Exclude<SkillCategory, 'domain'>,
+  roles: TeamRole[] = []
+): SkillDefinition | null => {
+  const normalizedName = name.trim();
+  if (!normalizedName) {
+    return null;
+  }
+
+  const existing = findSkillByName(normalizedName);
+
+  const normalizedRoles = Array.from(
+    new Set(
+      roles
+        .map((role) => registerRoleValue(role))
+        .filter((role): role is TeamRole => Boolean(role))
+    )
+  );
+
+  const mergedRoles = Array.from(
+    new Set([...(existing?.roles ?? []), ...normalizedRoles])
+  ) as TeamRole[];
+
+  const definition: SkillDefinition = existing
+    ? { ...existing, roles: mergedRoles }
+    : {
+        id: slugifySkillId(normalizedName),
+        name: normalizedName,
+        description: normalizedName,
+        category,
+        sources: [],
+        recommendedLevel: 'P',
+        evidenceStatus: 'claimed',
+        roles: mergedRoles
+      };
+
+  return upsertSkillDefinition(definition);
+};
+
+export const registerRole = (role: TeamRole): TeamRole | null => {
+  const normalized = registerRoleValue(role);
+  if (!normalized) {
+    return null;
+  }
+  rebuildRoleIndex();
+  notifyRegistryChange();
+  return normalized;
+};
+
+export const deleteRole = (role: TeamRole): void => {
+  const normalized = normalizeRole(role);
+  if (!normalized || !roleRegistry.has(normalized)) {
+    return;
+  }
+
+  roleRegistry.delete(normalized);
+  roleSkillIndex.delete(normalized);
+
+  Object.values(skillRegistry).forEach((definition) => {
+    if (!definition.roles.includes(normalized)) {
+      return;
+    }
+    const roles = definition.roles.filter((value) => value !== normalized);
+    upsertSkillDefinition({ ...definition, roles }, { silent: true });
+  });
+
+  rebuildRoleIndex();
+  notifyRegistryChange();
+};
+
+export const renameRole = (current: TeamRole, next: TeamRole): void => {
+  const currentNormalized = normalizeRole(current);
+  const nextNormalized = normalizeRole(next);
+
+  if (!currentNormalized || !nextNormalized) {
+    return;
+  }
+
+  if (currentNormalized === nextNormalized) {
+    registerRole(nextNormalized);
+    return;
+  }
+
+  const currentSkills = roleSkillIndex.get(currentNormalized);
+
+  if (currentSkills) {
+    roleSkillIndex.set(nextNormalized, new Set(currentSkills));
+    roleSkillIndex.delete(currentNormalized);
+  }
+
+  roleRegistry.delete(currentNormalized);
+  roleRegistry.add(nextNormalized);
+
+  Object.values(skillRegistry).forEach((definition) => {
+    if (!definition.roles.includes(currentNormalized)) {
+      return;
+    }
+    const roles = Array.from(
+      new Set(
+        definition.roles.map((role) => (role === currentNormalized ? nextNormalized : role))
+      )
+    ) as TeamRole[];
+    upsertSkillDefinition({ ...definition, roles }, { silent: true });
+  });
+
+  rebuildRoleIndex();
+  notifyRegistryChange();
+};
+
+export const setRoleSkills = (role: TeamRole, skillIds: string[]): void => {
+  const normalizedRole = registerRoleValue(role);
+  if (!normalizedRole) {
+    return;
+  }
+
+  const normalizedSkillIds = new Set<string>(
+    skillIds.map((id) => id.trim()).filter((id) => id.length > 0)
+  );
+
+  Object.values(skillRegistry).forEach((definition) => {
+    const hasRole = definition.roles.includes(normalizedRole);
+    const shouldHaveRole = normalizedSkillIds.has(definition.id);
+
+    if (hasRole === shouldHaveRole) {
+      return;
+    }
+
+    const roles = shouldHaveRole
+      ? [...definition.roles, normalizedRole]
+      : definition.roles.filter((value) => value !== normalizedRole);
+
+    upsertSkillDefinition({ ...definition, roles }, { silent: true });
+  });
+
+  rebuildRoleIndex();
+  notifyRegistryChange();
 };

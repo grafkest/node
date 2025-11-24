@@ -25,16 +25,7 @@ export type ModuleOutput = {
   artifactId?: string;
 };
 
-export type TeamRole =
-  | 'Владелец продукта'
-  | 'Эксперт R&D'
-  | 'Аналитик'
-  | 'Backend'
-  | 'Frontend'
-  | 'Архитектор'
-  | 'Тестировщик'
-  | 'Руководитель проекта'
-  | 'UX';
+export type TeamRole = string;
 
 export type TeamMember = {
   id: string;
@@ -3035,6 +3026,7 @@ export {
   roleToSkillsMap,
   getSkillsByRole,
   getSkillIdsByRole,
+  getKnownRoles,
   getRolesForSkill,
   getSkillNameById,
   skillLevels,
@@ -3043,7 +3035,14 @@ export {
   ensureSkillDefinition,
   subscribeToSkillRegistry,
   getSkillRegistryVersion,
-  findSkillByName
+  findSkillByName,
+  registerAdHocSkill,
+  slugifySkillId,
+  defaultTeamRoles,
+  registerRole,
+  renameRole,
+  deleteRole,
+  setRoleSkills
 } from './data/skills';
 
 export type {

@@ -29,6 +29,7 @@ import {
   type TeamRole,
   type UserStats,
   evidenceStatuses,
+  getKnownRoles,
   findSkillByName,
   getSkillNameById,
   getRolesForSkill,
@@ -45,6 +46,7 @@ import type {
   MissingSkillEntry
 } from '../utils/expertExcel';
 import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
+import RoleCompetencyAdmin from './RoleCompetencyAdmin';
 import styles from './AdminPanel.module.css';
 
 export type ModuleDraftPayload = {
@@ -128,7 +130,7 @@ type AdminPanelProps = {
   onDeleteExpert: (id: string) => void;
 };
 
-type AdminTab = 'module' | 'domain' | 'artifact' | 'expert';
+type AdminTab = 'module' | 'domain' | 'artifact' | 'expert' | 'role';
 
 type SelectItem<Value extends string> = {
   label: string;
@@ -178,7 +180,8 @@ const adminTabs = [
   { label: 'Модули', value: 'module' },
   { label: 'Домены', value: 'domain' },
   { label: 'Артефакты', value: 'artifact' },
-  { label: 'Сотрудники', value: 'expert' }
+  { label: 'Сотрудники', value: 'expert' },
+  { label: 'Роли и компетенции', value: 'role' }
 ] as const satisfies readonly { label: string; value: AdminTab }[];
 
 const ROOT_DOMAIN_OPTION = '__root__';
@@ -199,18 +202,6 @@ const deploymentToolLabels: Record<ModuleNode['deploymentTool'], string> = {
   docker: 'Docker',
   kubernetes: 'Kubernetes'
 };
-
-const TEAM_ROLES: TeamRole[] = [
-  'Владелец продукта',
-  'Эксперт R&D',
-  'Аналитик',
-  'Backend',
-  'Frontend',
-  'Архитектор',
-  'Тестировщик',
-  'Руководитель проекта',
-  'UX'
-];
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
   modules,
@@ -233,6 +224,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteExpert
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('module');
+  const skillRegistryVersion = useSkillRegistryVersion();
 
   const domainLabelMap = useMemo(() => buildDomainLabelMap(domains), [domains]);
   const moduleLabelMap = useMemo(() => buildModuleLabelMap(modules), [modules]);
@@ -369,8 +361,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   );
 
   const availableRoles = useMemo<TeamRole[]>(
-    () => mergeStringCollections(TEAM_ROLES, experts.map((expert) => expert.title)) as TeamRole[],
-    [experts]
+    () => {
+      void skillRegistryVersion;
+      return getKnownRoles();
+    },
+    [skillRegistryVersion]
   );
 
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
@@ -886,6 +881,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           />
         )}
 
+        {activeTab === 'role' && <RoleCompetencyAdmin />}
+
       </div>
     </div>
   );
@@ -956,6 +953,7 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   onSubmit,
   onDelete
 }) => {
+  const skillRegistryVersion = useSkillRegistryVersion();
   const current = Math.min(Math.max(step, 0), moduleSections.length - 1);
   const goToStep = (next: number) => {
     onStepChange(Math.min(Math.max(next, 0), moduleSections.length - 1));
@@ -989,8 +987,11 @@ const ModuleForm: React.FC<ModuleFormProps> = ({
   );
 
   const teamRoleItems = useMemo<SelectItem<TeamRole>[]>(
-    () => TEAM_ROLES.map((role) => ({ label: role, value: role })),
-    []
+    () => {
+      void skillRegistryVersion;
+      return getKnownRoles().map((role) => ({ label: role, value: role }));
+    },
+    [skillRegistryVersion]
   );
 
   const CREATE_PRODUCT_OPTION = '__create_product__';
