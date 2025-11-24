@@ -363,12 +363,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const availableRoles = useMemo<TeamRole[]>(
     () => {
       void skillRegistryVersion;
-      return mergeStringCollections(
-        getKnownRoles(),
-        experts.map((expert) => expert.title)
-      ) as TeamRole[];
+      return getKnownRoles();
     },
-    [experts, skillRegistryVersion]
+    [skillRegistryVersion]
   );
 
   const [selectedModuleId, setSelectedModuleId] = useState<string>('__new__');
