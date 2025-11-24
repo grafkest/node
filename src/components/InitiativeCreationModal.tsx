@@ -17,7 +17,12 @@ import type {
   InitiativeWorkItemStatus,
   TeamRole
 } from '../data';
-import { getKnownRoles, getSkillNameById, getSkillsByRole } from '../data/skills';
+import {
+  defaultTeamRoles,
+  getKnownRoles,
+  getSkillNameById,
+  getSkillsByRole
+} from '../data/skills';
 import InitiativeGanttChart, {
   type InitiativeGanttBlocker,
   type InitiativeGanttDependency,
@@ -239,30 +244,6 @@ const statusOptions: SelectOption<InitiativeStatus>[] = [
   { label: 'В работе', value: 'in-progress' },
   { label: 'Конвертирована', value: 'converted' }
 ];
-
-const defaultRoles: TeamRole[] = [
-  'Владелец продукта',
-  'Эксперт R&D',
-  'Аналитик',
-  'Backend',
-  'Frontend',
-  'Архитектор',
-  'Тестировщик',
-  'Руководитель проекта',
-  'UX'
-];
-
-const mergeRoles = (base: TeamRole[], extra: TeamRole[]): TeamRole[] => {
-  const set = new Set<TeamRole>();
-  base.forEach((role) => set.add(role));
-  extra.forEach((role) => {
-    const normalized = role.trim();
-    if (normalized) {
-      set.add(normalized as TeamRole);
-    }
-  });
-  return Array.from(set);
-};
 
 const buildRoleOptions = (roles: TeamRole[]): SelectOption<TeamRole>[] =>
   roles.map((role) => ({ label: role, value: role }));
@@ -574,7 +555,10 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const [customerRepresentative, setCustomerRepresentative] = useState('');
   const [customerContact, setCustomerContact] = useState('');
   const [customerComment, setCustomerComment] = useState('');
-  const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft(DEFAULT_ROLE)]);
+  const initialRegistryRoles = getKnownRoles();
+  const initialPrimaryRole = initialRegistryRoles[0] ?? DEFAULT_ROLE;
+
+  const [works, setWorks] = useState<WorkDraft[]>([createWorkDraft(initialPrimaryRole)]);
   const [collapsedWorkIds, setCollapsedWorkIds] = useState<string[]>([]);
   const [approvalStages, setApprovalStages] = useState<ApprovalStageDraft[]>([
     createApprovalStageDraft()
@@ -584,8 +568,8 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   const roleOptions = useMemo<SelectOption<TeamRole>[]>(() => {
     void skillRegistryVersion;
     const registryRoles = getKnownRoles();
-    const mergedRoles = mergeRoles(defaultRoles, registryRoles);
-    return buildRoleOptions(mergedRoles);
+    const resolvedRoles = registryRoles.length > 0 ? registryRoles : defaultTeamRoles;
+    return buildRoleOptions(resolvedRoles);
   }, [skillRegistryVersion]);
   const primaryRole = useMemo<TeamRole>(
     () => roleOptions[0]?.value ?? DEFAULT_ROLE,
@@ -596,6 +580,7 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       roleOptions.reduce((acc, option) => {
         void skillRegistryVersion;
         const skillOptions = getSkillsByRole(option.value)
+          .filter((skill) => skill.category === 'hard')
           .map((skill) => ({
             id: skill.id,
             label: skill.name,
@@ -622,9 +607,13 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   useEffect(() => {
     setRoleSkillOptions((prev) => {
       const next = createRoleSkillState();
+      const allowedRoles = new Set(roleOptions.map((option) => option.value));
 
       Object.entries(prev).forEach(([role, options]) => {
         const roleKey = role as TeamRole;
+        if (!allowedRoles.has(roleKey)) {
+          return;
+        }
         const existing = next[roleKey] ?? [];
         const merged = [...existing];
 
@@ -640,6 +629,26 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
       return next;
     });
   }, [createRoleSkillState]);
+
+  useEffect(() => {
+    const allowedRoles = new Set(roleOptions.map((option) => option.value));
+    setWorks((prev) =>
+      prev.map((work) => ({
+        ...work,
+        assignments: work.assignments.map((assignment) => {
+          const normalizedRole = allowedRoles.has(assignment.role) ? assignment.role : primaryRole;
+          const roleChanged = normalizedRole !== assignment.role;
+
+          return {
+            ...assignment,
+            role: normalizedRole,
+            task: roleChanged ? '' : assignment.task,
+            isCustom: roleChanged ? undefined : assignment.isCustom
+          };
+        })
+      }))
+    );
+  }, [primaryRole, roleOptions]);
 
   const hydrateFromDraft = useCallback(
     (draft: InitiativeCreationRequest | null) => {
