@@ -579,7 +579,6 @@ type StoredSkillRegistry = {
 
 const resetRegistry = () => {
   roleRegistry.clear();
-  defaultTeamRoles.forEach((role) => roleRegistry.add(role));
   roleSkillIndex.clear();
   Object.keys(skillRegistry).forEach((key) => {
     delete skillRegistry[key];
@@ -759,9 +758,8 @@ const upsertSkillDefinition = (
 const hydrateRegistry = (snapshot: StoredSkillRegistry | null) => {
   resetRegistry();
 
-  if (snapshot?.roles) {
-    snapshot.roles.forEach((role) => registerRoleValue(role));
-  }
+  const baseRoles = snapshot?.roles ?? defaultTeamRoles;
+  baseRoles.forEach((role) => registerRoleValue(role));
 
   const definitions = snapshot?.skills ?? Object.values(initialSkills);
   definitions.forEach((definition) => {
