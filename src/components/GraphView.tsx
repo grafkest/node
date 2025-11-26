@@ -528,9 +528,41 @@ const GraphView: React.FC<GraphViewProps> = ({
     scheduleCameraCapture(320);
   }, [getViewportSize, scheduleCameraCapture]);
 
+  const graphStructureKey = useMemo(() => {
+    const nodeKey = nodes
+      .map((node) => node.id)
+      .sort()
+      .join('|');
+
+    const linkKey = graphLinks
+      .map((link) => {
+        const source =
+          typeof link.source === 'object' && link.source !== null
+            ? (link.source as ForceNode).id
+            : String(link.source);
+        const target =
+          typeof link.target === 'object' && link.target !== null
+            ? (link.target as ForceNode).id
+            : String(link.target);
+
+        return `${source}->${target}:${link.type}`;
+      })
+      .sort()
+      .join('|');
+
+    return `${nodeKey}__${linkKey}`;
+  }, [graphLinks, nodes]);
+
+  const lastGraphStructureRef = useRef<string>('');
+
   useEffect(() => {
+    if (graphStructureKey === lastGraphStructureRef.current) {
+      return;
+    }
+
+    lastGraphStructureRef.current = graphStructureKey;
     restoreCamera();
-  }, [graphData, restoreCamera]);
+  }, [graphStructureKey, restoreCamera]);
 
   useEffect(() => {
     if (!normalizationRequest || nodes.length === 0) {
