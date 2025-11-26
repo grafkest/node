@@ -100,9 +100,29 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           width="full"
           size="s"
           value={search}
-          onChange={(event) => {
-            const nextValue =
-              typeof event === 'string' ? event : event?.value ?? '';
+          onChange={(payload) => {
+            const nextValue = (() => {
+              if (typeof payload === 'string') {
+                return payload;
+              }
+
+              if (payload && typeof payload === 'object') {
+                const withValue = payload as { value?: unknown };
+                if (typeof withValue.value === 'string') {
+                  return withValue.value;
+                }
+
+                const eventTargetValue =
+                  (payload as { e?: { target?: { value?: unknown } } }).e?.target
+                    ?.value;
+                if (typeof eventTargetValue === 'string') {
+                  return eventTargetValue;
+                }
+              }
+
+              return '';
+            })();
+
             onSearchChange(nextValue);
           }}
           placeholder="Поиск модулей..."
