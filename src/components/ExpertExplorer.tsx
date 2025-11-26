@@ -2177,7 +2177,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
             size="s"
             placeholder="Введите ФИО, компетенцию или модуль"
             value={search}
-            onChange={(value) => setSearch(value ?? '')}
+            onChange={({ value }) => setSearch(value ?? '')}
             className={styles.searchField}
           />
         </div>
