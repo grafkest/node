@@ -334,6 +334,20 @@ const GraphView: React.FC<GraphViewProps> = ({
   );
 
   const nodes = useMemo(() => {
+    const targetIds = new Set(
+      domainNodes
+        .map((node) => node.id)
+        .concat(artifactNodes.map((node) => node.id))
+        .concat(moduleNodes.map((node) => node.id))
+        .concat(initiativeNodes.map((node) => node.id))
+    );
+
+    nodeCacheRef.current.forEach((_, id) => {
+      if (!targetIds.has(id)) {
+        nodeCacheRef.current.delete(id);
+      }
+    });
+
     const nextNodes: ForceNode[] = [];
 
     const upsertNode = (node: GraphNode) => {
@@ -844,41 +858,53 @@ const GraphView: React.FC<GraphViewProps> = ({
         return;
       }
 
-      const entries: Array<[string, GraphLayoutNodePosition]> = [];
-    nodeCacheRef.current.forEach((node, id) => {
-      if (
-        typeof node.x !== 'number' ||
-        Number.isNaN(node.x) ||
-        typeof node.y !== 'number' ||
-        Number.isNaN(node.y)
-      ) {
+      if (nodeCacheRef.current.size === 0 || nodes.length === 0) {
         return;
       }
 
-      const payload: GraphLayoutNodePosition = {
-        x: roundCoordinate(node.x),
-        y: roundCoordinate(node.y)
-      };
+      const visibleIds = new Set(nodes.map((node) => node.id));
+      const entries: Array<[string, GraphLayoutNodePosition]> = [];
 
-      if (typeof node.fx === 'number' && !Number.isNaN(node.fx)) {
-        payload.fx = roundCoordinate(node.fx);
+      nodeCacheRef.current.forEach((node, id) => {
+        if (!visibleIds.has(id)) {
+          return;
+        }
+
+        if (
+          typeof node.x !== 'number' ||
+          Number.isNaN(node.x) ||
+          typeof node.y !== 'number' ||
+          Number.isNaN(node.y)
+        ) {
+          return;
+        }
+
+        const payload: GraphLayoutNodePosition = {
+          x: roundCoordinate(node.x),
+          y: roundCoordinate(node.y)
+        };
+
+        if (typeof node.fx === 'number' && !Number.isNaN(node.fx)) {
+          payload.fx = roundCoordinate(node.fx);
+        }
+
+        if (typeof node.fy === 'number' && !Number.isNaN(node.fy)) {
+          payload.fy = roundCoordinate(node.fy);
+        }
+
+        entries.push([id, payload]);
+      });
+
+      const serialized = JSON.stringify(Object.fromEntries(entries));
+      if (serialized === lastReportedLayoutRef.current) {
+        return;
       }
 
-      if (typeof node.fy === 'number' && !Number.isNaN(node.fy)) {
-        payload.fy = roundCoordinate(node.fy);
-      }
-
-      entries.push([id, payload]);
-    });
-
-    const serialized = JSON.stringify(Object.fromEntries(entries));
-    if (serialized === lastReportedLayoutRef.current) {
-      return;
-    }
-
-    lastReportedLayoutRef.current = serialized;
-    onLayoutChange(Object.fromEntries(entries), reason);
-  }, [onLayoutChange]);
+      lastReportedLayoutRef.current = serialized;
+      onLayoutChange(Object.fromEntries(entries), reason);
+    },
+    [nodes, onLayoutChange]
+  );
 
   const handleNodeDragEnd = useCallback(
     (node: ForceNode) => {
