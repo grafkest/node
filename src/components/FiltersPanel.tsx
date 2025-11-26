@@ -6,7 +6,6 @@ import { Switch } from '@consta/uikit/Switch';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import { IconSearchStroked } from '@consta/icons/IconSearchStroked';
-import { IconClose } from '@consta/icons/IconClose';
 import clsx from 'clsx';
 import React from 'react';
 import type { ComboboxPropRenderItem } from '@consta/uikit/Combobox';
@@ -101,18 +100,35 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           width="full"
           size="s"
           value={search}
-          onChange={(value) => onSearchChange(value ?? '')}
+          onChange={(payload) => {
+            const nextValue = (() => {
+              if (typeof payload === 'string') {
+                return payload;
+              }
+
+              if (payload && typeof payload === 'object') {
+                const withValue = payload as { value?: unknown };
+                if (typeof withValue.value === 'string') {
+                  return withValue.value;
+                }
+
+                const eventTargetValue =
+                  (payload as { e?: { target?: { value?: unknown } } }).e?.target
+                    ?.value;
+                if (typeof eventTargetValue === 'string') {
+                  return eventTargetValue;
+                }
+              }
+
+              return '';
+            })();
+
+            onSearchChange(nextValue);
+          }}
           placeholder="Поиск модулей..."
           leftSide={IconSearchStroked}
-          rightSide={search ? (
-            <Button
-              view="clear"
-              size="xs"
-              iconLeft={IconClose}
-              onClick={() => onSearchChange('')}
-              onlyIcon
-            />
-          ) : undefined}
+          withClearButton={Boolean(search)}
+          onClear={() => onSearchChange('')}
         />
       </div>
 
