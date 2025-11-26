@@ -100,7 +100,11 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           width="full"
           size="s"
           value={search}
-          onChange={({ value }) => onSearchChange(value ?? '')}
+          onChange={(event) => {
+            const nextValue =
+              typeof event === 'string' ? event : event?.value ?? '';
+            onSearchChange(nextValue);
+          }}
           placeholder="Поиск модулей..."
           leftSide={IconSearchStroked}
           withClearButton={Boolean(search)}
