@@ -938,8 +938,21 @@ const GraphView: React.FC<GraphViewProps> = ({
     [nodes, onLayoutChange]
   );
 
+  const handleNodeDragStart = useCallback(
+    (node: ForceNode) => {
+      if (node) {
+        onSelect(node);
+      }
+    },
+    [onSelect]
+  );
+
   const handleNodeDragEnd = useCallback(
     (node: ForceNode) => {
+      if (node) {
+        onSelect(node);
+      }
+
       if (node && typeof node.id === 'string') {
         const layout = layoutPositions[node.id];
         const hasFixedX = typeof layout?.fx === 'number' && Number.isFinite(layout.fx);
@@ -990,7 +1003,7 @@ const GraphView: React.FC<GraphViewProps> = ({
 
       emitLayoutUpdate('drag');
     },
-    [emitLayoutUpdate, layoutPositions]
+    [emitLayoutUpdate, layoutPositions, onSelect]
   );
 
   const handleEngineStop = useCallback(() => {
@@ -1059,6 +1072,9 @@ const GraphView: React.FC<GraphViewProps> = ({
               }}
               onNodeDoubleClick={(node) => {
                 handleNodeDoubleClick(node as ForceNode);
+              }}
+              onNodeDragStart={(node) => {
+                handleNodeDragStart(node as ForceNode);
               }}
               onNodeDragEnd={handleNodeDragEnd}
               onEngineStop={handleEngineStop}
