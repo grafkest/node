@@ -1303,7 +1303,8 @@ function App() {
     (module: ModuleNode) => {
       const matchesDomain =
         selectedDomains.size > 0 && module.domains.some((domain) => selectedDomains.has(domain));
-      const normalizedSearch = search.trim().toLowerCase();
+      const normalizedSearch =
+        typeof search === 'string' ? search.trim().toLowerCase() : '';
       const searchableText = moduleSearchIndex[module.id] ?? '';
       const matchesSearch =
         normalizedSearch.length === 0 || searchableText.includes(normalizedSearch);
@@ -1920,6 +1921,20 @@ function App() {
   const handleSelectNode = (node: GraphNode | null) => {
     setSelectedNode(node);
   };
+
+  const handleSearchChange = useCallback(
+    (value: string | { value?: string | null }) => {
+      const nextValue =
+        typeof value === 'string'
+          ? value
+          : value && typeof value === 'object' && 'value' in value
+            ? value.value ?? ''
+            : '';
+      setSelectedNode(null);
+      setSearch(nextValue);
+    },
+    []
+  );
 
   const handleDomainToggle = (domainId: string) => {
     const cascade = domainDescendants.get(domainId) ?? [domainId];
@@ -3523,7 +3538,7 @@ function App() {
                 <div className={styles.filtersCollapseContent}>
                   <FiltersPanel
                     search={search}
-                    onSearchChange={setSearch}
+                    onSearchChange={handleSearchChange}
                     statuses={allStatuses}
                     activeStatuses={statusFilters}
                     onToggleStatus={(status) => {

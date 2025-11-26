@@ -15,7 +15,7 @@ import styles from './FiltersPanel.module.css';
 
 type FiltersPanelProps = {
   search: string;
-  onSearchChange: (value: string) => void;
+  onSearchChange: (value: string | { value?: string | null }) => void;
   statuses: ModuleStatus[];
   activeStatuses: Set<ModuleStatus>;
   onToggleStatus: (status: ModuleStatus) => void;
@@ -101,7 +101,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           width="full"
           size="s"
           value={search}
-          onChange={({ value }) => onSearchChange(value ?? '')}
+          onChange={(value) => onSearchChange(value ?? '')}
           placeholder="Поиск модулей..."
           leftSide={IconSearchStroked}
           rightSide={search ? (
