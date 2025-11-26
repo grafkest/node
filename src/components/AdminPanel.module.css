@@ -471,6 +471,60 @@
   margin: 0;
 }
 
+.developmentPanel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--color-bg-border);
+  border-radius: 12px;
+  background: var(--color-bg-default);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.developmentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gapList {
+  display: grid;
+  gap: 12px;
+}
+
+.gapRow {
+  border: 1px solid var(--color-bg-border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--color-bg-ghost);
+}
+
+.gapTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gapMeta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.gapLink {
+  margin-top: 4px;
+}
+
+.planHint {
+  margin: 0;
+}
+
 @media (max-width: 1200px) {
   .container {
     grid-template-columns: 1fr;
