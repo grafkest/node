@@ -100,7 +100,7 @@ const FiltersPanel: React.FC<FiltersPanelProps> = ({
           width="full"
           size="s"
           value={search}
-          onChange={(value) => onSearchChange(value ?? '')}
+          onChange={({ value }) => onSearchChange(value ?? '')}
           placeholder="Поиск модулей..."
           leftSide={IconSearchStroked}
           withClearButton={Boolean(search)}
