@@ -2020,9 +2020,10 @@ function App() {
     moduleData.forEach((module) => ids.add(module.id));
     artifactData.forEach((artifact) => ids.add(artifact.id));
     flattenDomainTree(domainData).forEach((domain) => ids.add(domain.id));
+    initiativeData.forEach((initiative) => ids.add(initiative.id));
 
     return ids;
-  }, [artifactData, domainData, moduleData]);
+  }, [artifactData, domainData, initiativeData, moduleData]);
 
   const handleLayoutChange = useCallback(
     (positions: Record<string, GraphLayoutNodePosition>, reason: 'drag' | 'engine') => {
