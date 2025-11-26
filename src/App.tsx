@@ -1922,19 +1922,10 @@ function App() {
     setSelectedNode(node);
   };
 
-  const handleSearchChange = useCallback(
-    (value: string | { value?: string | null }) => {
-      const nextValue =
-        typeof value === 'string'
-          ? value
-          : value && typeof value === 'object' && 'value' in value
-            ? value.value ?? ''
-            : '';
-      setSelectedNode(null);
-      setSearch(nextValue);
-    },
-    []
-  );
+  const handleSearchChange = useCallback((value: string) => {
+    setSelectedNode(null);
+    setSearch(value);
+  }, []);
 
   const handleDomainToggle = (domainId: string) => {
     const cascade = domainDescendants.get(domainId) ?? [domainId];
