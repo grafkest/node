@@ -1204,6 +1204,11 @@ function App() {
     return index;
   }, [moduleData, domainNameMap, moduleNameMap, artifactNameMap]);
 
+  const normalizedSearch = useMemo(
+    () => (typeof search === 'string' ? search.trim().toLowerCase() : ''),
+    [search]
+  );
+
   useEffect(() => {
     if (!isSyncAvailable || !hasLoadedSnapshotRef.current || !activeGraphId) {
       return;
@@ -1303,8 +1308,6 @@ function App() {
     (module: ModuleNode) => {
       const matchesDomain =
         selectedDomains.size > 0 && module.domains.some((domain) => selectedDomains.has(domain));
-      const normalizedSearch =
-        typeof search === 'string' ? search.trim().toLowerCase() : '';
       const searchableText = moduleSearchIndex[module.id] ?? '';
       const matchesSearch =
         normalizedSearch.length === 0 || searchableText.includes(normalizedSearch);
@@ -1321,7 +1324,7 @@ function App() {
       );
     },
     [
-      search,
+      normalizedSearch,
       selectedDomains,
       statusFilters,
       productFilter,
@@ -1557,6 +1560,10 @@ function App() {
   }, [selectedNode, moduleDependents, artifactMap, moduleData]);
 
   const graphModules = useMemo(() => {
+    if (normalizedSearch) {
+      return filteredModules;
+    }
+
     const extraModuleIds = new Set(contextModuleIds);
 
     if (showAllConnections) {
@@ -1629,6 +1636,7 @@ function App() {
     return extended;
   }, [
     filteredModules,
+    normalizedSearch,
     contextModuleIds,
     moduleById,
     showAllConnections,
