@@ -3708,6 +3708,8 @@ function App() {
           domains={domainData}
           artifacts={artifactData}
           experts={expertProfiles}
+          initiatives={initiativeData}
+          employeeTasks={employeeTasks}
           moduleDraftPrefill={moduleDraftPrefill}
           onModuleDraftPrefillApplied={handleModuleDraftPrefillApplied}
           onCreateModule={handleCreateModule}
@@ -3722,6 +3724,7 @@ function App() {
           onCreateExpert={handleCreateExpert}
           onUpdateExpert={handleUpdateExpert}
           onDeleteExpert={handleDeleteExpert}
+          onUpdateEmployeeTasks={setEmployeeTasks}
         />
       </main>
       </>

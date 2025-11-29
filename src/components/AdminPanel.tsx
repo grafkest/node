@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   type ArtifactNode,
   type DomainNode,
+  type Initiative,
   type ExpertCompetencyRecord,
   type ExpertProfile,
   type ExpertSkill,
@@ -38,6 +39,8 @@ import {
   registerSkillDefinition,
   skillLevels
 } from '../data';
+import type { TaskListItem } from '../types/tasks';
+import { addDays, formatIsoDate, startOfDay } from '../utils/employeeTasks';
 import type { ExpertDraftPayload } from '../types/expert';
 import type {
   ExpertImportResult,
@@ -114,6 +117,8 @@ type AdminPanelProps = {
   domains: DomainNode[];
   artifacts: ArtifactNode[];
   experts: ExpertProfile[];
+  initiatives: Initiative[];
+  employeeTasks: TaskListItem[];
   moduleDraftPrefill: ModuleDraftPrefillRequest | null;
   onModuleDraftPrefillApplied?: () => void;
   onCreateModule: (draft: ModuleDraftPayload) => void;
@@ -128,6 +133,7 @@ type AdminPanelProps = {
   onCreateExpert: (draft: ExpertDraftPayload) => void;
   onUpdateExpert: (id: string, draft: ExpertDraftPayload) => void;
   onDeleteExpert: (id: string) => void;
+  onUpdateEmployeeTasks: (tasks: TaskListItem[]) => void;
 };
 
 type AdminTab = 'module' | 'domain' | 'artifact' | 'expert' | 'role';
@@ -208,6 +214,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   domains,
   artifacts,
   experts,
+  initiatives,
+  employeeTasks,
   moduleDraftPrefill,
   onModuleDraftPrefillApplied,
   onCreateModule,
@@ -221,7 +229,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteArtifact,
   onCreateExpert,
   onUpdateExpert,
-  onDeleteExpert
+  onDeleteExpert,
+  onUpdateEmployeeTasks
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('module');
   const skillRegistryVersion = useSkillRegistryVersion();
@@ -868,6 +877,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             draft={expertDraft}
             expertId={selectedExpertId === '__new__' ? null : selectedExpertId}
             availableRoles={availableRoles}
+            initiatives={initiatives}
+            tasks={employeeTasks}
             domainItems={parentDomainIds}
             domainLabelMap={domainLabelMap}
             moduleLabelMap={moduleLabelMap}
@@ -877,6 +888,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             onRegisterLanguage={registerLanguage}
             onChange={setExpertDraft}
             onSubmit={handleExpertSubmit}
+            onUpdateTasks={onUpdateEmployeeTasks}
             onDelete={selectedExpertId === '__new__' ? undefined : handleExpertDelete}
           />
         )}
@@ -3035,6 +3047,8 @@ type ExpertFormProps = {
   draft: ExpertDraftPayload;
   expertId: string | null;
   availableRoles: TeamRole[];
+  initiatives: Initiative[];
+  tasks: TaskListItem[];
   domainItems: string[];
   domainLabelMap: Record<string, string>;
   moduleLabelMap: Record<string, string>;
@@ -3044,6 +3058,7 @@ type ExpertFormProps = {
   onRegisterLanguage: (value: string) => void;
   onChange: (draft: ExpertDraftPayload) => void;
   onSubmit: () => void;
+  onUpdateTasks: (tasks: TaskListItem[]) => void;
   onDelete?: () => void;
 };
 
@@ -3056,11 +3071,30 @@ type ExpertImportDialogState = {
   fileName: string;
 };
 
+type SkillGap = {
+  definition: ReturnType<typeof getSkillsByRole>[number];
+  currentLevel: SkillLevel | null;
+  targetLevel: SkillLevel;
+  suggestedInitiative?: Initiative;
+  isTheoretical: boolean;
+};
+
+const TARGET_SKILL_LEVEL: SkillLevel = 'E';
+const SKILL_LEVEL_RANK: Record<SkillLevel, number> = {
+  A: 0,
+  W: 1,
+  P: 2,
+  Ad: 3,
+  E: 4
+};
+
 const ExpertForm: React.FC<ExpertFormProps> = ({
   mode,
   draft,
   expertId,
   availableRoles,
+  initiatives,
+  tasks,
   domainItems,
   domainLabelMap,
   moduleLabelMap,
@@ -3070,6 +3104,7 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   onRegisterLanguage,
   onChange,
   onSubmit,
+  onUpdateTasks,
   onDelete
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -3077,6 +3112,8 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [planStatus, setPlanStatus] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
   const skillRegistryVersion = useSkillRegistryVersion();
   const expertExcelRef = useRef<Promise<typeof import('../utils/expertExcel')> | null>(null);
 
@@ -3591,6 +3628,12 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     []
   );
 
+  const skillLevelLabelMap = useMemo(() => {
+    const map = new Map<SkillLevel, string>();
+    skillLevels.forEach((descriptor) => map.set(descriptor.id, descriptor.label));
+    return map;
+  }, []);
+
   const CREATE_LOCATION_OPTION = '__create_location__';
   const CREATE_LANGUAGE_OPTION = '__create_language__';
 
@@ -3612,6 +3655,56 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
   const importRoleSelection = importState?.draft.title
     ? existingRoleItems.find((item) => item.value === importState.draft.title) ?? null
     : null;
+
+  const findInitiativeForSkill = useCallback(
+    (definition: ReturnType<typeof getSkillsByRole>[number]) => {
+      const normalizedName = definition.name.toLowerCase();
+      const normalizedId = definition.id.toLowerCase();
+
+      return initiatives.find((initiative) => {
+        const requirementMatch = initiative.requirements?.some((requirement) =>
+          requirement.skills.some((skill) => {
+            const normalizedSkill = skill.toLowerCase();
+            return (
+              normalizedSkill.includes(normalizedName) ||
+              normalizedSkill.includes(normalizedId)
+            );
+          })
+        );
+
+        const skillMatch = initiative.requiredSkills.some((skill) => {
+          const normalizedSkill = skill.toLowerCase();
+          return (
+            normalizedSkill.includes(normalizedName) || normalizedSkill.includes(normalizedId)
+          );
+        });
+
+        return requirementMatch || skillMatch;
+      });
+    },
+    [initiatives]
+  );
+
+  const hardSkillGaps = useMemo<SkillGap[]>(() => {
+    return hardSkillDefinitions
+      .map((definition) => {
+        const skill = draft.skills.find((entry) => entry.id === definition.id);
+        const currentLevel = skill?.level ?? null;
+        const currentRank = currentLevel ? SKILL_LEVEL_RANK[currentLevel] : -1;
+        if (currentRank >= SKILL_LEVEL_RANK[TARGET_SKILL_LEVEL]) {
+          return null;
+        }
+
+        return {
+          definition,
+          currentLevel,
+          targetLevel: TARGET_SKILL_LEVEL,
+          suggestedInitiative: findInitiativeForSkill(definition) ?? undefined,
+          isTheoretical: definition.recommendedLevel === 'A'
+        } satisfies SkillGap;
+      })
+      .filter((entry): entry is SkillGap => Boolean(entry));
+  }, [draft.skills, findInitiativeForSkill, hardSkillDefinitions]);
 
   const updateCompetenciesFromSkills = useCallback(
     (
@@ -3783,6 +3876,65 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
     onChange({ ...draft, softSkills: mergeStringCollections([], Array.from(current)) });
   };
 
+  const handleGenerateDevelopmentPlan = useCallback(() => {
+    if (!expertId) {
+      setPlanError('Сохраните профиль, чтобы сформировать план развития и привязать задачи.');
+      setPlanStatus(null);
+      return;
+    }
+
+    if (hardSkillGaps.length === 0) {
+      setPlanError('Все hard skills уже соответствуют эталону роли.');
+      setPlanStatus(null);
+      return;
+    }
+
+    const prefix = `devplan-${expertId}-`;
+    const today = startOfDay(new Date());
+    let previousTaskId: string | null = null;
+
+    const planTasks: TaskListItem[] = hardSkillGaps.map((gap, index) => {
+      const id = `${prefix}${gap.definition.id}`;
+      const durationDays = gap.isTheoretical ? 7 : 14;
+      const relation = gap.suggestedInitiative
+        ? ({ type: 'initiative', targetId: gap.suggestedInitiative.id } as const)
+        : ({ type: 'methodology' } as const);
+
+      const description = gap.isTheoretical
+        ? `Обучение навыку «${gap.definition.name}»: теория и закрепление базовых подходов.`
+        : gap.suggestedInitiative
+          ? `Практика навыка «${gap.definition.name}» через инициативу «${gap.suggestedInitiative.name}».`
+          : `Подберите инициативу с запросом на «${gap.definition.name}» для практической отработки.`;
+
+      const schedule =
+        previousTaskId === null
+          ? ({
+              type: 'start-duration',
+              startDate: formatIsoDate(addDays(today, index * 2)),
+              durationDays
+            } as const)
+          : ({ type: 'after-task', predecessorId: previousTaskId, durationDays } as const);
+
+      previousTaskId = id;
+
+      return {
+        id,
+        name: `Развитие: ${gap.definition.name}`,
+        priority: 'medium',
+        status: 'new',
+        assigneeId: expertId,
+        description,
+        schedule,
+        relation
+      } satisfies TaskListItem;
+    });
+
+    const filteredTasks = tasks.filter((task) => !task.id.startsWith(prefix));
+    onUpdateTasks([...filteredTasks, ...planTasks]);
+    setPlanStatus(`План развития обновлён: добавлено ${planTasks.length} задач(и).`);
+    setPlanError(null);
+  }, [expertId, hardSkillGaps, onUpdateTasks, tasks]);
+
   useEffect(() => {
     if (!hardSkillDefinitions.length) {
       return;
@@ -3803,6 +3955,11 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
       });
     }
   }, [draft, hardSkillDefinitions.length, onChange, updateCompetenciesFromSkills]);
+
+  useEffect(() => {
+    setPlanError(null);
+    setPlanStatus(null);
+  }, [expertId]);
 
   return (
     <div className={styles.formBody}>
@@ -4135,6 +4292,84 @@ const ExpertForm: React.FC<ExpertFormProps> = ({
             Выберите роль, чтобы настроить hard skills.
           </Text>
         )}
+      </div>
+
+      <div className={styles.developmentPanel}>
+        <div className={styles.developmentHeader}>
+          <div>
+            <Text size="xs" weight="semibold" className={styles.skillMatrixTitle}>
+              Сопоставление с эталонной версией роли
+            </Text>
+            <Text size="xs" view="secondary" className={styles.skillMatrixHint}>
+              Эталон: все hard skills на уровне {skillLevelLabelMap.get(TARGET_SKILL_LEVEL) ?? TARGET_SKILL_LEVEL}.
+            </Text>
+          </div>
+          <Button
+            size="s"
+            view="primary"
+            disabled={!hardSkillGaps.length || !expertId}
+            label="Сформировать план развития"
+            onClick={handleGenerateDevelopmentPlan}
+          />
+        </div>
+        {planError && (
+          <Text size="xs" view="alert" className={styles.planHint}>
+            {planError}
+          </Text>
+        )}
+        {planStatus && (
+          <Text size="xs" view="success" className={styles.planHint}>
+            {planStatus}
+          </Text>
+        )}
+        {hardSkillGaps.length > 0 ? (
+          <div className={styles.gapList}>
+            {hardSkillGaps.map((gap) => (
+              <div key={gap.definition.id} className={styles.gapRow}>
+                <div className={styles.gapTitle}>
+                  <Text size="s" weight="semibold">
+                    {gap.definition.name}
+                  </Text>
+                  <Text size="xs" view="secondary">
+                    {gap.currentLevel
+                      ? `${skillLevelLabelMap.get(gap.currentLevel) ?? gap.currentLevel} → ${skillLevelLabelMap.get(gap.targetLevel) ?? gap.targetLevel}`
+                      : `Нет оценки → ${skillLevelLabelMap.get(gap.targetLevel) ?? gap.targetLevel}`}
+                  </Text>
+                </div>
+                <Text size="xs" view="secondary" className={styles.skillMatrixDescription}>
+                  {gap.definition.description}
+                </Text>
+                <div className={styles.gapMeta}>
+                  <Text size="xs" view="secondary">
+                    Требуется: {skillLevelLabelMap.get(gap.targetLevel) ?? gap.targetLevel}
+                  </Text>
+                  <Text size="xs" view="secondary">
+                    Роль ожидает: {skillLevelLabelMap.get(gap.definition.recommendedLevel) ?? gap.definition.recommendedLevel}
+                  </Text>
+                  <Text size="xs" view="secondary">
+                    Формат: {gap.isTheoretical ? 'теория' : 'практика'}
+                  </Text>
+                </div>
+                {gap.suggestedInitiative ? (
+                  <Text size="xs" className={styles.gapLink}>
+                    Рекомендованный проект: «{gap.suggestedInitiative.name}»
+                  </Text>
+                ) : (
+                  <Text size="xs" view="ghost" className={styles.gapLink}>
+                    Подберите инициативу с запросом на этот навык.
+                  </Text>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Text size="xs" view="success" className={styles.skillMatrixEmpty}>
+            Профиль соответствует эталонной версии роли по hard skills.
+          </Text>
+        )}
+        <Text size="xs" view="secondary" className={styles.planHint}>
+          Задачи плана развития появятся в разделе «Задачи моих сотрудников», где можно скорректировать сроки и последовательность.
+        </Text>
       </div>
 
       <div className={styles.skillMatrix}>
