@@ -35,6 +35,7 @@ import {
   buildRoleMatchReports,
   type RolePlanningDraft
 } from '../utils/initiativeMatching';
+import { buildRoadmapScenarios } from '../utils/initiativeRoadmap';
 import { useSkillRegistryVersion } from '../utils/useSkillRegistryVersion';
 import styles from './InitiativeCreationModal.module.css';
 
@@ -485,6 +486,11 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
   mode = 'create',
   initialDraft = null
 }) => {
+  const baseStartDate = useMemo(
+    () => (initialDraft?.startDate ? startOfDay(new Date(initialDraft.startDate)) : null),
+    [initialDraft]
+  );
+
   const graphDomainIds = useMemo(() => collectGraphDomainIds(domains), [domains]);
   const domainBaseItems = useMemo<OptionItem[]>(
     () =>
@@ -1283,6 +1289,45 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
 
     return { planningRoles: planning, roleAssignmentRefs: assignmentRefs };
   }, [assignmentSchedule, works]);
+
+  const roadmapScenarios = useMemo(() => {
+    const requirementMap = new Map<string, number>();
+    planningRoles.forEach((role) => {
+      requirementMap.set(role.role, Math.max(1, Math.round(role.required)) || 1);
+    });
+
+    const assignments = works.flatMap((work) =>
+      work.assignments.map((assignment) => {
+        const schedule = assignmentSchedule.get(assignment.id);
+        return {
+          id: assignment.id,
+          role: assignment.role,
+          startDay: schedule?.startDay ?? Math.max(0, Math.round(assignment.startDay)),
+          durationDays: schedule?.durationDays ?? Math.max(1, Math.round(assignment.durationDays)),
+          effortDays: Math.max(1, Math.round(assignment.effortDays))
+        };
+      })
+    );
+
+    const scenarios = buildRoadmapScenarios({
+      assignments,
+      roleRequirements: requirementMap,
+      maxExtraPerRole: 3
+    });
+
+    const startDate = initiativeStartDate?.trim()
+      ? startOfDay(new Date(initiativeStartDate))
+      : baseStartDate;
+
+    return scenarios.map((scenario) => ({
+      ...scenario,
+      options: scenario.options.map((option) => ({
+        ...option,
+        startDate: startDate ? addDays(startDate, option.startDay) : null,
+        endDate: startDate ? addDays(startDate, Math.max(0, option.endDay - 1)) : null
+      }))
+    }));
+  }, [assignmentSchedule, baseStartDate, initiativeStartDate, planningRoles, works]);
 
   const draftPayload = useMemo<InitiativeCreationRequest>(
     () => {
@@ -2453,6 +2498,74 @@ const InitiativeCreationModal: React.FC<InitiativeCreationModalProps> = ({
                   </div>
                 </div>
               </div>
+              {roadmapScenarios.length > 0 && (
+                <section className={styles.section}>
+                  <div className={styles.sectionHeader}>
+                    <div>
+                      <Text size="s" weight="semibold">
+                        Автоподбор стартов ролей и численности
+                      </Text>
+                      <Text size="xs" view="secondary">
+                        Сценарии показывают, как изменится дорожная карта при увеличении команды по перегруженным ролям.
+                      </Text>
+                    </div>
+                  </div>
+                  <div className={styles.roadmapGrid}>
+                    {roadmapScenarios.map((scenario) => (
+                      <Card
+                        key={scenario.role}
+                        className={styles.roadmapCard}
+                        verticalSpace="l"
+                        horizontalSpace="l"
+                      >
+                        <div className={styles.roadmapCardHeader}>
+                          <div>
+                            <Text size="s" weight="semibold">
+                              {scenario.role}
+                            </Text>
+                            <Text size="xs" view="secondary">
+                              Без разрывов участия роли
+                            </Text>
+                          </div>
+                          {scenario.overloaded && (
+                            <Badge size="s" status="warning" label="Есть перегрузка" />
+                          )}
+                        </div>
+                        <div className={styles.roadmapOptionList}>
+                          {scenario.options.map((option) => {
+                            const finishDayLabel = option.endDay;
+                            const dateLabel =
+                              option.startDate && option.endDate
+                                ? `${startDateFormatter.format(option.startDate)} – ${startDateFormatter.format(option.endDate)}`
+                                : null;
+
+                            return (
+                              <div key={`${scenario.role}-${option.specialists}-${option.startDay}`} className={styles.roadmapOption}>
+                                <div className={styles.roadmapOptionHeader}>
+                                  <Text size="s" weight="semibold">
+                                    {option.specialists} {option.specialists === 1 ? 'специалист' : 'специалиста'}
+                                  </Text>
+                                  <Text size="xs" view="secondary">
+                                    Д{option.startDay + 1} – Д{finishDayLabel} · {option.durationDays} дн.
+                                  </Text>
+                                </div>
+                                {dateLabel && (
+                                  <Text size="2xs" view="secondary">
+                                    {dateLabel}
+                                  </Text>
+                                )}
+                                <Text size="2xs" view="secondary" className={styles.roadmapOptionMeta}>
+                                  Трудозатраты: {option.totalEffortDays} дн · Простой роли: {option.idleDays} дн
+                                </Text>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </section>
+              )}
             </section>
           )}
           {activeStep === 'team' && (
