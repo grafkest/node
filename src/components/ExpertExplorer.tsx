@@ -2105,7 +2105,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
       const label = typed.label;
       const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 9);
-      const shouldShowLabel = isHighlighted || isHoverRelated || globalScale >= 0.95;
+      const shouldShowLabel =
+        isHoverRelated && (isHighlighted || isHovered || globalScale >= 0.95);
       const textY = (node.y ?? 0) + outerRadius + 8;
 
       ctx.save();

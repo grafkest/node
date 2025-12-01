@@ -1249,7 +1249,8 @@ function drawNode(
   const effectiveAlpha = clamp(baseAlpha * dimFactor, 0.08, 1);
   const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 10);
   const iconFontSize = Math.max(14 / Math.sqrt(globalScale), 12);
-  const shouldShowLabel = isHighlighted || isHoverRelated || globalScale >= 0.95;
+  const shouldShowLabel =
+    isHoverRelated && (isHighlighted || isHovered || globalScale >= 0.95);
 
   const accent = resolveNodeColor(node, palette);
   const halo = withAlpha(accent, 0.18);
