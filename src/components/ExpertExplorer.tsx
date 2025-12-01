@@ -217,6 +217,29 @@ const getNodeRenderRadius = (node: ForceNode): number => {
   return baseRadius + Math.min(8, connectionIntensity * 2);
 };
 
+const buildNeighborMap = (nodes: ForceNode[], links: ForceLink[]): Map<string, Set<string>> => {
+  const map = new Map<string, Set<string>>();
+  nodes.forEach((node) => {
+    map.set(node.id, new Set());
+  });
+
+  links.forEach((link) => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
+    const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
+
+    const sourceSet = map.get(sourceId);
+    const targetSet = map.get(targetId);
+    if (sourceSet) {
+      sourceSet.add(targetId);
+    }
+    if (targetSet) {
+      targetSet.add(sourceId);
+    }
+  });
+
+  return map;
+};
+
 const skillTypeLabel: Record<SkillFocus['type'], string> = {
   domain: 'Домен',
   competency: 'Компетенция',
@@ -267,6 +290,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [roleGraphInstanceKey, setRoleGraphInstanceKey] = useState(0);
   const [isSkillGraphVisible, setIsSkillGraphVisible] = useState(true);
   const [isRoleGraphVisible, setIsRoleGraphVisible] = useState(true);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const initialGraphZoomAppliedRef = useRef<Record<'graph' | 'assignments', boolean>>({
@@ -1393,6 +1417,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [viewMode]);
 
   useEffect(() => {
+    setHoveredNodeId(null);
+  }, [graphInstanceKey, roleGraphInstanceKey, viewMode]);
+
+  useEffect(() => {
     if (!isSkillGraphVisible || (viewMode !== 'graph' && viewMode !== 'assignments')) {
       return;
     }
@@ -1589,6 +1617,31 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     return { nodes, links };
   }, [selectedRoleAggregate]);
+
+  const skillNeighborMap = useMemo(
+    () => buildNeighborMap(skillGraphNodes, skillGraphLinks),
+    [skillGraphLinks, skillGraphNodes]
+  );
+
+  const assignmentNeighborMap = useMemo(
+    () => buildNeighborMap(assignmentGraphNodes, assignmentGraphLinks),
+    [assignmentGraphLinks, assignmentGraphNodes]
+  );
+
+  const roleNeighborMap = useMemo(
+    () => buildNeighborMap(roleGraphData.nodes, roleGraphData.links),
+    [roleGraphData.links, roleGraphData.nodes]
+  );
+
+  const activeNeighborMap = useMemo(() => {
+    if (viewMode === 'roles') {
+      return roleNeighborMap;
+    }
+    if (viewMode === 'assignments') {
+      return assignmentNeighborMap;
+    }
+    return skillNeighborMap;
+  }, [assignmentNeighborMap, roleNeighborMap, skillNeighborMap, viewMode]);
 
   useEffect(() => {
     if (viewMode !== 'roles') {
@@ -2008,11 +2061,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const nodeCanvasObject = useCallback(
     (node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const typed = node as ForceNode;
-
-      const connectionIntensity = Math.sqrt(Math.max(typed.connectionCount ?? 0, 0));
       const radius = getNodeRenderRadius(typed);
-
-      const baseColor =
+      const accent =
         typed.type === 'expert'
           ? palette.expert
           : typed.type === 'initiative'
@@ -2032,66 +2082,94 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const isSolid =
         typed.type === 'expert' || typed.type === 'role' || typed.type === 'initiative';
       const isHighlighted = highlightNodeIds.has(typed.id);
-      const fillColor = isHighlighted || isSolid ? baseColor : withAlpha(baseColor, 0.22);
-      const accentTextColor = getReadableTextColor(baseColor, palette);
-      const labelTextColor = getReadableTextColor(palette.background, palette);
-      const solidTextColor = accentTextColor === labelTextColor ? accentTextColor : labelTextColor;
+      const isHovered = hoveredNodeId === typed.id;
+      const isNeighbor =
+        hoveredNodeId && activeNeighborMap.get(hoveredNodeId)?.has(typed.id)
+          ? hoveredNodeId !== typed.id
+          : false;
+      const isHoverRelated = !hoveredNodeId || isHovered || isNeighbor;
+      const selectionDim =
+        highlightNodeIds.size > 0 && !isHighlighted && !highlightNodeIds.has(typed.id) ? 0.28 : 1;
+      const baseAlpha = isHighlighted || isHovered ? 1 : isSolid ? 0.95 : 0.85;
+      const effectiveAlpha = Math.max(
+        0.1,
+        Math.min(1, baseAlpha * selectionDim * (isHoverRelated ? 1 : 0.18))
+      );
 
-      const fontSizeBase =
-        typed.type === 'expert'
-          ? 16
-          : typed.type === 'initiative'
-            ? 15
-            : typed.type === 'role'
-              ? 15
-              : typed.type === 'module' || typed.type === 'domain'
-                ? 14
-                : 12;
-      const fontSize =
-        (fontSizeBase + Math.min(4, connectionIntensity)) /
-        Math.sqrt(Math.max(globalScale, 0.6));
-      const textY = (node.y ?? 0) + radius + 4;
+      const scaleFactor = Math.max(0.75, Math.min(1.35, 1 / Math.sqrt(globalScale)));
+      const outerRadius = radius * scaleFactor;
+      const shellThickness = Math.max(2.5, Math.min(6, outerRadius * 0.28));
+      const coreRadius = Math.max(outerRadius * 0.45, outerRadius - shellThickness * 1.6);
+      const haloRadius = outerRadius + shellThickness * 0.9;
+      const shadowBlur = Math.max(6, Math.min(16, outerRadius * 1.15));
+
+      const label = typed.label;
+      const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 9);
+      const shouldShowLabel = isHighlighted || isHoverRelated || globalScale >= 0.95;
+      const textY = (node.y ?? 0) + outerRadius + 8;
 
       ctx.save();
+      ctx.globalAlpha = effectiveAlpha;
+      ctx.shadowColor = withAlpha(accent, 0.32);
+      ctx.shadowBlur = shadowBlur;
+      ctx.shadowOffsetY = 2;
+
       ctx.beginPath();
-      ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
-      ctx.fillStyle = fillColor;
-      ctx.globalAlpha = isHighlighted || isSolid ? 1 : 0.9;
+      ctx.arc(node.x ?? 0, node.y ?? 0, outerRadius, 0, 2 * Math.PI, false);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+      ctx.lineWidth = shellThickness;
+      ctx.strokeStyle = accent;
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.beginPath();
+      ctx.arc(node.x ?? 0, node.y ?? 0, coreRadius, 0, 2 * Math.PI, false);
+      ctx.fillStyle = accent;
       ctx.fill();
 
-      if (isHighlighted) {
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = baseColor;
+      if (isHovered || isHighlighted) {
+        ctx.beginPath();
+        ctx.arc(node.x ?? 0, node.y ?? 0, haloRadius, 0, 2 * Math.PI, false);
+        ctx.strokeStyle = withAlpha(accent, 0.25);
+        ctx.lineWidth = Math.max(2, shellThickness * 0.9);
         ctx.stroke();
       }
-      ctx.restore();
 
-      ctx.save();
-      ctx.font = `${fontSize}px "Inter", "Segoe UI", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-
-      if (isHighlighted) {
-        ctx.lineWidth = Math.max(2, fontSize / 3);
-        ctx.strokeStyle = withAlpha(palette.background, 0.9);
-        ctx.strokeText(typed.label, node.x ?? 0, textY);
-        ctx.fillStyle = solidTextColor;
-      } else {
-        ctx.fillStyle = isSolid ? solidTextColor : labelTextColor;
-        if (!isSolid) {
-          ctx.globalAlpha = Math.min(0.95, 0.55 + globalScale * 0.2);
+      if (shouldShowLabel) {
+        const textAlpha = isHighlighted || isHovered ? 1 : Math.max(effectiveAlpha, 0.65);
+        ctx.globalAlpha = textAlpha;
+        ctx.font = `${labelFontSize}px "Inter", "Segoe UI", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        if (isHovered || isHighlighted) {
+          ctx.lineWidth = Math.max(2, labelFontSize / 3);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+          ctx.strokeText(label, node.x ?? 0, textY);
         }
+        ctx.fillStyle = palette.text;
+        ctx.fillText(label, node.x ?? 0, textY);
       }
 
-      ctx.fillText(typed.label, node.x ?? 0, textY);
       ctx.restore();
     },
-    [highlightNodeIds, palette]
+    [activeNeighborMap, highlightNodeIds, hoveredNodeId, palette]
   );
 
   const linkColor = useCallback(
     (link: LinkObject) => {
       const typed = link as ForceLink;
+      const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
+      const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
+      const isHoverActive = Boolean(hoveredNodeId);
+      const isHoverRelated =
+        !hoveredNodeId ||
+        sourceId === hoveredNodeId ||
+        targetId === hoveredNodeId ||
+        activeNeighborMap.get(hoveredNodeId)?.has(sourceId) ||
+        activeNeighborMap.get(hoveredNodeId)?.has(targetId);
+
       if (typed.id && highlightLinkIds.has(typed.id)) {
         return palette.edgeHighlight;
       }
@@ -2108,11 +2186,16 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         return palette.planEdge;
       }
       if (typed.type === 'soft') {
-        return withAlpha(palette.soft, 0.45);
+        const softColor = withAlpha(palette.soft, 0.45);
+        return isHoverActive && !isHoverRelated ? withAlpha(palette.soft, 0.16) : softColor;
       }
-      return palette.edge;
+      const baseColor = palette.edge;
+      if (isHoverActive && !isHoverRelated) {
+        return withAlpha(baseColor, 0.16);
+      }
+      return baseColor;
     },
-    [highlightLinkIds, palette]
+    [activeNeighborMap, highlightLinkIds, hoveredNodeId, palette]
   );
 
   const linkWidth = useCallback(
@@ -2521,10 +2604,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   width={graphDimensions.width}
                   height={graphDimensions.height}
                   graphData={displayedSkillGraphData}
-                  backgroundColor={palette.background}
+                  backgroundColor="rgba(255, 255, 255, 0)"
                   nodeRelSize={4}
                   cooldownTicks={80}
                   onNodeClick={handleNodeClick}
+                  onNodeHover={(node) =>
+                    setHoveredNodeId(node ? (node as ForceNode).id : null)
+                  }
                   nodeCanvasObject={nodeCanvasObject}
                   nodeCanvasObjectMode={() => 'replace'}
                   linkColor={linkColor}
@@ -2685,10 +2771,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   width={graphDimensions.width}
                   height={graphDimensions.height}
                   graphData={assignmentGraphData}
-                  backgroundColor={palette.background}
+                  backgroundColor="rgba(255, 255, 255, 0)"
                   nodeRelSize={4}
                   cooldownTicks={80}
                   onNodeClick={handleNodeClick}
+                  onNodeHover={(node) =>
+                    setHoveredNodeId(node ? (node as ForceNode).id : null)
+                  }
                   nodeCanvasObject={nodeCanvasObject}
                   nodeCanvasObjectMode={() => 'replace'}
                   linkColor={linkColor}
@@ -2826,10 +2915,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                             width={roleGraphDimensions.width}
                             height={roleGraphDimensions.height}
                             graphData={roleGraphData}
-                            backgroundColor={palette.background}
+                            backgroundColor="rgba(255, 255, 255, 0)"
                             nodeRelSize={4}
                             cooldownTicks={80}
                             onNodeClick={handleNodeClick}
+                            onNodeHover={(node) =>
+                              setHoveredNodeId(node ? (node as ForceNode).id : null)
+                            }
                             nodeCanvasObject={nodeCanvasObject}
                             nodeCanvasObjectMode={() => 'replace'}
                             linkColor={linkColor}
@@ -3256,16 +3348,6 @@ function areExpertPalettesEqual(a: ExpertPalette, b: ExpertPalette): boolean {
     a.initiativeEdge === b.initiativeEdge &&
     a.planEdge === b.planEdge
   );
-}
-
-function getReadableTextColor(backgroundColor: string, palette: ExpertPalette): string {
-  const rgb = parseColor(backgroundColor);
-  if (!rgb) {
-    return palette.textOnAccent;
-  }
-
-  const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-  return brightness > 180 ? palette.text : palette.textOnAccent;
 }
 
 function parseColor(color: string): RGBColor | null {
