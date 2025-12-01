@@ -165,6 +165,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const [isFocusedView, setIsFocusedView] = useState(false);
   const [graphInstanceKey, setGraphInstanceKey] = useState(0);
   const [isGraphVisible, setIsGraphVisible] = useState(true);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
   const refreshGraphInstance = useCallback(() => {
     const refresh = (graphRef.current as unknown as { refresh?: () => void })?.refresh;
@@ -393,6 +394,26 @@ const GraphView: React.FC<GraphViewProps> = ({
     });
     return map;
   }, [nodes]);
+
+  const neighborMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+
+    const register = (source: string, target: string) => {
+      if (!map.has(source)) {
+        map.set(source, new Set());
+      }
+      map.get(source)!.add(target);
+    };
+
+    graphLinks.forEach((link) => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
+      const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
+      register(sourceId, targetId);
+      register(targetId, sourceId);
+    });
+
+    return map;
+  }, [graphLinks]);
 
   const connectionCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1053,7 +1074,15 @@ const GraphView: React.FC<GraphViewProps> = ({
               graphData={graphData}
               nodeLabel={(node: ForceNode) => node.name ?? node.id}
               linkColor={(link: ForceLink) =>
-                resolveLinkColor(link, palette, visibleDomainIds, visibleModuleStatuses, moduleStatusMap)
+                resolveLinkColor(
+                  link,
+                  palette,
+                  visibleDomainIds,
+                  visibleModuleStatuses,
+                  moduleStatusMap,
+                  hoveredNodeId,
+                  neighborMap
+                )
               }
               nodeCanvasObject={(node: ForceNode, ctx, globalScale) => {
                 drawNode(
@@ -1061,6 +1090,8 @@ const GraphView: React.FC<GraphViewProps> = ({
                   ctx,
                   globalScale,
                   highlightedNode,
+                  hoveredNodeId,
+                  neighborMap,
                   palette,
                   visibleDomainIds,
                   visibleModuleStatuses
@@ -1080,6 +1111,9 @@ const GraphView: React.FC<GraphViewProps> = ({
               onEngineStop={handleEngineStop}
               onZoom={handleZoomTransform}
               onZoomEnd={handleZoomEnd}
+              onNodeHover={(node) => {
+                setHoveredNodeId(node ? (node as ForceNode).id : null);
+              }}
             />
           ) : (
             <Loader size="m" />
@@ -1186,6 +1220,8 @@ function drawNode(
   ctx: CanvasRenderingContext2D,
   globalScale: number,
   highlighted: string | null,
+  hoveredNodeId: string | null,
+  neighborMap: Map<string, Set<string>>,
   palette: GraphPalette,
   visibleDomainIds: Set<string>,
   visibleModuleStatuses: Set<ModuleStatus>
@@ -1194,83 +1230,84 @@ function drawNode(
   const x = typeof node.x === 'number' ? node.x : 0;
   const y = typeof node.y === 'number' ? node.y : 0;
   const isHighlighted = highlighted === node.id;
+  const isHovered = hoveredNodeId === node.id;
+  const isNeighbor =
+    hoveredNodeId && neighborMap.get(hoveredNodeId)?.has(node.id) ? hoveredNodeId !== node.id : false;
   const isDomainDimmed =
     node.type === 'domain' && visibleDomainIds.size > 0 && !visibleDomainIds.has(node.id);
   const isModuleDimmed =
     node.type === 'module' &&
     visibleModuleStatuses.size > 0 &&
     !visibleModuleStatuses.has(node.status);
-  const baseAlpha = isHighlighted ? 1 : 1;
+  const isHoverRelated = !hoveredNodeId || isHovered || isNeighbor;
+  const baseAlpha = isHighlighted || isHovered ? 1 : 0.95;
   const dimFactor =
-    (highlighted && node.id !== highlighted ? 0.4 : 1) *
-    (isModuleDimmed && !isHighlighted ? 0.35 : 1) *
-    (isDomainDimmed && !isHighlighted ? 0.35 : 1);
-  const effectiveAlpha = clamp(baseAlpha * dimFactor, 0.1, 1);
+    (highlighted && node.id !== highlighted ? 0.35 : 1) *
+    (isHoverRelated ? 1 : 0.2) *
+    (isModuleDimmed && !isHighlighted ? 0.3 : 1) *
+    (isDomainDimmed && !isHighlighted ? 0.3 : 1);
+  const effectiveAlpha = clamp(baseAlpha * dimFactor, 0.08, 1);
   const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 10);
   const iconFontSize = Math.max(14 / Math.sqrt(globalScale), 12);
+  const shouldShowLabel = isHighlighted || isHoverRelated || globalScale >= 0.95;
+
+  const accent = resolveNodeColor(node, palette);
+  const halo = withAlpha(accent, 0.18);
+  const outerRadius = 13 * clamp(1 / Math.sqrt(globalScale), 0.85, 1.35);
+  const shellThickness = clamp(3 / Math.sqrt(globalScale), 2, 4);
+  const coreRadius = Math.max(outerRadius * 0.45, 4.5);
+  const shadowBlur = clamp(22 / Math.sqrt(globalScale), 8, 18);
+  const icon = resolveNodeIcon(node);
 
   ctx.save();
   ctx.globalAlpha = effectiveAlpha;
+  ctx.shadowColor = withAlpha(accent, 0.35);
+  ctx.shadowBlur = shadowBlur;
+  ctx.shadowOffsetY = 2;
 
-  let labelOffset = 14;
-  let iconColor = palette.text;
-  const icon = resolveNodeIcon(node);
+  // Outer white shell with colored ring
+  ctx.beginPath();
+  ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+  ctx.lineWidth = shellThickness;
+  ctx.strokeStyle = accent;
+  ctx.stroke();
 
-  switch (node.type) {
-    case 'module': {
-      const moduleRadius = 11;
-      const fill = resolveModuleColor(node.status, palette);
-      renderCircle(ctx, x, y, moduleRadius, fill, withAlpha(fill, 0.35));
-      labelOffset = moduleRadius + 8;
-      iconColor = '#FFFFFF';
-      break;
-    }
-    case 'domain': {
-      const domainRadius = 9;
-      renderDiamond(ctx, x, y, domainRadius, palette.domain, withAlpha(palette.domain, 0.35));
-      labelOffset = domainRadius + 10;
-      break;
-    }
-    case 'artifact': {
-      const artifactRadius = 8;
-      renderTriangle(ctx, x, y, artifactRadius, palette.artifact, withAlpha(palette.artifact, 0.35));
-      labelOffset = artifactRadius + 10;
-      break;
-    }
-    case 'initiative': {
-      const width = 26;
-      const height = 16;
-      renderRoundedRect(
-        ctx,
-        x - width / 2,
-        y - height / 2,
-        width,
-        height,
-        6,
-        palette.initiative,
-        withAlpha(palette.initiative, 0.35)
-      );
-      labelOffset = height / 2 + 10;
-      iconColor = '#FFFFFF';
-      break;
-    }
+  // Inner core
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.beginPath();
+  ctx.arc(x, y, coreRadius, 0, Math.PI * 2);
+  ctx.fillStyle = accent;
+  ctx.fill();
+
+  // Halo for hover/highlight
+  if (isHovered || isHighlighted) {
+    ctx.beginPath();
+    ctx.arc(x, y, outerRadius + shellThickness + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = halo;
+    ctx.lineWidth = shellThickness;
+    ctx.stroke();
   }
 
   if (icon) {
     ctx.font = `${iconFontSize}px sans-serif`;
-    ctx.fillStyle = iconColor;
+    ctx.fillStyle = '#FFFFFF';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(icon, x, y);
   }
 
-  const textAlpha = isHighlighted ? 1 : Math.max(effectiveAlpha, 0.45);
-  ctx.globalAlpha = textAlpha;
-  ctx.font = `${labelFontSize}px sans-serif`;
-  ctx.fillStyle = palette.text;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillText(label, x, y + labelOffset);
+  if (shouldShowLabel) {
+    const textAlpha = isHighlighted || isHovered ? 1 : Math.max(effectiveAlpha, 0.6);
+    ctx.globalAlpha = textAlpha;
+    ctx.font = `${labelFontSize}px 'Inter', 'Segoe UI', sans-serif`;
+    ctx.fillStyle = palette.text;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, x, y + outerRadius + 10);
+  }
 
   ctx.restore();
 }
@@ -1280,8 +1317,20 @@ function resolveLinkColor(
   palette: GraphPalette,
   visibleDomainIds: Set<string>,
   visibleModuleStatuses: Set<ModuleStatus>,
-  moduleStatusMap: Map<string, ModuleStatus>
+  moduleStatusMap: Map<string, ModuleStatus>,
+  hoveredNodeId: string | null,
+  neighborMap: Map<string, Set<string>>
 ) {
+  const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
+  const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
+  const isHoverActive = Boolean(hoveredNodeId);
+  const isHoverRelated =
+    !hoveredNodeId ||
+    sourceId === hoveredNodeId ||
+    targetId === hoveredNodeId ||
+    neighborMap.get(hoveredNodeId)?.has(sourceId) ||
+    neighborMap.get(hoveredNodeId)?.has(targetId);
+
   if (link.type === 'initiative-plan') {
     const moduleId =
       typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
@@ -1315,14 +1364,16 @@ function resolveLinkColor(
             : palette.linkRelates;
 
   if ((link.type === 'domain' || link.type === 'initiative-domain') && visibleDomainIds.size > 0) {
-    const targetId =
-      typeof link.target === 'object' ? (link.target as ForceNode).id : String(link.target);
     if (!visibleDomainIds.has(targetId)) {
       return withAlpha(baseColor, 0.2);
     }
   }
 
-  return baseColor;
+  if (isHoverActive && !isHoverRelated) {
+    return withAlpha(baseColor, 0.15);
+  }
+
+  return isHoverRelated ? withAlpha(baseColor, 0.95) : baseColor;
 }
 
 function withAlpha(color: string, alpha: number) {
@@ -1342,91 +1393,20 @@ function withAlpha(color: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function renderCircle(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  fill: string,
-  outline: string
-) {
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, 2 * Math.PI);
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.strokeStyle = outline;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-}
+function resolveNodeColor(node: GraphNode, palette: GraphPalette): string {
+  if (node.type === 'module') {
+    return resolveModuleColor(node.status, palette);
+  }
 
-function renderDiamond(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  fill: string,
-  outline: string
-) {
-  ctx.beginPath();
-  ctx.moveTo(x, y - radius);
-  ctx.lineTo(x + radius, y);
-  ctx.lineTo(x, y + radius);
-  ctx.lineTo(x - radius, y);
-  ctx.closePath();
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.strokeStyle = outline;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-}
+  if (node.type === 'domain') {
+    return palette.domain;
+  }
 
-function renderTriangle(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  fill: string,
-  outline: string
-) {
-  ctx.beginPath();
-  ctx.moveTo(x, y - radius);
-  ctx.lineTo(x + radius, y + radius);
-  ctx.lineTo(x - radius, y + radius);
-  ctx.closePath();
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.strokeStyle = outline;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-}
+  if (node.type === 'initiative') {
+    return palette.initiative;
+  }
 
-function renderRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-  fill: string,
-  outline: string
-) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.strokeStyle = outline;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  return palette.artifact;
 }
 
 function resolveModuleColor(status: ModuleStatus, palette: GraphPalette): string {
