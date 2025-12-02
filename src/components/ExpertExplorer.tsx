@@ -2361,6 +2361,73 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     [emphasizedLinkIds]
   );
 
+  const linkDirectionalParticles = useCallback(
+    (link: LinkObject) => {
+      const typed = link as ForceLink;
+      const isEmphasized = typed.id ? emphasizedLinkIds.has(typed.id) : false;
+      if (emphasizedLinkIds.size > 0 && !isEmphasized) {
+        return 0;
+      }
+      return isEmphasized ? 3 : 1;
+    },
+    [emphasizedLinkIds]
+  );
+
+  const linkDirectionalParticleWidth = useCallback(
+    (link: LinkObject) => {
+      const typed = link as ForceLink;
+      return typed.id && emphasizedLinkIds.has(typed.id) ? 2.1 : 1.1;
+    },
+    [emphasizedLinkIds]
+  );
+
+  const linkDirectionalParticleSpeed = useCallback(
+    (link: LinkObject) => {
+      const typed = link as ForceLink;
+      const isEmphasized = typed.id ? emphasizedLinkIds.has(typed.id) : false;
+      const typeBoost =
+        typed.type === 'module' || typed.type === 'plan' || typed.type === 'initiative' ? 0.0015 : 0;
+      return 0.0035 + typeBoost + (isEmphasized ? 0.0025 : 0);
+    },
+    [emphasizedLinkIds]
+  );
+
+  const linkDirectionalParticleColor = useCallback(
+    (link: LinkObject) => {
+      const typed = link as ForceLink;
+      const sourceId =
+        typeof typed.source === 'string' ? typed.source : ((typed.source as ForceNode)?.id ?? '');
+      const targetId =
+        typeof typed.target === 'string' ? typed.target : ((typed.target as ForceNode)?.id ?? '');
+
+      const sourceNode = nodeById.get(sourceId);
+      const targetNode = nodeById.get(targetId);
+
+      const isEmphasized = typed.id ? emphasizedLinkIds.has(typed.id) : false;
+      const hasEmphasis = emphasizedLinkIds.size > 0;
+      const baseAlpha = isEmphasized ? 0.9 : hasEmphasis ? 0.42 : 0.62;
+
+      if (targetNode?.type === 'module' && sourceNode?.type !== 'module') {
+        return setAlpha(palette.module, baseAlpha);
+      }
+
+      if (sourceNode?.type === 'module' && targetNode?.type !== 'module') {
+        return setAlpha(palette.edgeHighlight, Math.min(1, baseAlpha + 0.1));
+      }
+
+      if (typed.type === 'plan' || typed.type === 'initiative') {
+        return setAlpha(palette.initiative, baseAlpha);
+      }
+
+      if (isEmphasized) {
+        return setAlpha(palette.edgeHighlight, baseAlpha);
+      }
+
+      return setAlpha(palette.edge, baseAlpha);
+    },
+    [emphasizedLinkIds, nodeById, palette]
+  );
+
   const resetFilters = useCallback(() => {
     setSearch('');
     setDomainFilter([]);
@@ -2767,6 +2834,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   nodeCanvasObjectMode={() => 'replace'}
                   linkColor={linkColor}
                   linkWidth={linkWidth}
+                  linkDirectionalParticles={linkDirectionalParticles}
+                  linkDirectionalParticleWidth={linkDirectionalParticleWidth}
+                  linkDirectionalParticleSpeed={linkDirectionalParticleSpeed}
+                  linkDirectionalParticleColor={linkDirectionalParticleColor}
                   enableZoomInteraction
                   enablePanInteraction
                   onNodeHover={(node) => setHoveredNodeId(node ? (node as ForceNode).id : null)}
@@ -2932,6 +3003,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   nodeCanvasObjectMode={() => 'replace'}
                   linkColor={linkColor}
                   linkWidth={linkWidth}
+                  linkDirectionalParticles={linkDirectionalParticles}
+                  linkDirectionalParticleWidth={linkDirectionalParticleWidth}
+                  linkDirectionalParticleSpeed={linkDirectionalParticleSpeed}
+                  linkDirectionalParticleColor={linkDirectionalParticleColor}
                   enableZoomInteraction
                   enablePanInteraction
                   onNodeHover={(node) => setHoveredNodeId(node ? (node as ForceNode).id : null)}
@@ -3074,6 +3149,10 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                             nodeCanvasObjectMode={() => 'replace'}
                             linkColor={linkColor}
                             linkWidth={linkWidth}
+                            linkDirectionalParticles={linkDirectionalParticles}
+                            linkDirectionalParticleWidth={linkDirectionalParticleWidth}
+                            linkDirectionalParticleSpeed={linkDirectionalParticleSpeed}
+                            linkDirectionalParticleColor={linkDirectionalParticleColor}
                             enableZoomInteraction
                             enablePanInteraction
                             onNodeHover={(node) =>
@@ -3550,6 +3629,14 @@ function parseColor(color: string): RGBColor | null {
   const [r, g, b] = components as [number, number, number];
 
   return { r, g, b };
+}
+
+function setAlpha(color: string, alpha: number) {
+  const rgb = parseColor(color);
+  if (!rgb) {
+    return color;
+  }
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
 function withAlpha(color: string, alpha: number) {
