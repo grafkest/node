@@ -11,6 +11,18 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 20px;
   align-items: end;
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.75),
+      rgba(255, 255, 255, 0.6)
+    ),
+    rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(82, 96, 115, 0.12);
+  box-shadow: 0 12px 40px rgba(20, 25, 38, 0.12), 0 2px 10px rgba(20, 25, 38, 0.08);
+  backdrop-filter: blur(14px);
+  animation: panelFadeUp 320ms ease;
 }
 
 .filterModeToggle {
@@ -58,6 +70,10 @@
 
 .summaryCard {
   height: 100%;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(82, 96, 115, 0.12);
+  box-shadow: 0 12px 32px rgba(20, 25, 38, 0.1), 0 1px 6px rgba(20, 25, 38, 0.08);
+  backdrop-filter: blur(10px);
 }
 
 .viewToolbar {
@@ -177,6 +193,10 @@
   min-height: 0;
 }
 
+.graphPane {
+  animation: panelFadeUp 320ms ease;
+}
+
 @media (max-width: 768px) {
   .content {
     grid-template-columns: 1fr;
@@ -212,6 +232,11 @@
   flex-direction: column;
   gap: 8px;
   padding: 0 4px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(82, 96, 115, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(20, 25, 38, 0.08);
 }
 
 .graphFilterButtons {
@@ -252,9 +277,13 @@
 .graphContainer {
   flex: 1;
   min-height: 440px;
-  border: 1px solid var(--color-bg-border);
-  border-radius: 12px;
+  border: 1px solid rgba(82, 96, 115, 0.12);
+  border-radius: 16px;
   overflow: hidden;
+  background: radial-gradient(circle at 20% 20%, rgba(63, 140, 255, 0.08), transparent 30%),
+    radial-gradient(circle at 80% 10%, rgba(69, 199, 176, 0.12), transparent 32%),
+    rgba(255, 255, 255, 0.8);
+  box-shadow: 0 16px 38px rgba(20, 25, 38, 0.16), 0 2px 8px rgba(20, 25, 38, 0.08);
 }
 
 .graphPlaceholder {
@@ -269,6 +298,10 @@
 
 .focusCard {
   align-self: flex-start;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(82, 96, 115, 0.12);
+  box-shadow: 0 12px 24px rgba(20, 25, 38, 0.1);
+  backdrop-filter: blur(12px);
 }
 
 .focusMeta {
@@ -297,6 +330,8 @@
   border-radius: 12px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 24px rgba(20, 25, 38, 0.08);
 }
 
 .expertCard:hover {
@@ -354,6 +389,7 @@
   overflow-y: auto;
   min-height: 0;
   display: flex;
+  animation: panelFadeUp 320ms ease;
 }
 
 .detailsContent {
@@ -386,6 +422,18 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+@keyframes panelFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .sectionTitle {
