@@ -2,12 +2,14 @@ import { Badge } from '@consta/uikit/Badge';
 import { Button } from '@consta/uikit/Button';
 import { Card } from '@consta/uikit/Card';
 import { Combobox, type ComboboxPropRenderValue } from '@consta/uikit/Combobox';
+import { Loader } from '@consta/uikit/Loader';
 import { Switch } from '@consta/uikit/Switch';
 import { Tabs } from '@consta/uikit/Tabs';
 import { Text } from '@consta/uikit/Text';
 import { TextField } from '@consta/uikit/TextField';
 import { useTheme, type ThemePreset } from '@consta/uikit/Theme';
 import clsx from 'clsx';
+import { forceCollide, forceX, forceY } from 'd3-force-3d';
 import React, {
   useCallback,
   useEffect,
@@ -179,16 +181,16 @@ const graphDensityOptions: GraphDensityOption[] = [
     description: 'Полная детализация с сохранением всех редких навыков'
   },
   {
-    label: 'Совпадения 2+',
+    label: 'Сбалансировано 2+',
     value: 'shared',
     minConnections: 2,
-    description: 'Скрывать навыки, которые есть только у одного эксперта'
+    description: 'Убирает единичные связи, сохраняя локальные кластеры экспертов'
   },
   {
-    label: 'Ядро 3+',
+    label: 'Ядро 4+',
     value: 'core',
-    minConnections: 3,
-    description: 'Показывать только навыки, которыми делятся как минимум три эксперта'
+    minConnections: 4,
+    description: 'Максимально плотный граф: оставляем только часто встречающиеся связи'
   }
 ];
 
@@ -262,6 +264,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [softSkillEditorExpert, setSoftSkillEditorExpert] = useState<ExpertProfile | null>(null);
   const [focusedSkill, setFocusedSkill] = useState<SkillFocus | null>(null);
   const [focusedAssignment, setFocusedAssignment] = useState<AssignmentFocus | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<TeamRole | null>(null);
   const [graphInstanceKey, setGraphInstanceKey] = useState(0);
   const [roleGraphInstanceKey, setRoleGraphInstanceKey] = useState(0);
@@ -1013,6 +1016,8 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
           ? link.target
           : (link.target as ForceNode).id;
 
+      link.id = link.id ?? `${sourceId}->${targetId}`;
+
       const sourceNode = seenNodes.get(sourceId);
       const targetNode = seenNodes.get(targetId);
       const sourceLabelLength = sourceNode?.label.length ?? 0;
@@ -1022,12 +1027,27 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         (targetNode?.connectionCount ?? 0) +
         2;
 
-      const baseDistance = 50;
+      const importanceWeight =
+        link.type === 'domain'
+          ? 1.25
+          : link.type === 'competency'
+            ? 1.1
+            : link.type === 'consulting'
+              ? 0.95
+              : link.type === 'soft'
+                ? 0.85
+                : link.type === 'module' || link.type === 'initiative'
+                  ? 1.15
+                  : link.type === 'role'
+                    ? 1.2
+                    : 1;
+
+      const baseDistance = 48;
       const labelFactor = 4.5;
       const densityFactor = 6;
 
       link.preferredDistance =
-        baseDistance +
+        baseDistance * importanceWeight +
         labelFactor * Math.max(sourceLabelLength, targetLabelLength) +
         densityFactor * Math.sqrt(projectedConnections);
 
@@ -1461,6 +1481,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     if (viewMode !== 'assignments') {
       setFocusedAssignment(null);
     }
+    setHoveredNodeId(null);
   }, [viewMode]);
 
   useEffect(() => {
@@ -1628,11 +1649,48 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
     const chargeForce = graph.d3Force('charge');
     if (chargeForce && typeof (chargeForce as { strength?: unknown }).strength === 'function') {
-      const extraRepulsion =
-        viewMode === 'graph' ? Math.min(260, skillGraphNodes.length * 0.85) : 0;
-      const charge = viewMode === 'assignments' ? -220 : -160 - extraRepulsion;
+      const nodeCount =
+        viewMode === 'assignments' ? assignmentGraphNodes.length : skillGraphNodes.length;
+      const extraRepulsion = viewMode === 'graph' ? Math.min(260, nodeCount * 0.95) : 0;
+      const charge = viewMode === 'assignments' ? -240 - extraRepulsion * 0.25 : -200 - extraRepulsion;
       (chargeForce as { strength: (value: number) => void }).strength(charge);
     }
+
+    const collisionForce = forceCollide<ForceNode>((currentNode) => {
+      return getNodeRenderRadius(currentNode) + 6;
+    }).strength(0.85);
+    graph.d3Force('collision', collisionForce);
+
+    const centerX = graphDimensions.width ? graphDimensions.width / 2 : 0;
+    const centerY = graphDimensions.height ? graphDimensions.height / 2 : 0;
+    const typeTargets: Partial<Record<ForceNode['type'], { x: number; y: number }>> =
+      viewMode === 'graph'
+        ? {
+            expert: { x: centerX, y: centerY + 12 },
+            domain: { x: centerX - graphDimensions.width * 0.26, y: centerY - 80 },
+            competency: { x: centerX - graphDimensions.width * 0.08, y: centerY - 120 },
+            consulting: { x: centerX + graphDimensions.width * 0.2, y: centerY - 32 },
+            soft: { x: centerX + graphDimensions.width * 0.14, y: centerY + 110 }
+          }
+        : {
+            expert: { x: centerX - graphDimensions.width * 0.15, y: centerY },
+            module: { x: centerX + graphDimensions.width * 0.18, y: centerY - 80 },
+            initiative: { x: centerX + graphDimensions.width * 0.12, y: centerY + 120 }
+          };
+
+    const clusterStrength = viewMode === 'graph' ? 0.14 : 0.1;
+    graph.d3Force(
+      'clusterX',
+      forceX<ForceNode>((currentNode) => typeTargets[currentNode.type]?.x ?? centerX).strength(
+        clusterStrength
+      )
+    );
+    graph.d3Force(
+      'clusterY',
+      forceY<ForceNode>((currentNode) => typeTargets[currentNode.type]?.y ?? centerY).strength(
+        clusterStrength
+      )
+    );
 
     const linkForce = graph.d3Force('link');
     if (viewMode === 'assignments' && linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
@@ -1648,8 +1706,90 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     skillGraphLinks,
     skillGraphNodes,
     graphInstanceKey,
+    graphDimensions.height,
+    graphDimensions.width,
     viewMode
   ]);
+
+  const activeGraphNodes = useMemo(() => {
+    if (viewMode === 'assignments') {
+      return assignmentGraphNodes;
+    }
+    if (viewMode === 'roles') {
+      return roleGraphData.nodes;
+    }
+    return skillGraphNodes;
+  }, [assignmentGraphNodes, roleGraphData.nodes, skillGraphNodes, viewMode]);
+
+  const activeGraphLinks = useMemo(() => {
+    if (viewMode === 'assignments') {
+      return assignmentGraphLinks;
+    }
+    if (viewMode === 'roles') {
+      return roleGraphData.links;
+    }
+    return skillGraphLinks;
+  }, [assignmentGraphLinks, roleGraphData.links, skillGraphLinks, viewMode]);
+
+  const nodeById = useMemo(() => {
+    const map = new Map<string, ForceNode>();
+    activeGraphNodes.forEach((node) => map.set(node.id, node));
+    return map;
+  }, [activeGraphNodes]);
+
+  const graphAdjacency = useMemo(() => {
+    const map = new Map<string, { neighborId: string; linkId: string }[]>();
+
+    activeGraphLinks.forEach((link) => {
+      const sourceId =
+        typeof link.source === 'string'
+          ? link.source
+          : (link.source as ForceNode).id;
+      const targetId =
+        typeof link.target === 'string'
+          ? link.target
+          : (link.target as ForceNode).id;
+
+      if (sourceId === targetId) {
+        return;
+      }
+
+      const linkId = link.id ?? `${sourceId}->${targetId}`;
+
+      map.set(sourceId, [...(map.get(sourceId) ?? []), { neighborId: targetId, linkId }]);
+      map.set(targetId, [...(map.get(targetId) ?? []), { neighborId: sourceId, linkId }]);
+    });
+
+    return map;
+  }, [activeGraphLinks]);
+
+  const hoverHighlights = useMemo(() => {
+    if (!hoveredNodeId) {
+      return { nodes: new Set<string>(), links: new Set<string>() };
+    }
+
+    const nodes = new Set<string>([hoveredNodeId]);
+    const links = new Set<string>();
+
+    const neighbors = graphAdjacency.get(hoveredNodeId);
+    neighbors?.forEach(({ neighborId, linkId }) => {
+      nodes.add(neighborId);
+      links.add(linkId);
+
+      const neighborNode = nodeById.get(neighborId);
+      if (neighborNode?.type !== 'expert') {
+        graphAdjacency.get(neighborId)?.forEach(({ neighborId: nestedId, linkId: nestedLink }) => {
+          const nestedNode = nodeById.get(nestedId);
+          if (nestedNode?.type === 'expert') {
+            nodes.add(nestedId);
+            links.add(nestedLink);
+          }
+        });
+      }
+    });
+
+    return { nodes, links };
+  }, [graphAdjacency, hoveredNodeId, nodeById]);
 
   useEffect(() => {
     if (viewMode !== 'roles') {
@@ -1837,6 +1977,18 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
     includeSoftSkills,
     viewMode
   ]);
+
+  const emphasizedNodeIds = useMemo(() => {
+    const set = new Set<string>(highlightNodeIds);
+    hoverHighlights.nodes.forEach((id) => set.add(id));
+    return set;
+  }, [highlightNodeIds, hoverHighlights.nodes]);
+
+  const emphasizedLinkIds = useMemo(() => {
+    const set = new Set<string>(highlightLinkIds);
+    hoverHighlights.links.forEach((id) => set.add(id));
+    return set;
+  }, [highlightLinkIds, hoverHighlights.links]);
 
   const selectedExpertAssignments = useMemo(() => {
     if (!selectedExpert) {
@@ -2026,13 +2178,15 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   : typed.type === 'competency'
                     ? palette.competency
                     : typed.type === 'soft'
-                      ? palette.soft
+                    ? palette.soft
                       : palette.consulting;
 
       const isSolid =
         typed.type === 'expert' || typed.type === 'role' || typed.type === 'initiative';
-      const isHighlighted = highlightNodeIds.has(typed.id);
-      const fillColor = isHighlighted || isSolid ? baseColor : withAlpha(baseColor, 0.22);
+      const isHighlighted = emphasizedNodeIds.has(typed.id);
+      const hasFocus = emphasizedNodeIds.size > 0;
+      const isDimmed = hasFocus && !isHighlighted;
+      const fillColor = isHighlighted || isSolid ? baseColor : withAlpha(baseColor, 0.28);
       const accentTextColor = getReadableTextColor(baseColor, palette);
       const labelTextColor = getReadableTextColor(palette.background, palette);
       const solidTextColor = accentTextColor === labelTextColor ? accentTextColor : labelTextColor;
@@ -2050,18 +2204,96 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const fontSize =
         (fontSizeBase + Math.min(4, connectionIntensity)) /
         Math.sqrt(Math.max(globalScale, 0.6));
-      const textY = (node.y ?? 0) + radius + 4;
+      const textY = (node.y ?? 0) + radius + 8;
+
+      const x = node.x ?? 0;
+      const y = node.y ?? 0;
+
+      const renderShape = () => {
+        ctx.beginPath();
+
+        if (typed.type === 'domain') {
+          ctx.moveTo(x, y - radius);
+          ctx.lineTo(x + radius, y);
+          ctx.lineTo(x, y + radius);
+          ctx.lineTo(x - radius, y);
+          ctx.closePath();
+          return;
+        }
+
+        if (typed.type === 'competency') {
+          const sides = 6;
+          for (let i = 0; i < sides; i += 1) {
+            const angle = (Math.PI / 3) * i + Math.PI / 6;
+            const px = x + radius * Math.cos(angle);
+            const py = y + radius * Math.sin(angle);
+            if (i === 0) {
+              ctx.moveTo(px, py);
+            } else {
+              ctx.lineTo(px, py);
+            }
+          }
+          ctx.closePath();
+          return;
+        }
+
+        if (typed.type === 'consulting') {
+          const width = radius * 2.4;
+          const height = radius * 1.4;
+          const rx = 6;
+          ctx.moveTo(x - width / 2 + rx, y - height / 2);
+          ctx.arcTo(x + width / 2, y - height / 2, x + width / 2, y + height / 2, rx);
+          ctx.arcTo(x + width / 2, y + height / 2, x - width / 2, y + height / 2, rx);
+          ctx.arcTo(x - width / 2, y + height / 2, x - width / 2, y - height / 2, rx);
+          ctx.arcTo(x - width / 2, y - height / 2, x + width / 2, y - height / 2, rx);
+          ctx.closePath();
+          return;
+        }
+
+        if (typed.type === 'module') {
+          const size = radius * 1.4;
+          const corner = 6;
+          ctx.moveTo(x - size + corner, y - size);
+          ctx.arcTo(x + size, y - size, x + size, y + size, corner);
+          ctx.arcTo(x + size, y + size, x - size, y + size, corner);
+          ctx.arcTo(x - size, y + size, x - size, y - size, corner);
+          ctx.arcTo(x - size, y - size, x + size, y - size, corner);
+          ctx.closePath();
+          return;
+        }
+
+        if (typed.type === 'initiative') {
+          const width = radius * 2.4;
+          const height = radius * 1.6;
+          ctx.moveTo(x - width / 2, y - height / 2);
+          ctx.lineTo(x + width / 2, y);
+          ctx.lineTo(x - width / 2, y + height / 2);
+          ctx.closePath();
+          return;
+        }
+
+        ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
+      };
 
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
+      ctx.globalAlpha = isDimmed ? 0.12 : 1;
       ctx.fillStyle = fillColor;
-      ctx.globalAlpha = isHighlighted || isSolid ? 1 : 0.9;
+
+      if (isHighlighted) {
+        ctx.shadowColor = withAlpha(baseColor, 0.55);
+        ctx.shadowBlur = 18;
+      }
+
+      renderShape();
       ctx.fill();
 
       if (isHighlighted) {
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = withAlpha(baseColor, 0.75);
+        ctx.stroke();
+
+        ctx.lineWidth = 5.5;
+        ctx.strokeStyle = withAlpha(baseColor, 0.25);
         ctx.stroke();
       }
       ctx.restore();
@@ -2074,7 +2306,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       if (isHighlighted) {
         ctx.lineWidth = Math.max(2, fontSize / 3);
         ctx.strokeStyle = withAlpha(palette.background, 0.9);
-        ctx.strokeText(typed.label, node.x ?? 0, textY);
+        ctx.strokeText(typed.label, x, textY);
         ctx.fillStyle = solidTextColor;
       } else {
         ctx.fillStyle = isSolid ? solidTextColor : labelTextColor;
@@ -2083,44 +2315,50 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         }
       }
 
-      ctx.fillText(typed.label, node.x ?? 0, textY);
+      if (isDimmed) {
+        ctx.globalAlpha *= 0.7;
+      }
+
+      ctx.fillText(typed.label, x, textY);
       ctx.restore();
     },
-    [highlightNodeIds, palette]
+    [emphasizedNodeIds, palette]
   );
 
   const linkColor = useCallback(
     (link: LinkObject) => {
       const typed = link as ForceLink;
-      if (typed.id && highlightLinkIds.has(typed.id)) {
+      if (typed.id && emphasizedLinkIds.has(typed.id)) {
         return palette.edgeHighlight;
       }
+      let base = palette.edge;
       if (typed.type === 'role') {
-        return palette.roleEdge;
+        base = palette.roleEdge;
+      } else if (typed.type === 'initiative') {
+        base = palette.initiativeEdge;
+      } else if (typed.type === 'module') {
+        base = palette.moduleEdge;
+      } else if (typed.type === 'plan') {
+        base = palette.planEdge;
+      } else if (typed.type === 'soft') {
+        base = withAlpha(palette.soft, 0.45);
       }
-      if (typed.type === 'initiative') {
-        return palette.initiativeEdge;
+
+      if (emphasizedLinkIds.size > 0 && (!typed.id || !emphasizedLinkIds.has(typed.id))) {
+        return withAlpha(base, 0.2);
       }
-      if (typed.type === 'module') {
-        return palette.moduleEdge;
-      }
-      if (typed.type === 'plan') {
-        return palette.planEdge;
-      }
-      if (typed.type === 'soft') {
-        return withAlpha(palette.soft, 0.45);
-      }
-      return palette.edge;
+
+      return base;
     },
-    [highlightLinkIds, palette]
+    [emphasizedLinkIds, palette]
   );
 
   const linkWidth = useCallback(
     (link: LinkObject) => {
       const typed = link as ForceLink;
-      return typed.id && highlightLinkIds.has(typed.id) ? 1.6 : 0.6;
+      return typed.id && emphasizedLinkIds.has(typed.id) ? 1.7 : 0.65;
     },
-    [highlightLinkIds]
+    [emphasizedLinkIds]
   );
 
   const resetFilters = useCallback(() => {
@@ -2531,6 +2769,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   linkWidth={linkWidth}
                   enableZoomInteraction
                   enablePanInteraction
+                  onNodeHover={(node) => setHoveredNodeId(node ? (node as ForceNode).id : null)}
                 />
               ) : (
                 <Loader size="m" />
@@ -2695,6 +2934,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                   linkWidth={linkWidth}
                   enableZoomInteraction
                   enablePanInteraction
+                  onNodeHover={(node) => setHoveredNodeId(node ? (node as ForceNode).id : null)}
                 />
               ) : (
                 <Loader size="m" />
@@ -2836,6 +3076,9 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
                             linkWidth={linkWidth}
                             enableZoomInteraction
                             enablePanInteraction
+                            onNodeHover={(node) =>
+                              setHoveredNodeId(node ? (node as ForceNode).id : null)
+                            }
                           />
                         ) : (
                           <Loader size="m" />
