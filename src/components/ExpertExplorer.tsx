@@ -2105,8 +2105,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
       const label = typed.label;
       const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 9);
-      const shouldShowLabel =
-        isHoverRelated && (isHighlighted || isHovered || globalScale >= 0.95);
+      const shouldShowLabel = isHighlighted || isHovered || globalScale >= 0.95;
       const textY = (node.y ?? 0) + outerRadius + 8;
 
       ctx.save();
@@ -2139,7 +2138,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       }
 
       if (shouldShowLabel) {
-        const textAlpha = isHighlighted || isHovered ? 1 : Math.max(effectiveAlpha, 0.65);
+        const textAlpha = isHighlighted || isHovered ? 1 : effectiveAlpha;
         ctx.globalAlpha = textAlpha;
         ctx.font = `${labelFontSize}px "Inter", "Segoe UI", sans-serif`;
         ctx.textAlign = 'center';

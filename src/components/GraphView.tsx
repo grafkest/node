@@ -1249,8 +1249,7 @@ function drawNode(
   const effectiveAlpha = clamp(baseAlpha * dimFactor, 0.08, 1);
   const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 10);
   const iconFontSize = Math.max(14 / Math.sqrt(globalScale), 12);
-  const shouldShowLabel =
-    isHoverRelated && (isHighlighted || isHovered || globalScale >= 0.95);
+  const shouldShowLabel = isHighlighted || isHovered || globalScale >= 0.95;
 
   const accent = resolveNodeColor(node, palette);
   const halo = withAlpha(accent, 0.18);
@@ -1301,7 +1300,7 @@ function drawNode(
   }
 
   if (shouldShowLabel) {
-    const textAlpha = isHighlighted || isHovered ? 1 : Math.max(effectiveAlpha, 0.6);
+    const textAlpha = isHighlighted || isHovered ? 1 : effectiveAlpha;
     ctx.globalAlpha = textAlpha;
     ctx.font = `${labelFontSize}px 'Inter', 'Segoe UI', sans-serif`;
     ctx.fillStyle = palette.text;
