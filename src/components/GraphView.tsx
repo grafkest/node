@@ -1239,11 +1239,17 @@ function drawNode(
     node.type === 'module' &&
     visibleModuleStatuses.size > 0 &&
     !visibleModuleStatuses.has(node.status);
-  const isHoverRelated = !hoveredNodeId || isHovered || isNeighbor;
+  const hoverFactor = !hoveredNodeId
+    ? 1
+    : isHovered
+      ? 1
+      : isNeighbor
+        ? 0.55
+        : 0.2;
   const baseAlpha = isHighlighted || isHovered ? 1 : 0.95;
   const dimFactor =
     (highlighted && node.id !== highlighted ? 0.35 : 1) *
-    (isHoverRelated ? 1 : 0.2) *
+    hoverFactor *
     (isModuleDimmed && !isHighlighted ? 0.3 : 1) *
     (isDomainDimmed && !isHighlighted ? 0.3 : 1);
   const effectiveAlpha = clamp(baseAlpha * dimFactor, 0.08, 1);
@@ -1324,12 +1330,17 @@ function resolveLinkColor(
   const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
   const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
   const isHoverActive = Boolean(hoveredNodeId);
-  const isHoverRelated =
-    !hoveredNodeId ||
-    sourceId === hoveredNodeId ||
-    targetId === hoveredNodeId ||
-    neighborMap.get(hoveredNodeId)?.has(sourceId) ||
-    neighborMap.get(hoveredNodeId)?.has(targetId);
+  const isDirectHover = hoveredNodeId && (sourceId === hoveredNodeId || targetId === hoveredNodeId);
+  const isNeighborHover =
+    hoveredNodeId &&
+    (neighborMap.get(hoveredNodeId)?.has(sourceId) || neighborMap.get(hoveredNodeId)?.has(targetId));
+  const hoverTier = !hoveredNodeId
+    ? 'none'
+    : isDirectHover
+      ? 'focused'
+      : isNeighborHover
+        ? 'neighbor'
+        : 'dim';
 
   if (link.type === 'initiative-plan') {
     const moduleId =
@@ -1369,11 +1380,19 @@ function resolveLinkColor(
     }
   }
 
-  if (isHoverActive && !isHoverRelated) {
-    return withAlpha(baseColor, 0.15);
+  if (!isHoverActive || hoverTier === 'none') {
+    return baseColor;
   }
 
-  return isHoverRelated ? withAlpha(baseColor, 0.95) : baseColor;
+  if (hoverTier === 'focused') {
+    return withAlpha(baseColor, 1);
+  }
+
+  if (hoverTier === 'neighbor') {
+    return withAlpha(baseColor, 0.6);
+  }
+
+  return withAlpha(baseColor, 0.15);
 }
 
 function withAlpha(color: string, alpha: number) {

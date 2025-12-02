@@ -2087,14 +2087,17 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         hoveredNodeId && activeNeighborMap.get(hoveredNodeId)?.has(typed.id)
           ? hoveredNodeId !== typed.id
           : false;
-      const isHoverRelated = !hoveredNodeId || isHovered || isNeighbor;
+      const hoverFactor = !hoveredNodeId
+        ? 1
+        : isHovered
+          ? 1
+          : isNeighbor
+            ? 0.55
+            : 0.18;
       const selectionDim =
         highlightNodeIds.size > 0 && !isHighlighted && !highlightNodeIds.has(typed.id) ? 0.28 : 1;
       const baseAlpha = isHighlighted || isHovered ? 1 : isSolid ? 0.95 : 0.85;
-      const effectiveAlpha = Math.max(
-        0.1,
-        Math.min(1, baseAlpha * selectionDim * (isHoverRelated ? 1 : 0.18))
-      );
+      const effectiveAlpha = Math.max(0.1, Math.min(1, baseAlpha * selectionDim * hoverFactor));
 
       const scaleFactor = Math.max(0.75, Math.min(1.35, 1 / Math.sqrt(globalScale)));
       const outerRadius = radius * scaleFactor;
@@ -2163,12 +2166,18 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
       const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
       const isHoverActive = Boolean(hoveredNodeId);
-      const isHoverRelated =
-        !hoveredNodeId ||
-        sourceId === hoveredNodeId ||
-        targetId === hoveredNodeId ||
-        activeNeighborMap.get(hoveredNodeId)?.has(sourceId) ||
-        activeNeighborMap.get(hoveredNodeId)?.has(targetId);
+      const isDirectHover = hoveredNodeId && (sourceId === hoveredNodeId || targetId === hoveredNodeId);
+      const isNeighborHover =
+        hoveredNodeId &&
+        (activeNeighborMap.get(hoveredNodeId)?.has(sourceId) ||
+          activeNeighborMap.get(hoveredNodeId)?.has(targetId));
+      const hoverTier = !hoveredNodeId
+        ? 'none'
+        : isDirectHover
+          ? 'focused'
+          : isNeighborHover
+            ? 'neighbor'
+            : 'dim';
 
       if (typed.id && highlightLinkIds.has(typed.id)) {
         return palette.edgeHighlight;
@@ -2186,14 +2195,28 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
         return palette.planEdge;
       }
       if (typed.type === 'soft') {
-        const softColor = withAlpha(palette.soft, 0.45);
-        return isHoverActive && !isHoverRelated ? withAlpha(palette.soft, 0.16) : softColor;
+        if (!isHoverActive || hoverTier === 'none') {
+          return withAlpha(palette.soft, 0.45);
+        }
+        if (hoverTier === 'focused') {
+          return withAlpha(palette.soft, 0.45);
+        }
+        if (hoverTier === 'neighbor') {
+          return withAlpha(palette.soft, 0.3);
+        }
+        return withAlpha(palette.soft, 0.16);
       }
       const baseColor = palette.edge;
-      if (isHoverActive && !isHoverRelated) {
-        return withAlpha(baseColor, 0.16);
+      if (!isHoverActive || hoverTier === 'none') {
+        return baseColor;
       }
-      return baseColor;
+      if (hoverTier === 'focused') {
+        return withAlpha(baseColor, 1);
+      }
+      if (hoverTier === 'neighbor') {
+        return withAlpha(baseColor, 0.6);
+      }
+      return withAlpha(baseColor, 0.16);
     },
     [activeNeighborMap, highlightLinkIds, hoveredNodeId, palette]
   );
