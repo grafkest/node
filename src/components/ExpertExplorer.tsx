@@ -291,6 +291,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   const [isSkillGraphVisible, setIsSkillGraphVisible] = useState(true);
   const [isRoleGraphVisible, setIsRoleGraphVisible] = useState(true);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
 
   const graphRef = useRef<ForceGraphMethods | null>(null);
   const initialGraphZoomAppliedRef = useRef<Record<'graph' | 'assignments', boolean>>({
@@ -1644,6 +1645,28 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
   }, [assignmentNeighborMap, roleNeighborMap, skillNeighborMap, viewMode]);
 
   useEffect(() => {
+    if (!selectedGraphNodeId) {
+      return;
+    }
+
+    if (!activeNeighborMap.has(selectedGraphNodeId)) {
+      setSelectedGraphNodeId(null);
+    }
+  }, [activeNeighborMap, selectedGraphNodeId]);
+
+  const focusNodeId = useMemo(() => {
+    if (hoveredNodeId) {
+      return hoveredNodeId;
+    }
+
+    if (selectedGraphNodeId && activeNeighborMap.has(selectedGraphNodeId)) {
+      return selectedGraphNodeId;
+    }
+
+    return null;
+  }, [activeNeighborMap, hoveredNodeId, selectedGraphNodeId]);
+
+  useEffect(() => {
     if (viewMode !== 'roles') {
       return;
     }
@@ -1976,6 +1999,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       }
 
       const typed = node as ForceNode;
+      setSelectedGraphNodeId(typed.id);
       if (typed.type === 'expert') {
         handleSelectExpert(typed.originId);
         return;
@@ -2082,21 +2106,21 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const isSolid =
         typed.type === 'expert' || typed.type === 'role' || typed.type === 'initiative';
       const isHighlighted = highlightNodeIds.has(typed.id);
-      const isHovered = hoveredNodeId === typed.id;
+      const isFocusTarget = focusNodeId === typed.id;
       const isNeighbor =
-        hoveredNodeId && activeNeighborMap.get(hoveredNodeId)?.has(typed.id)
-          ? hoveredNodeId !== typed.id
+        focusNodeId && activeNeighborMap.get(focusNodeId)?.has(typed.id)
+          ? focusNodeId !== typed.id
           : false;
-      const hoverFactor = !hoveredNodeId
+      const hoverFactor = !focusNodeId
         ? 1
-        : isHovered
+        : isFocusTarget
           ? 1
           : isNeighbor
             ? 0.55
             : 0.18;
       const selectionDim =
         highlightNodeIds.size > 0 && !isHighlighted && !highlightNodeIds.has(typed.id) ? 0.28 : 1;
-      const baseAlpha = isHighlighted || isHovered ? 1 : isSolid ? 0.95 : 0.85;
+      const baseAlpha = isHighlighted || isFocusTarget ? 1 : isSolid ? 0.95 : 0.85;
       const effectiveAlpha = Math.max(0.1, Math.min(1, baseAlpha * selectionDim * hoverFactor));
 
       const scaleFactor = Math.max(0.75, Math.min(1.35, 1 / Math.sqrt(globalScale)));
@@ -2108,7 +2132,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
       const label = typed.label;
       const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 9);
-      const shouldShowLabel = isHighlighted || isHovered || globalScale >= 0.95;
+      const shouldShowLabel = isHighlighted || isFocusTarget || globalScale >= 0.95;
       const textY = (node.y ?? 0) + outerRadius + 8;
 
       ctx.save();
@@ -2132,7 +2156,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       ctx.fillStyle = accent;
       ctx.fill();
 
-      if (isHovered || isHighlighted) {
+      if (isFocusTarget || isHighlighted) {
         ctx.beginPath();
         ctx.arc(node.x ?? 0, node.y ?? 0, haloRadius, 0, 2 * Math.PI, false);
         ctx.strokeStyle = withAlpha(accent, 0.25);
@@ -2141,12 +2165,12 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       }
 
       if (shouldShowLabel) {
-        const textAlpha = isHighlighted || isHovered ? 1 : effectiveAlpha;
+        const textAlpha = isHighlighted || isFocusTarget ? 1 : effectiveAlpha;
         ctx.globalAlpha = textAlpha;
         ctx.font = `${labelFontSize}px "Inter", "Segoe UI", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        if (isHovered || isHighlighted) {
+        if (isFocusTarget || isHighlighted) {
           ctx.lineWidth = Math.max(2, labelFontSize / 3);
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
           ctx.strokeText(label, node.x ?? 0, textY);
@@ -2157,7 +2181,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
 
       ctx.restore();
     },
-    [activeNeighborMap, highlightNodeIds, hoveredNodeId, palette]
+    [activeNeighborMap, focusNodeId, highlightNodeIds, palette]
   );
 
   const linkColor = useCallback(
@@ -2165,13 +2189,13 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       const typed = link as ForceLink;
       const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
       const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
-      const isHoverActive = Boolean(hoveredNodeId);
-      const isDirectHover = hoveredNodeId && (sourceId === hoveredNodeId || targetId === hoveredNodeId);
+      const isHoverActive = Boolean(focusNodeId);
+      const isDirectHover = focusNodeId && (sourceId === focusNodeId || targetId === focusNodeId);
       const isNeighborHover =
-        hoveredNodeId &&
-        (activeNeighborMap.get(hoveredNodeId)?.has(sourceId) ||
-          activeNeighborMap.get(hoveredNodeId)?.has(targetId));
-      const hoverTier = !hoveredNodeId
+        focusNodeId &&
+        (activeNeighborMap.get(focusNodeId)?.has(sourceId) ||
+          activeNeighborMap.get(focusNodeId)?.has(targetId));
+      const hoverTier = !focusNodeId
         ? 'none'
         : isDirectHover
           ? 'focused'
@@ -2218,7 +2242,7 @@ const ExpertExplorer: React.FC<ExpertExplorerProps> = ({
       }
       return withAlpha(baseColor, 0.16);
     },
-    [activeNeighborMap, highlightLinkIds, hoveredNodeId, palette]
+    [activeNeighborMap, focusNodeId, highlightLinkIds, palette]
   );
 
   const linkWidth = useCallback(

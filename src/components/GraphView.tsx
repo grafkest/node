@@ -166,6 +166,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const [graphInstanceKey, setGraphInstanceKey] = useState(0);
   const [isGraphVisible, setIsGraphVisible] = useState(true);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const refreshGraphInstance = useCallback(() => {
     const refresh = (graphRef.current as unknown as { refresh?: () => void })?.refresh;
@@ -414,6 +415,16 @@ const GraphView: React.FC<GraphViewProps> = ({
 
     return map;
   }, [graphLinks]);
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return;
+    }
+
+    if (!neighborMap.has(selectedNodeId)) {
+      setSelectedNodeId(null);
+    }
+  }, [neighborMap, selectedNodeId]);
 
   const connectionCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -876,6 +887,18 @@ const GraphView: React.FC<GraphViewProps> = ({
     showEntireGraph();
   }, [showEntireGraph]);
 
+  const focusNodeId = useMemo(() => {
+    if (hoveredNodeId) {
+      return hoveredNodeId;
+    }
+
+    if (selectedNodeId && neighborMap.has(selectedNodeId)) {
+      return selectedNodeId;
+    }
+
+    return null;
+  }, [hoveredNodeId, neighborMap, selectedNodeId]);
+
   const handleZoomTransform = useCallback(
     (transform?: { k: number; x: number; y: number }) => {
       const { width, height } = getViewportSize();
@@ -1080,7 +1103,7 @@ const GraphView: React.FC<GraphViewProps> = ({
                   visibleDomainIds,
                   visibleModuleStatuses,
                   moduleStatusMap,
-                  hoveredNodeId,
+                  focusNodeId,
                   neighborMap
                 )
               }
@@ -1090,7 +1113,7 @@ const GraphView: React.FC<GraphViewProps> = ({
                   ctx,
                   globalScale,
                   highlightedNode,
-                  hoveredNodeId,
+                  focusNodeId,
                   neighborMap,
                   palette,
                   visibleDomainIds,
@@ -1099,6 +1122,7 @@ const GraphView: React.FC<GraphViewProps> = ({
               }}
               nodeCanvasObjectMode={() => 'replace'}
               onNodeClick={(node) => {
+                setSelectedNodeId((prev) => ((node as ForceNode).id === prev ? prev : (node as ForceNode).id));
                 onSelect(node as ForceNode);
               }}
               onNodeDoubleClick={(node) => {
@@ -1220,7 +1244,7 @@ function drawNode(
   ctx: CanvasRenderingContext2D,
   globalScale: number,
   highlighted: string | null,
-  hoveredNodeId: string | null,
+  focusNodeId: string | null,
   neighborMap: Map<string, Set<string>>,
   palette: GraphPalette,
   visibleDomainIds: Set<string>,
@@ -1230,23 +1254,23 @@ function drawNode(
   const x = typeof node.x === 'number' ? node.x : 0;
   const y = typeof node.y === 'number' ? node.y : 0;
   const isHighlighted = highlighted === node.id;
-  const isHovered = hoveredNodeId === node.id;
+  const isFocusTarget = focusNodeId === node.id;
   const isNeighbor =
-    hoveredNodeId && neighborMap.get(hoveredNodeId)?.has(node.id) ? hoveredNodeId !== node.id : false;
+    focusNodeId && neighborMap.get(focusNodeId)?.has(node.id) ? focusNodeId !== node.id : false;
   const isDomainDimmed =
     node.type === 'domain' && visibleDomainIds.size > 0 && !visibleDomainIds.has(node.id);
   const isModuleDimmed =
     node.type === 'module' &&
     visibleModuleStatuses.size > 0 &&
     !visibleModuleStatuses.has(node.status);
-  const hoverFactor = !hoveredNodeId
+  const hoverFactor = !focusNodeId
     ? 1
-    : isHovered
+    : isFocusTarget
       ? 1
       : isNeighbor
         ? 0.55
         : 0.2;
-  const baseAlpha = isHighlighted || isHovered ? 1 : 0.95;
+  const baseAlpha = isHighlighted || isFocusTarget ? 1 : 0.95;
   const dimFactor =
     (highlighted && node.id !== highlighted ? 0.35 : 1) *
     hoverFactor *
@@ -1255,7 +1279,7 @@ function drawNode(
   const effectiveAlpha = clamp(baseAlpha * dimFactor, 0.08, 1);
   const labelFontSize = Math.max(12 / Math.sqrt(globalScale), 10);
   const iconFontSize = Math.max(14 / Math.sqrt(globalScale), 12);
-  const shouldShowLabel = isHighlighted || isHovered || globalScale >= 0.95;
+  const shouldShowLabel = isHighlighted || isFocusTarget || globalScale >= 0.95;
 
   const accent = resolveNodeColor(node, palette);
   const halo = withAlpha(accent, 0.18);
@@ -1289,7 +1313,7 @@ function drawNode(
   ctx.fill();
 
   // Halo for hover/highlight
-  if (isHovered || isHighlighted) {
+  if (isFocusTarget || isHighlighted) {
     ctx.beginPath();
     ctx.arc(x, y, outerRadius + shellThickness + 4, 0, Math.PI * 2);
     ctx.strokeStyle = halo;
@@ -1306,7 +1330,7 @@ function drawNode(
   }
 
   if (shouldShowLabel) {
-    const textAlpha = isHighlighted || isHovered ? 1 : effectiveAlpha;
+    const textAlpha = isHighlighted || isFocusTarget ? 1 : effectiveAlpha;
     ctx.globalAlpha = textAlpha;
     ctx.font = `${labelFontSize}px 'Inter', 'Segoe UI', sans-serif`;
     ctx.fillStyle = palette.text;
@@ -1324,17 +1348,17 @@ function resolveLinkColor(
   visibleDomainIds: Set<string>,
   visibleModuleStatuses: Set<ModuleStatus>,
   moduleStatusMap: Map<string, ModuleStatus>,
-  hoveredNodeId: string | null,
+  focusNodeId: string | null,
   neighborMap: Map<string, Set<string>>
 ) {
   const sourceId = typeof link.source === 'object' ? link.source.id : String(link.source);
   const targetId = typeof link.target === 'object' ? link.target.id : String(link.target);
-  const isHoverActive = Boolean(hoveredNodeId);
-  const isDirectHover = hoveredNodeId && (sourceId === hoveredNodeId || targetId === hoveredNodeId);
+  const isHoverActive = Boolean(focusNodeId);
+  const isDirectHover = focusNodeId && (sourceId === focusNodeId || targetId === focusNodeId);
   const isNeighborHover =
-    hoveredNodeId &&
-    (neighborMap.get(hoveredNodeId)?.has(sourceId) || neighborMap.get(hoveredNodeId)?.has(targetId));
-  const hoverTier = !hoveredNodeId
+    focusNodeId &&
+    (neighborMap.get(focusNodeId)?.has(sourceId) || neighborMap.get(focusNodeId)?.has(targetId));
+  const hoverTier = !focusNodeId
     ? 'none'
     : isDirectHover
       ? 'focused'
